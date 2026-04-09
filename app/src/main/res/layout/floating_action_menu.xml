@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 浮球扇形快捷菜单，用 PropertyAnimator 驱动每个按钮动画展开 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:padding="2dp">
+
+    <!-- 按钮2：收起 -->
+    <LinearLayout
+        android:id="@+id/fan_btn_close"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="6dp"
+        android:alpha="0"
+        android:translationY="-40dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="收起"
+            android:textSize="10sp"
+            android:textColor="#FFFFFF"
+            android:background="#AA424242"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:layout_marginEnd="6dp" />
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/floating_ball_modern_bg"
+            android:elevation="4dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="✕"
+                android:textSize="16sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold" />
+        </FrameLayout>
+    </LinearLayout>
+
+    <!-- 按钮1：项目面板 -->
+    <LinearLayout
+        android:id="@+id/fan_btn_panel"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="4dp"
+        android:alpha="0"
+        android:translationY="-20dp">
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="项目面板"
+            android:textSize="10sp"
+            android:textColor="#FFFFFF"
+            android:background="#AA424242"
+            android:paddingStart="5dp"
+            android:paddingEnd="5dp"
+            android:paddingTop="2dp"
+            android:paddingBottom="2dp"
+            android:layout_marginEnd="6dp" />
+        <FrameLayout
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/floating_ball_modern_bg"
+            android:elevation="4dp">
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center"
+                android:text="▦"
+                android:textSize="16sp"
+                android:textColor="#FFFFFF" />
+        </FrameLayout>
+    </LinearLayout>
+
+</LinearLayout>

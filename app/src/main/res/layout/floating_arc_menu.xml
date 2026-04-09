@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+    <!-- 去掉或缩小遮罩，先测试可见性 -->
+    <!-- <View
+        android:id="@+id/overlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#33000000" /> -->
+
+    <!-- 菜单容器：背景透明，尺寸刚好包住按钮 -->
+    <LinearLayout
+        android:id="@+id/arc_container"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:background="@android:color/transparent"
+        android:padding="40dp">
+
+        <ImageButton
+            android:id="@+id/btn_option1"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_margin="16dp"
+            android:src="@drawable/ic_option1"
+            android:background="@drawable/selector_floating_ball"
+            android:scaleType="centerInside"
+            android:contentDescription="Option 1" />
+
+        <ImageButton
+            android:id="@+id/btn_option2"
+            android:layout_width="56dp"
+            android:layout_height="56dp"
+            android:layout_margin="16dp"
+            android:src="@drawable/ic_option2"
+            android:background="@drawable/selector_floating_ball"
+            android:scaleType="centerInside"
+            android:contentDescription="Option 2" />
+
+    </LinearLayout>
+</FrameLayout>

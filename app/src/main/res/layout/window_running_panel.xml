@@ -1,0 +1,194 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/running_panel_container"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/panel_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- 标题栏 -->
+        <LinearLayout
+            android:id="@+id/panel_header"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@drawable/panel_header_background"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="16dp"
+            android:paddingEnd="16dp">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="运行状态"
+                android:textSize="16sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold" />
+
+            <ImageView
+                android:id="@+id/btn_close_running"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:src="@drawable/ic_close"
+                android:tint="#FFFFFF"
+                android:background="@android:color/transparent"
+                android:padding="4dp"
+                android:clickable="true" />
+        </LinearLayout>
+
+        <!-- 状态信息栏 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:padding="12dp"
+            android:background="#F5F5F5">
+
+            <!-- 当前运行状态 -->
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <View
+                    android:id="@+id/status_indicator"
+                    android:layout_width="12dp"
+                    android:layout_height="12dp"
+                    android:background="@drawable/circle_green"
+                    android:layout_marginEnd="8dp" />
+
+                <TextView
+                    android:id="@+id/tv_status"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="运行中"
+                    android:textSize="14sp"
+                    android:textColor="#4CAF50"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <!-- 当前 operation 名称 -->
+            <TextView
+                android:id="@+id/tv_current_op"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="当前: -"
+                android:textSize="13sp"
+                android:textColor="#333333"
+                android:layout_marginTop="8dp"
+                android:ellipsize="end"
+                android:maxLines="1" />
+
+            <!-- 进度信息 -->
+            <TextView
+                android:id="@+id/tv_progress"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="进度: 0/0"
+                android:textSize="12sp"
+                android:textColor="#666666"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/tv_success_rate"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="成功率: -"
+                android:textSize="12sp"
+                android:textColor="#4A5565"
+                android:layout_marginTop="4dp" />
+
+            <TextView
+                android:id="@+id/tv_duration_stats"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="耗时: -"
+                android:textSize="12sp"
+                android:textColor="#4A5565"
+                android:layout_marginTop="2dp" />
+
+            <TextView
+                android:id="@+id/tv_failure_reason"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="失败: -"
+                android:textSize="12sp"
+                android:textColor="#B23B3B"
+                android:layout_marginTop="2dp"
+                android:maxLines="2"
+                android:ellipsize="end" />
+        </LinearLayout>
+
+        <!-- Operation 列表 -->
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_running_operations"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:padding="8dp"
+            android:clipToPadding="false" />
+
+        <!-- 控制按钮栏 -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:padding="8dp"
+            android:background="#FFFFFF"
+            android:elevation="4dp">
+
+            <!-- 暂停/继续按钮 -->
+            <TextView
+                android:id="@+id/btn_pause"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="⏸ 暂停"
+                android:textSize="14sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/btn_pause_selector"
+                android:layout_marginEnd="8dp" />
+
+            <!-- 停止按钮 -->
+            <TextView
+                android:id="@+id/btn_stop"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:text="⏹ 停止"
+                android:textSize="14sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:background="@drawable/btn_stop_selector" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 拖动指示器 -->
+    <View
+        android:id="@+id/drag_handle"
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal|top"
+        android:layout_marginTop="52dp"
+        android:background="@drawable/drag_handle" />
+
+    <View
+        android:id="@+id/resize_handle"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/panel_resize_handle" />
+
+</FrameLayout>

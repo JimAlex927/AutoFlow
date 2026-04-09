@@ -1,0 +1,80 @@
+<resources>
+    <string name="app_name">AtommMaster</string>
+
+    <string name="main_header_title">AtommMaster</string>
+    <string name="main_header_subtitle">无 root 自动化控制台</string>
+    <string name="main_header_support">Accessibility Service + MediaProjection</string>
+
+    <string name="main_status_title">运行状态</string>
+    <string name="main_status_checking">正在检查运行环境</string>
+    <string name="main_status_ready">运行环境已就绪</string>
+    <string name="main_status_missing">还有 %1$d 项权限待开启</string>
+    <string name="status_accessibility_connected">无障碍 已连接</string>
+    <string name="status_accessibility_disconnected">无障碍 未连接</string>
+    <string name="status_projection_connected">录屏 已授权</string>
+    <string name="status_projection_disconnected">录屏 未授权</string>
+    <string name="status_overlay_connected">悬浮窗 已授权</string>
+    <string name="status_overlay_disconnected">悬浮窗 未授权</string>
+    <string name="status_battery_optimization_unrestricted">省电策略 已放开</string>
+    <string name="status_battery_optimization_restricted">省电策略 仍受限</string>
+
+    <string name="main_float_start">启动悬浮脚本面板</string>
+    <string name="main_float_stop">停止悬浮脚本面板</string>
+
+    <string name="main_permissions_title">权限管理</string>
+    <string name="main_permissions_description">先补齐三项基础权限，悬浮脚本面板和执行引擎才会稳定工作。</string>
+    <string name="main_permission_accessibility">开启无障碍服务</string>
+    <string name="main_permission_projection">授权屏幕录制</string>
+    <string name="main_permission_overlay">授予悬浮窗权限</string>
+    <string name="main_permission_battery_optimization">权限加固（防闪退）</string>
+    <string name="hardening_dialog_title">权限加固</string>
+    <string name="hardening_dialog_message">当前品牌：%1$s\n系统电池白名单：%2$s\n\n建议依次处理系统白名单、厂商省电页和自启动设置，尽量把 AtommMaster 设为无限制或允许后台运行。</string>
+    <string name="hardening_dialog_best_effort">一键尝试</string>
+    <string name="hardening_item_system_whitelist">关闭系统电池优化</string>
+    <string name="hardening_item_vendor_battery">打开厂商省电管理页</string>
+    <string name="hardening_item_auto_start">打开自启动管理页</string>
+    <string name="hardening_item_app_details">打开应用详情页</string>
+    <string name="hardening_state_whitelisted">已放开</string>
+    <string name="hardening_state_restricted">仍受限</string>
+
+    <string name="main_tools_title">工具箱</string>
+    <string name="main_tools_description">导入导出、联机调试和定时演示入口都集中在这里。</string>
+    <string name="main_show_server">显示服务地址</string>
+    <string name="main_export_scripts">导出脚本包</string>
+    <string name="main_import_scripts">导入脚本包</string>
+    <string name="main_schedule_demo">1 分钟后执行</string>
+    <string name="main_schedule_clear">清空定时任务</string>
+
+    <string name="main_server_title">服务地址</string>
+    <string name="main_server_placeholder">点击“显示服务地址”后可查看本机与局域网访问入口。</string>
+    <string name="server_local_debug">本机调试: http://127.0.0.1:%1$d</string>
+    <string name="server_emulator">模拟器访问: http://10.0.2.2:%1$d</string>
+    <string name="server_lan_header">局域网访问:</string>
+
+    <string name="toast_projection_granted">录屏授权成功</string>
+    <string name="toast_projection_granted_but_failed">录屏授权成功，但启动捕获失败</string>
+    <string name="toast_projection_denied">录屏授权已取消</string>
+    <string name="toast_schedule_cleared">已清空全部定时任务</string>
+    <string name="toast_float_panel_started">悬浮脚本面板已启动</string>
+    <string name="toast_float_panel_stopped">悬浮脚本面板已停止</string>
+    <string name="toast_capture_running">录屏捕获正在运行</string>
+    <string name="toast_overlay_already_granted">悬浮窗权限已授予</string>
+    <string name="toast_overlay_prompt">请授予悬浮窗权限后返回</string>
+    <string name="toast_battery_optimization_already_ignored">省电优化已放开</string>
+    <string name="toast_battery_optimization_prompt">请将 AtommMaster 设为无限制或允许后台运行</string>
+    <string name="toast_battery_optimization_request_failed">无法直接拉起白名单授权，已打开电池优化设置</string>
+    <string name="toast_hardening_recommendation">建议先完成权限加固，尤其是无限制和自启动</string>
+    <string name="toast_hardening_vendor_settings_opened">已打开厂商省电管理页，请把 AtommMaster 设为无限制</string>
+    <string name="toast_hardening_auto_start_opened">已打开自启动管理页，请允许 AtommMaster 自启动</string>
+    <string name="toast_hardening_vendor_settings_unavailable">当前品牌未识别到专属省电页，已回退到应用详情页</string>
+    <string name="toast_hardening_auto_start_unavailable">当前品牌未识别到自启动页，已回退到应用详情页</string>
+    <string name="toast_hardening_fallback_app_details">已打开应用详情页，请检查电池、后台活动和自启动</string>
+    <string name="toast_no_runnable_task">未找到可执行的项目、任务或节点</string>
+    <string name="toast_schedule_failed">创建定时任务失败</string>
+    <string name="toast_schedule_success">已定时: %1$s/%2$s/%3$s（1 分钟后）</string>
+    <string name="toast_export_success">导出成功: %1$s</string>
+    <string name="toast_export_failed">导出失败: %1$s</string>
+    <string name="share_scripts_title">分享脚本包</string>
+    <string name="toast_import_done">导入完成: 项目 %1$d 个，跳过 %2$d 项</string>
+    <string name="toast_import_failed">导入失败: %1$s</string>
+</resources>

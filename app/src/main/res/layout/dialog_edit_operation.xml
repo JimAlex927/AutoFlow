@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="20dp"
+    android:background="@drawable/dialog_background">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="编辑 Operation"
+        android:textSize="18sp"
+        android:textColor="#3c6de4"
+        android:textStyle="bold"
+        android:gravity="center"
+        android:layout_marginBottom="16dp" />
+
+    <!-- 名称输入 -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="名称"
+        android:textSize="14sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="4dp" />
+
+    <EditText
+        android:id="@+id/edt_op_name"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="@drawable/input_bg"
+        android:hint="输入 operation 名称"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:textSize="14sp"
+        android:textColor="#333333"
+        android:singleLine="true"
+        android:layout_marginBottom="16dp" />
+
+    <!-- 类型显示（只读） -->
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="类型"
+        android:textSize="14sp"
+        android:textColor="#666666"
+        android:layout_marginBottom="4dp" />
+
+    <TextView
+        android:id="@+id/tv_op_type"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:background="@drawable/input_bg"
+        android:gravity="center_vertical"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:textSize="14sp"
+        android:textColor="#999999"
+        android:layout_marginBottom="20dp" />
+
+    <!-- 按钮栏 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_cancel"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:text="取消"
+            android:textSize="14sp"
+            android:textColor="#666666"
+            android:gravity="center"
+            android:background="@drawable/btn_cancel_bg"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/btn_save"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:text="保存"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:background="@drawable/btn_run_selector" />
+    </LinearLayout>
+
+</LinearLayout>

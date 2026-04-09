@@ -1,0 +1,245 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/dialog_background">
+
+    <LinearLayout
+        android:id="@+id/dialog_drag_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="10dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="跳转 Task 节点"
+            android:textColor="#315dbf"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btn_scale_dialog"
+            android:layout_width="44dp"
+            android:layout_height="30dp"
+            android:layout_marginEnd="6dp"
+            android:background="@drawable/item_operation_compact_bg"
+            android:gravity="center"
+            android:text="缩放"
+            android:textColor="#315dbf"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/btn_close_top"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:background="@drawable/item_operation_compact_bg"
+            android:gravity="center"
+            android:text="×"
+            android:textColor="#5f6f84"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:overScrollMode="ifContentScrolls">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:text="选择目标 Task 和目标节点，可选在子 Task 完成后返回当前 Task 再继续执行。"
+                android:textColor="#6a7682"
+                android:textSize="12sp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="节点名称"
+                android:textSize="14sp" />
+
+            <EditText
+                android:id="@+id/edt_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:hint="例如：跳转到登录任务" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="目标 Task ID"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="12dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <AutoCompleteTextView
+                    android:id="@+id/edt_target_task"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="例如：login_task" />
+
+                <TextView
+                    android:id="@+id/btn_use_current_task"
+                    android:layout_width="54dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:text="当前"
+                    android:textColor="#315dbf" />
+
+                <TextView
+                    android:id="@+id/btn_pick_target_task"
+                    android:layout_width="54dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:text="选择"
+                    android:textColor="#315dbf" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="4dp"
+                android:text="目标 Operation ID"
+                android:textSize="14sp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <AutoCompleteTextView
+                    android:id="@+id/edt_target_operation"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="例如：start_login" />
+
+                <TextView
+                    android:id="@+id/btn_pick_target_operation"
+                    android:layout_width="54dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:text="选择"
+                    android:textColor="#315dbf" />
+
+                <TextView
+                    android:id="@+id/btn_clear_target_operation"
+                    android:layout_width="54dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:text="清空"
+                    android:textColor="#5f6f84" />
+            </LinearLayout>
+
+            <CheckBox
+                android:id="@+id/cb_return_after_complete"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="10dp"
+                android:text="子 Task 完成后返回当前 Task"
+                android:textColor="#2f3d4f" />
+
+            <LinearLayout
+                android:id="@+id/layout_next_operation_section"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="返回后的下一节点（可选）"
+                    android:textSize="14sp" />
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="16dp"
+                    android:gravity="center_vertical"
+                    android:orientation="horizontal">
+
+                    <AutoCompleteTextView
+                        android:id="@+id/edt_next_operation"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:hint="例如：op_002" />
+
+                    <TextView
+                        android:id="@+id/btn_pick_next"
+                        android:layout_width="58dp"
+                        android:layout_height="40dp"
+                        android:layout_marginStart="8dp"
+                        android:background="@drawable/item_operation_compact_bg"
+                        android:gravity="center"
+                        android:text="选择"
+                        android:textColor="#315dbf" />
+                </LinearLayout>
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_cancel"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginEnd="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/btn_cancel_bg"
+            android:gravity="center"
+            android:text="取消"
+            android:textColor="#666666" />
+
+        <TextView
+            android:id="@+id/btn_confirm"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_marginStart="8dp"
+            android:layout_weight="1"
+            android:background="@drawable/btn_edit_selector"
+            android:gravity="center"
+            android:text="确认新增"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</LinearLayout>

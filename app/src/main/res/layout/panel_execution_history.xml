@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#1E1E1E">
+
+    <!-- 标题栏 -->
+    <LinearLayout
+        android:id="@+id/panel_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="#2D2D2D"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="执行历史"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/btn_clear_history"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_delete"
+            android:tint="#FFFFFF"
+            android:contentDescription="清除历史" />
+
+        <ImageButton
+            android:id="@+id/btn_close_history"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:tint="#FFFFFF"
+            android:contentDescription="关闭" />
+    </LinearLayout>
+
+    <!-- 历史统计 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:background="#252525">
+
+        <TextView
+            android:id="@+id/tv_history_count"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="记录数: 0"
+            android:textColor="#AAAAAA"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tv_success_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="成功: 0"
+            android:textColor="#4CAF50"
+            android:textSize="12sp"
+            android:layout_marginStart="8dp" />
+
+        <TextView
+            android:id="@+id/tv_failure_count"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="失败: 0"
+            android:textColor="#F44336"
+            android:textSize="12sp"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+    <!-- 历史列表 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_history"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="8dp" />
+
+    <!-- 空状态提示 -->
+    <TextView
+        android:id="@+id/tv_empty_history"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="暂无执行历史"
+        android:textColor="#666666"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+</LinearLayout>

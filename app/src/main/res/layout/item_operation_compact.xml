@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginStart="8dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginEnd="8dp"
+    android:layout_marginBottom="4dp"
+    android:background="@drawable/project_panel_operation_row_bg"
+    android:clickable="true"
+    android:focusable="true"
+    android:gravity="center_vertical"
+    android:minHeight="56dp"
+    android:orientation="horizontal"
+    android:paddingStart="8dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="8dp"
+    android:paddingBottom="8dp">
+
+    <View
+        android:id="@+id/selection_indicator"
+        android:layout_width="3dp"
+        android:layout_height="34dp"
+        android:layout_marginEnd="8dp"
+        android:background="#3C6DE4"
+        android:visibility="invisible" />
+
+    <TextView
+        android:id="@+id/operation_index"
+        android:layout_width="30dp"
+        android:layout_height="30dp"
+        android:background="@drawable/project_panel_operation_badge_bg"
+        android:gravity="center"
+        android:text="01"
+        android:textColor="#FFFFFF"
+        android:textSize="10sp"
+        android:textStyle="bold" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/list_item_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#243244"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/operation_id"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#8A97A6"
+                android:textSize="10sp" />
+
+            <TextView
+                android:id="@+id/operation_type"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/project_panel_type_chip_bg"
+                android:paddingStart="6dp"
+                android:paddingTop="2dp"
+                android:paddingEnd="6dp"
+                android:paddingBottom="2dp"
+                android:textColor="#546273"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 悬浮按钮标识点：仅当节点已绑定悬浮按钮时可见，背景色在 ViewHolder 中以代码设置 -->
+    <View
+        android:id="@+id/float_btn_dot"
+        android:layout_width="7dp"
+        android:layout_height="7dp"
+        android:layout_marginEnd="6dp"
+        android:visibility="gone" />
+
+    <ImageView
+        android:id="@+id/more_options"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:background="@drawable/project_panel_toolbar_icon_bg"
+        android:padding="5dp"
+        android:src="@drawable/ic_more_vert"
+        android:tint="#728090" />
+
+    <CheckBox
+        android:id="@+id/chk_batch"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="2dp"
+        android:buttonTint="@color/colorPrimary"
+        android:visibility="gone" />
+
+</LinearLayout>

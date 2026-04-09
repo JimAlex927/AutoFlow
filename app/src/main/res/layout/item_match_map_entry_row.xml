@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:layout_marginBottom="6dp"
+    android:padding="8dp"
+    android:background="@drawable/item_operation_compact_bg">
+
+    <!-- Row 1: 排序 + 区域输入 + 框选 + 导入 + 删除 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="5dp">
+
+        <!-- 排序上移 -->
+        <TextView
+            android:id="@+id/btn_move_up"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:gravity="center"
+            android:text="↑"
+            android:textSize="13sp"
+            android:textColor="#7CB342"
+            android:background="@drawable/item_operation_compact_bg"/>
+
+        <!-- 排序下移 -->
+        <TextView
+            android:id="@+id/btn_move_down"
+            android:layout_width="24dp"
+            android:layout_height="24dp"
+            android:gravity="center"
+            android:text="↓"
+            android:textSize="13sp"
+            android:textColor="#7CB342"
+            android:layout_marginStart="2dp"
+            android:layout_marginEnd="4dp"
+            android:background="@drawable/item_operation_compact_bg"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="区域"
+            android:textSize="11sp"
+            android:textColor="#4e5f74"/>
+
+        <EditText
+            android:id="@+id/edt_match_bbox"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="x,y,w,h"
+            android:textSize="11sp"
+            android:inputType="text"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"/>
+
+        <!-- 框选区域 -->
+        <TextView
+            android:id="@+id/btn_pick_region"
+            android:layout_width="34dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="框选"
+            android:textSize="10sp"
+            android:textColor="#315dbf"
+            android:background="@drawable/item_operation_compact_bg"
+            android:layout_marginEnd="3dp"/>
+
+        <!-- 从模板导入bbox -->
+        <TextView
+            android:id="@+id/btn_import_bbox"
+            android:layout_width="34dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="导入"
+            android:textSize="10sp"
+            android:textColor="#7CB342"
+            android:background="@drawable/item_operation_compact_bg"
+            android:layout_marginEnd="3dp"/>
+
+        <!-- 删除整行 -->
+        <TextView
+            android:id="@+id/btn_delete_entry"
+            android:layout_width="26dp"
+            android:layout_height="26dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textSize="11sp"
+            android:textColor="#B23B3B"
+            android:background="@drawable/item_operation_compact_bg"/>
+    </LinearLayout>
+
+    <!-- Row 2: 模板（多选展示）+ 选择按钮 + 相似度 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="模板"
+            android:textSize="11sp"
+            android:textColor="#4e5f74"/>
+
+        <!-- 已选模板名称展示（tag 存 List<String>） -->
+        <TextView
+            android:id="@+id/tv_selected_templates"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="（点击&quot;选&quot;添加模板）"
+            android:textSize="11sp"
+            android:textColor="#2a3a4a"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"/>
+
+        <!-- 多选模板 -->
+        <TextView
+            android:id="@+id/btn_select_templates"
+            android:layout_width="34dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="选"
+            android:textSize="11sp"
+            android:textColor="#315dbf"
+            android:textStyle="bold"
+            android:background="@drawable/item_operation_compact_bg"
+            android:layout_marginEnd="6dp"/>
+
+        <!-- 相似度 -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="相似"
+            android:textSize="11sp"
+            android:textColor="#4e5f74"/>
+
+        <EditText
+            android:id="@+id/edt_match_similarity"
+            android:layout_width="54dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="4dp"
+            android:hint="0.88"
+            android:textSize="11sp"
+            android:inputType="numberDecimal"/>
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:gravity="center_horizontal"
+    android:padding="1dp">
+
+    <!-- Circular button body — background set programmatically to support custom color -->
+    <FrameLayout
+        android:id="@+id/node_btn_container"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
+        android:clickable="true"
+        android:focusable="true"
+        android:elevation="6dp">
+
+        <TextView
+            android:id="@+id/node_btn_label"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_gravity="center"
+            android:gravity="center"
+            android:textColor="#FFFFFF"
+            android:textSize="9sp"
+            android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end"
+            android:padding="4dp" />
+    </FrameLayout>
+
+    <!-- Optional name badge below the button -->
+    <TextView
+        android:id="@+id/node_btn_name"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="3dp"
+        android:maxWidth="80dp"
+        android:paddingStart="6dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="6dp"
+        android:paddingBottom="2dp"
+        android:background="@drawable/floating_ball_status_bg"
+        android:textColor="#FFFFFF"
+        android:textSize="9sp"
+        android:textStyle="bold"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:gravity="center"
+        android:visibility="gone" />
+
+</LinearLayout>

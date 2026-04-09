@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/dialog_background">
+
+    <LinearLayout
+        android:id="@+id/dialog_drag_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="点击操作"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#315dbf" />
+
+        <TextView
+            android:id="@+id/btn_scale_dialog"
+            android:layout_width="44dp"
+            android:layout_height="30dp"
+            android:layout_marginEnd="6dp"
+            android:gravity="center"
+            android:text="缩放"
+            android:textSize="11sp"
+            android:textColor="#315dbf"
+            android:background="@drawable/item_operation_compact_bg" />
+
+        <TextView
+            android:id="@+id/btn_close_top"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="×"
+            android:textStyle="bold"
+            android:textColor="#5f6f84"
+            android:background="@drawable/item_operation_compact_bg" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="坐标支持 500,800 或 (500,800)。点击模式默认 fast。"
+                android:textSize="12sp"
+                android:textColor="#6a7682"
+                android:layout_marginBottom="10dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="操作名称:"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <EditText
+                android:id="@+id/edt_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="例如: 点击确认按钮"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="点击坐标 (x,y):"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="12dp">
+
+                <EditText
+                    android:id="@+id/edt_click_target"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="例如: 500,800" />
+
+                <TextView
+                    android:id="@+id/btn_pick_point"
+                    android:layout_width="72dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:gravity="center"
+                    android:text="取点"
+                    android:textSize="11sp"
+                    android:textColor="#315dbf"
+                    android:background="@drawable/item_operation_compact_bg" />
+            </LinearLayout>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="点击模式:"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <AutoCompleteTextView
+                android:id="@+id/edt_click_mode"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="fast / strict"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="快速模式 settleMs:"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <EditText
+                android:id="@+id/edt_click_settle_ms"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="32"
+                android:inputType="number"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="严格模式 waitTimeoutMs:"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <EditText
+                android:id="@+id/edt_click_wait_timeout_ms"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="3000"
+                android:inputType="number"
+                android:layout_marginBottom="12dp" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="下一个操作 ID:"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="16dp">
+
+                <AutoCompleteTextView
+                    android:id="@+id/edt_next_operation"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="例如: op_002" />
+
+                <TextView
+                    android:id="@+id/btn_pick_next"
+                    android:layout_width="58dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:gravity="center"
+                    android:text="选择"
+                    android:textColor="#315dbf"
+                    android:background="@drawable/item_operation_compact_bg" />
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_cancel"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="取消"
+            android:textColor="#666666"
+            android:background="@drawable/btn_cancel_bg"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/btn_confirm"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="确定"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/btn_edit_selector"
+            android:layout_marginStart="8dp" />
+    </LinearLayout>
+
+</LinearLayout>

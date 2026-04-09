@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/panel_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <!-- ── 标题栏（可拖动） ── -->
+        <LinearLayout
+            android:id="@+id/drag_header"
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:background="@drawable/panel_header_background"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp">
+
+            <ImageView
+                android:id="@+id/btn_flow_back"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_back"
+                android:tint="#FFFFFF"
+                android:background="@drawable/panel_icon_action_bg"
+                android:padding="7dp" />
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="流程图编排"
+                android:textSize="15sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginStart="6dp"
+                android:layout_marginEnd="6dp" />
+
+            <!-- 自动排列 -->
+            <ImageView
+                android:id="@+id/btn_flow_auto_layout"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@android:drawable/ic_menu_sort_by_size"
+                android:tint="#FFFFFF"
+                android:background="@drawable/panel_icon_action_bg"
+                android:padding="7dp" />
+
+            <!-- 居中视图 -->
+            <ImageView
+                android:id="@+id/btn_flow_center"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@android:drawable/ic_menu_mylocation"
+                android:tint="#FFFFFF"
+                android:background="@drawable/panel_icon_action_bg"
+                android:padding="7dp"
+                android:layout_marginStart="6dp" />
+
+            <!-- 关闭 -->
+            <ImageView
+                android:id="@+id/btn_flow_close"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
+                android:src="@drawable/ic_close"
+                android:tint="#FFFFFF"
+                android:background="@drawable/panel_icon_action_bg"
+                android:padding="7dp"
+                android:layout_marginStart="6dp" />
+        </LinearLayout>
+
+        <!-- ── 提示条：操作说明 ── -->
+        <TextView
+            android:id="@+id/tv_flow_hint"
+            android:layout_width="match_parent"
+            android:layout_height="28dp"
+            android:gravity="center"
+            android:text="点击选中 · 双击编辑 · 长按拖动 · 拖绿点/红点连线"
+            android:textSize="11sp"
+            android:textColor="#7A8798"
+            android:background="#EDF4FF" />
+
+        <!-- ── 画布区域 ── -->
+        <com.auto.master.floatwin.FlowGraphView
+            android:id="@+id/flow_graph_view"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="#F0F4FC" />
+
+        <!-- ── 选中信息条 ── -->
+        <TextView
+            android:id="@+id/tv_flow_selected"
+            android:layout_width="match_parent"
+            android:layout_height="28dp"
+            android:gravity="center_vertical"
+            android:paddingStart="12dp"
+            android:text="未选中节点"
+            android:textSize="11sp"
+            android:textColor="#4E5F74"
+            android:background="#E8EFF8"
+            android:singleLine="true"
+            android:ellipsize="end" />
+
+        <!-- ── 底部操作栏 ── -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="52dp"
+            android:orientation="horizontal"
+            android:gravity="center"
+            android:padding="8dp"
+            android:background="@drawable/panel_footer_background"
+            android:elevation="3dp">
+
+            <TextView
+                android:id="@+id/btn_flow_edit_node"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="编辑节点"
+                android:textSize="12sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:background="@drawable/panel_btn_primary_selector"
+                android:layout_marginEnd="5dp" />
+
+            <TextView
+                android:id="@+id/btn_flow_set_next"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="设置主线"
+                android:textSize="12sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:background="@drawable/panel_btn_secondary_selector"
+                android:layout_marginEnd="5dp" />
+
+            <TextView
+                android:id="@+id/btn_flow_set_fallback"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="设置分支"
+                android:textSize="12sp"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:background="@drawable/panel_btn_tertiary_selector"
+                android:layout_marginEnd="5dp" />
+
+            <TextView
+                android:id="@+id/btn_flow_clear_conn"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="清除连线"
+                android:textSize="12sp"
+                android:textColor="#B23B3B"
+                android:textStyle="bold"
+                android:background="@drawable/item_operation_compact_bg" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <!-- 拖动把手 -->
+    <View
+        android:id="@+id/drag_handle"
+        android:layout_width="40dp"
+        android:layout_height="4dp"
+        android:layout_gravity="center_horizontal|top"
+        android:layout_marginTop="52dp"
+        android:background="@drawable/drag_handle" />
+
+    <!-- 缩放把手 -->
+    <View
+        android:id="@+id/resize_handle"
+        android:layout_width="18dp"
+        android:layout_height="18dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="8dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/panel_resize_handle" />
+
+</FrameLayout>

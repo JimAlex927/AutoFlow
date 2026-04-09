@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#1E1E1E">
+
+    <!-- 标题栏 -->
+    <LinearLayout
+        android:id="@+id/panel_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="#2D2D2D"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="断点管理"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/btn_add_breakpoint"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_add"
+            android:tint="#FFFFFF"
+            android:contentDescription="添加断点" />
+
+        <ImageButton
+            android:id="@+id/btn_clear_all_breakpoints"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_delete"
+            android:tint="#FFFFFF"
+            android:contentDescription="清除所有" />
+
+        <ImageButton
+            android:id="@+id/btn_close_breakpoints"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:tint="#FFFFFF"
+            android:contentDescription="关闭" />
+    </LinearLayout>
+
+    <!-- 断点列表 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_breakpoints"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:padding="8dp" />
+
+    <!-- 空状态提示 -->
+    <TextView
+        android:id="@+id/tv_empty_breakpoints"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:gravity="center"
+        android:text="暂无断点\n点击 + 添加断点"
+        android:textColor="#666666"
+        android:textSize="14sp"
+        android:visibility="gone" />
+
+</LinearLayout>

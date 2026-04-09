@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<selector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- 优先级最高：正在运行中（用自定义属性 app:running="true" 判断） -->
+    <item app:running="true">
+        <shape>
+            <solid android:color="#44FF0000" />  <!-- 浅红色，半透明 -->
+            <corners android:radius="8dp" />     <!-- 可选：圆角 -->
+        </shape>
+    </item>
+
+    <!-- 用户选中（用 android:state_selected="true" 判断） -->
+    <item android:state_selected="true">
+        <shape>
+            <solid android:color="#330000FF" />  <!-- 浅蓝色，半透明 -->
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+
+    <!-- 默认状态 -->
+    <item>
+        <shape>
+            <solid android:color="@android:color/transparent" />
+        </shape>
+    </item>
+
+</selector>

@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/dialog_background">
+
+    <!-- 标题栏 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="选择项目模板"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:textColor="#315dbf" />
+
+        <TextView
+            android:id="@+id/btn_template_close"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textStyle="bold"
+            android:textColor="#5f6f84"
+            android:background="@drawable/item_operation_compact_bg" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="10dp"
+        android:text="选择一个模板快速创建项目，所有节点参数可在创建后修改"
+        android:textSize="12sp"
+        android:textColor="#6a7682" />
+
+    <!-- 模板列表 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_templates"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxHeight="320dp"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:clipToPadding="false" />
+
+    <!-- 底部按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:id="@+id/btn_template_blank"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="空白项目"
+            android:textSize="14sp"
+            android:textColor="#2f4f7c"
+            android:textStyle="bold"
+            android:background="@drawable/item_operation_compact_bg"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/btn_template_cancel"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="取消"
+            android:textSize="14sp"
+            android:textColor="#5f6f84"
+            android:background="@drawable/item_operation_compact_bg" />
+    </LinearLayout>
+
+</LinearLayout>

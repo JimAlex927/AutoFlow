@@ -1,0 +1,24 @@
+<!-- res/layout/float_menu.xml -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content">
+
+    <!-- 这里是菜单项 -->
+    <Button
+        android:id="@+id/btn_option1"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Option 1"
+        android:layout_centerHorizontal="true"
+        android:visibility="gone"/>
+
+    <Button
+        android:id="@+id/btn_option2"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Option 2"
+        android:layout_centerHorizontal="true"
+        android:visibility="gone"/>
+
+    <!-- 添加更多选项 -->
+</FrameLayout>

@@ -1,0 +1,374 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/project_panel_shell_bg"
+    android:alpha="0.985">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical">
+
+        <LinearLayout
+            android:id="@+id/drag_header"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:background="@drawable/project_panel_toolbar_bg"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp">
+
+            <ImageView
+                android:id="@+id/btn_back"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:padding="6dp"
+                android:src="@drawable/ic_back"
+                android:tint="#2E3B4E"
+                android:visibility="gone" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:orientation="vertical">
+
+                <TextView
+                    android:id="@+id/tv_title"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Projects"
+                    android:textColor="#213043"
+                    android:textSize="14sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_breadcrumb"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="1dp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    android:textColor="#7B8795"
+                    android:textSize="10sp"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <ImageView
+                android:id="@+id/btn_search"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:padding="6dp"
+                android:src="@drawable/handler_search"
+                android:tint="#4B5A6C" />
+
+            <ImageView
+                android:id="@+id/btn_add"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:padding="6dp"
+                android:src="@android:drawable/ic_input_add"
+                android:tint="#4B5A6C" />
+
+            <ImageView
+                android:id="@+id/btn_refresh"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:padding="6dp"
+                android:src="@android:drawable/ic_menu_rotate"
+                android:tint="#4B5A6C" />
+
+            <ImageView
+                android:id="@+id/btn_close"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:padding="6dp"
+                android:src="@drawable/icon_sub_close"
+                android:tint="#4B5A6C" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ly_search"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:background="#F7FAFD"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="6dp"
+            android:visibility="gone">
+
+            <EditText
+                android:id="@+id/edt_search"
+                android:layout_width="0dp"
+                android:layout_height="30dp"
+                android:layout_weight="1"
+                android:background="@drawable/project_panel_search_bg"
+                android:hint="搜索项目 / Task / Operation"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp"
+                android:singleLine="true"
+                android:textColor="#273444"
+                android:textColorHint="#93A0AE"
+                android:textSize="12sp" />
+
+            <ImageView
+                android:id="@+id/btn_clear_search"
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:padding="6dp"
+                android:src="@drawable/ic_close"
+                android:tint="#8090A0" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/breadcrumb_layout"
+            android:layout_width="match_parent"
+            android:layout_height="22dp"
+            android:background="#F7FAFD"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:visibility="gone">
+
+            <ImageView
+                android:id="@+id/breadcrumb_icon"
+                android:layout_width="14dp"
+                android:layout_height="14dp"
+                android:layout_marginEnd="5dp"
+                android:src="@drawable/ic_folder"
+                android:tint="#7B8795" />
+
+            <TextView
+                android:id="@+id/tv_breadcrumb_legacy"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:ellipsize="end"
+                android:maxLines="1"
+                android:textColor="#7B8795"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/runtime_status_bar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="6dp"
+            android:layout_marginEnd="8dp"
+            android:layout_marginBottom="2dp"
+            android:background="#EEF5F1"
+            android:orientation="vertical"
+            android:paddingStart="8dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="6dp"
+            android:visibility="gone">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <View
+                    android:id="@+id/runtime_status_dot"
+                    android:layout_width="8dp"
+                    android:layout_height="8dp"
+                    android:background="#4CAF50" />
+
+                <TextView
+                    android:id="@+id/tv_runtime_status"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="8dp"
+                    android:layout_weight="1"
+                    android:text="运行中"
+                    android:textColor="#2F6E46"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_runtime_progress"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0/0"
+                    android:textColor="#6F7E8D"
+                    android:textSize="10sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_runtime_detail"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="5dp"
+                android:ellipsize="end"
+                android:maxLines="2"
+                android:textColor="#546273"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <FrameLayout
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:background="#FBFCFE">
+
+            <androidx.recyclerview.widget.RecyclerView
+                android:id="@+id/rv_content"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:clipToPadding="false"
+                android:paddingTop="4dp"
+                android:paddingBottom="4dp" />
+
+            <LinearLayout
+                android:id="@+id/empty_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:orientation="vertical"
+                android:padding="20dp"
+                android:visibility="gone">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="暂无内容"
+                    android:textColor="#415064"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/tv_empty_hint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:gravity="center"
+                    android:text="点击右上角添加"
+                    android:textColor="#8A97A6"
+                    android:textSize="11sp" />
+            </LinearLayout>
+        </FrameLayout>
+
+        <LinearLayout
+            android:id="@+id/footer_drag_zone"
+            android:layout_width="match_parent"
+            android:layout_height="46dp"
+            android:background="@drawable/project_panel_footer_bg"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="7dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="7dp"
+            android:paddingBottom="6dp">
+
+            <TextView
+                android:id="@+id/btn_run"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1.1"
+                android:background="@drawable/project_panel_btn_primary"
+                android:gravity="center"
+                android:text="运行"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btn_edit"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1.1"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/project_panel_btn_secondary"
+                android:gravity="center"
+                android:text="编辑"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btn_move_up"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0.8"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/project_panel_btn_minor"
+                android:gravity="center"
+                android:text="上移"
+                android:textColor="#546273"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btn_move_down"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0.8"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/project_panel_btn_minor"
+                android:gravity="center"
+                android:text="下移"
+                android:textColor="#546273"
+                android:textSize="10sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btn_batch"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="0.9"
+                android:layout_marginStart="5dp"
+                android:background="@drawable/project_panel_btn_minor"
+                android:gravity="center"
+                android:text="批量"
+                android:textColor="#546273"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+    </LinearLayout>
+
+    <View
+        android:id="@+id/drag_handle"
+        android:layout_width="28dp"
+        android:layout_height="3dp"
+        android:layout_gravity="center_horizontal|top"
+        android:layout_marginTop="5dp"
+        android:background="@drawable/project_panel_top_grip" />
+
+    <FrameLayout
+        android:id="@+id/resize_handle"
+        android:layout_width="20dp"
+        android:layout_height="20dp"
+        android:layout_gravity="bottom|end"
+        android:layout_marginEnd="4dp"
+        android:layout_marginBottom="4dp"
+        android:background="@drawable/project_panel_resize_bg"
+        android:padding="6dp">
+
+        <View
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/project_panel_resize_mark" />
+    </FrameLayout>
+
+</FrameLayout>

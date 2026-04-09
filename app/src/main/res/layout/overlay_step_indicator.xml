@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 执行步骤覆盖层：执行中显示在屏幕顶部 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="10dp"
+    android:paddingTop="7dp"
+    android:paddingEnd="10dp"
+    android:paddingBottom="7dp"
+    android:background="@drawable/overlay_step_indicator_bg">
+
+    <!-- 操作类型颜色条 -->
+    <View
+        android:id="@+id/step_type_bar"
+        android:layout_width="3dp"
+        android:layout_height="22dp"
+        android:background="#4CAF50"
+        android:layout_marginEnd="8dp" />
+
+    <!-- 操作名 + 步骤信息 -->
+    <LinearLayout
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tv_step_op_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="执行中..."
+            android:textColor="#FFFFFF"
+            android:textSize="12sp"
+            android:textStyle="bold"
+            android:maxLines="1"
+            android:maxWidth="180dp"
+            android:ellipsize="end" />
+
+        <TextView
+            android:id="@+id/tv_step_info"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="步骤 1"
+            android:textColor="#D0D5DD"
+            android:textSize="10sp" />
+    </LinearLayout>
+
+    <!-- 转圈进度指示 -->
+    <ProgressBar
+        android:layout_width="14dp"
+        android:layout_height="14dp"
+        android:indeterminate="true"
+        android:layout_marginStart="8dp"
+        android:indeterminateTint="#E5EEFB" />
+
+</LinearLayout>

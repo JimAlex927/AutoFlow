@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="14dp"
+    android:background="@drawable/dialog_background">
+
+    <LinearLayout
+        android:id="@+id/dialog_drag_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="10dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="变量脚本节点"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#315dbf"/>
+
+        <TextView
+            android:id="@+id/btn_scale_dialog"
+            android:layout_width="44dp"
+            android:layout_height="30dp"
+            android:layout_marginEnd="6dp"
+            android:gravity="center"
+            android:text="放大"
+            android:textSize="11sp"
+            android:textColor="#315dbf"
+            android:background="@drawable/item_operation_compact_bg" />
+
+        <TextView
+            android:id="@+id/btn_close_top"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="X"
+            android:textStyle="bold"
+            android:textColor="#5f6f84"
+            android:background="@drawable/item_operation_compact_bg" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="在这里写变量计算逻辑，支持变量赋值和运算。如需流程跳转，请使用条件分支、多路分支或循环节点"
+                android:textSize="12sp"
+                android:textColor="#6a7682"
+                android:layout_marginBottom="10dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="操作名称"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/edt_name"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:hint="例如: 变量计算与跳转"
+                android:layout_marginBottom="10dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="脚本代码"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/edt_script"
+                android:layout_width="match_parent"
+                android:layout_height="170dp"
+                android:gravity="top|start"
+                android:inputType="textMultiLine"
+                android:hint="a = 100&#10;a = a + 1&#10;msg = &quot;count=&quot; + a"
+                android:layout_marginBottom="8dp"/>
+
+            <TextView
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:text="说明: 这是 JS 脚本。支持 if/else、比较、&amp;&amp;||，以及 toNumber/toBool/toStr/len/contains/startsWith/endsWith/substr2/now（不再支持 jump()，请使用专用分支节点）"
+                android:textSize="12sp"
+                android:textColor="#6a7682"
+                android:layout_marginBottom="10dp"/>
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="默认下一节点 (可选)"
+                android:textSize="14sp"
+                android:layout_marginBottom="4dp"/>
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginBottom="12dp">
+
+                <AutoCompleteTextView
+                    android:id="@+id/edt_next_operation"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:hint="例如: op_002"/>
+
+                <TextView
+                    android:id="@+id/btn_pick_next"
+                    android:layout_width="58dp"
+                    android:layout_height="40dp"
+                    android:layout_marginStart="8dp"
+                    android:gravity="center"
+                    android:text="选择"
+                    android:textColor="#315dbf"
+                    android:background="@drawable/item_operation_compact_bg"/>
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_cancel"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="取消"
+            android:textColor="#666666"
+            android:background="@drawable/btn_cancel_bg"
+            android:layout_marginEnd="8dp"/>
+
+        <TextView
+            android:id="@+id/btn_confirm"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="确认添加"
+            android:textStyle="bold"
+            android:textColor="#FFFFFF"
+            android:background="@drawable/btn_edit_selector"
+            android:layout_marginStart="8dp"/>
+    </LinearLayout>
+</LinearLayout>

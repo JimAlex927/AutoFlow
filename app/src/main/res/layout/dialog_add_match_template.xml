@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/dialog_background">
+
+    <LinearLayout
+        android:id="@+id/dialog_drag_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="模板匹配操作"
+            android:textSize="18sp"
+            android:textStyle="bold"
+            android:textColor="#315dbf" />
+
+        <TextView
+            android:id="@+id/btn_scale_dialog"
+            android:layout_width="44dp"
+            android:layout_height="30dp"
+            android:layout_marginEnd="6dp"
+            android:gravity="center"
+            android:text="放大"
+            android:textSize="11sp"
+            android:textColor="#315dbf"
+            android:background="@drawable/item_operation_compact_bg" />
+
+        <TextView
+            android:id="@+id/btn_close_top"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textStyle="bold"
+            android:textColor="#5f6f84"
+            android:background="@drawable/item_operation_compact_bg" />
+    </LinearLayout>
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:overScrollMode="ifContentScrolls">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="操作名称"
+        android:textSize="13sp"
+        android:textColor="#4e5f74"
+        android:layout_marginBottom="4dp"/>
+
+    <EditText
+        android:id="@+id/edt_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="例如: 检测登录按钮"
+        android:layout_marginBottom="10dp"/>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="模板图片文件"
+        android:textSize="13sp"
+        android:textColor="#4e5f74"
+        android:layout_marginBottom="4dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <AutoCompleteTextView
+            android:id="@+id/edt_template_file"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="例如: login_btn.png"/>
+
+        <TextView
+            android:id="@+id/btn_template_ts"
+            android:layout_width="74dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:gravity="center"
+            android:text="时间戳"
+            android:textSize="12sp"
+            android:textColor="#315dbf"
+            android:background="@drawable/item_operation_compact_bg"/>
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/btn_template_library"
+        android:layout_width="match_parent"
+        android:layout_height="36dp"
+        android:layout_marginBottom="8dp"
+        android:gravity="center"
+        android:text="从图片库选择"
+        android:textSize="12sp"
+        android:textColor="#315dbf"
+        android:background="@drawable/item_operation_compact_bg"/>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="120dp"
+        android:layout_marginBottom="8dp"
+        android:background="@drawable/item_operation_compact_bg"
+        android:padding="6dp">
+
+        <ImageView
+            android:id="@+id/iv_template_preview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter"
+            android:contentDescription="模板预览" />
+
+        <TextView
+            android:id="@+id/tv_template_preview_tip"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:text="暂无模板预览"
+            android:textColor="#6a7682"
+            android:textSize="12sp" />
+    </FrameLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="最近模板"
+        android:textSize="12sp"
+        android:textColor="#4e5f74"
+        android:layout_marginBottom="4dp"/>
+
+    <HorizontalScrollView
+        android:layout_width="match_parent"
+        android:layout_height="74dp"
+        android:layout_marginBottom="8dp"
+        android:scrollbars="none"
+        android:overScrollMode="never">
+
+        <LinearLayout
+            android:id="@+id/ly_recent_templates"
+            android:layout_width="wrap_content"
+            android:layout_height="match_parent"
+            android:orientation="horizontal"
+            android:gravity="center_vertical" />
+    </HorizontalScrollView>
+
+    <TextView
+        android:id="@+id/btn_capture"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:text="立即截图 / 更换模板"
+        android:textStyle="bold"
+        android:textColor="#FFFFFF"
+        android:gravity="center"
+        android:background="@drawable/btn_run_selector"
+        android:layout_marginBottom="10dp"/>
+
+    <LinearLayout
+        android:id="@+id/ly_advanced_toggle"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:background="@drawable/item_operation_compact_bg"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/tv_advanced_toggle"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="展开高级参数"
+            android:textColor="#315dbf"
+            android:textStyle="bold"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/tv_advanced_arrow"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="▼"
+            android:textColor="#315dbf"
+            android:textSize="13sp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/ly_advanced_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:background="@drawable/item_operation_compact_bg"
+        android:padding="10dp"
+        android:layout_marginBottom="10dp"
+        android:visibility="gone">
+
+        <CheckBox
+            android:id="@+id/chk_use_gray"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="开启灰度匹配"
+            android:textColor="#4e5f74"
+            android:buttonTint="#315dbf" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="匹配方法"
+            android:textSize="13sp"
+            android:textColor="#4e5f74"
+            android:layout_marginTop="6dp"
+            android:layout_marginBottom="4dp"/>
+
+        <AutoCompleteTextView
+            android:id="@+id/edt_match_method"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="TM_CCOEFF_NORMED"
+            android:layout_marginBottom="8dp"/>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="缩放因子"
+            android:textSize="13sp"
+            android:textColor="#4e5f74"
+            android:layout_marginBottom="4dp"/>
+
+        <EditText
+            android:id="@+id/edt_scale_factor"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="numberDecimal"
+            android:hint="1.0"/>
+
+        <CheckBox
+            android:id="@+id/chk_success_click"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="匹配成功后自动点击"
+            android:textColor="#4e5f74"
+            android:buttonTint="#315dbf"
+            android:layout_marginTop="8dp" />
+
+        <CheckBox
+            android:id="@+id/chk_use_canny"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="开启 Canny 预处理(实验)"
+            android:textColor="#4e5f74"
+            android:buttonTint="#315dbf"
+            android:layout_marginTop="2dp" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="匹配失败跳转节点 fallbackId"
+            android:textSize="13sp"
+            android:textColor="#4e5f74"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp"/>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <AutoCompleteTextView
+                android:id="@+id/edt_fallback_operation"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="例如: op_retry_001"/>
+
+            <TextView
+                android:id="@+id/btn_pick_fallback"
+                android:layout_width="58dp"
+                android:layout_height="40dp"
+                android:layout_marginStart="8dp"
+                android:gravity="center"
+                android:text="选择"
+                android:textColor="#315dbf"
+                android:background="@drawable/item_operation_compact_bg"/>
+        </LinearLayout>
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="节点前延迟(ms)"
+            android:textSize="13sp"
+            android:textColor="#4e5f74"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp"/>
+
+        <EditText
+            android:id="@+id/edt_match_pre_delay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:hint="0" />
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="节点后延迟(ms)"
+            android:textSize="13sp"
+            android:textColor="#4e5f74"
+            android:layout_marginTop="8dp"
+            android:layout_marginBottom="4dp"/>
+
+        <EditText
+            android:id="@+id/edt_match_post_delay"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:inputType="number"
+            android:hint="0" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:layout_marginBottom="10dp">
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginEnd="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="相似度(0~1)"
+                android:textSize="13sp"
+                android:textColor="#4e5f74"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/edt_similarity"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="numberDecimal"/>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:layout_marginStart="6dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="超时(毫秒)"
+                android:textSize="13sp"
+                android:textColor="#4e5f74"
+                android:layout_marginBottom="4dp"/>
+
+            <EditText
+                android:id="@+id/edt_timeout"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="number"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="下一节点 (可视化连线)"
+        android:textSize="13sp"
+        android:textColor="#4e5f74"
+        android:layout_marginBottom="4dp"/>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="16dp">
+
+        <AutoCompleteTextView
+            android:id="@+id/edt_next_operation"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:hint="不填则按 response 处理"/>
+
+        <TextView
+            android:id="@+id/btn_pick_next"
+            android:layout_width="58dp"
+            android:layout_height="40dp"
+            android:layout_marginStart="8dp"
+            android:gravity="center"
+            android:text="选择"
+            android:textColor="#315dbf"
+            android:background="@drawable/item_operation_compact_bg"/>
+    </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_cancel"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:text="取消"
+            android:textSize="14sp"
+            android:textColor="#666666"
+            android:gravity="center"
+            android:background="@drawable/btn_cancel_bg"
+            android:layout_marginEnd="8dp" />
+
+        <TextView
+            android:id="@+id/btn_confirm"
+            android:layout_width="0dp"
+            android:layout_height="44dp"
+            android:layout_weight="1"
+            android:text="确认添加"
+            android:textSize="14sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:gravity="center"
+            android:background="@drawable/btn_edit_selector" />
+    </LinearLayout>
+
+</LinearLayout>

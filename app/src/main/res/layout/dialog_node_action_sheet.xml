@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="220dp"
+    android:layout_height="wrap_content"
+    android:background="@drawable/project_panel_shell_bg"
+    android:orientation="vertical"
+    android:paddingTop="8dp"
+    android:paddingBottom="8dp">
+
+    <TextView
+        android:id="@+id/tv_action_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="14dp"
+        android:paddingTop="6dp"
+        android:paddingEnd="14dp"
+        android:paddingBottom="8dp"
+        android:text="节点操作"
+        android:textColor="#243244"
+        android:textSize="13sp"
+        android:textStyle="bold" />
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_action_list"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxHeight="260dp"
+        android:overScrollMode="ifContentScrolls"
+        android:scrollbars="vertical" />
+</LinearLayout>

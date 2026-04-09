@@ -1,0 +1,127 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/dialog_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/tv_library_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="选择模板图片"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:textColor="#315dbf"/>
+
+        <TextView
+            android:id="@+id/btn_library_add"
+            android:layout_width="44dp"
+            android:layout_height="30dp"
+            android:layout_marginEnd="6dp"
+            android:gravity="center"
+            android:text="新增"
+            android:textSize="11sp"
+            android:textColor="#315dbf"
+            android:background="@drawable/item_operation_compact_bg"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/btn_library_close"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textStyle="bold"
+            android:textColor="#5f6f84"
+            android:background="@drawable/item_operation_compact_bg" />
+    </LinearLayout>
+
+    <EditText
+        android:id="@+id/edt_library_search"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="搜索文件名"
+        android:layout_marginBottom="8dp"/>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_library"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:minHeight="180dp"
+        android:paddingBottom="6dp"/>
+
+    <LinearLayout
+        android:id="@+id/ly_library_manage_actions"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:orientation="horizontal"
+        android:layout_marginTop="6dp">
+
+        <TextView
+            android:id="@+id/btn_library_batch"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="批量"
+            android:textColor="#315dbf"
+            android:background="@drawable/item_operation_compact_bg"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/btn_library_delete"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="删除(0)"
+            android:textColor="#b23b3b"
+            android:background="@drawable/item_operation_compact_bg"
+            android:layout_marginStart="6dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/ly_library_select_actions"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/btn_library_cancel"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="取消"
+            android:textColor="#666666"
+            android:background="@drawable/btn_cancel_bg"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/btn_library_confirm"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="确定"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:background="@drawable/btn_edit_selector"
+            android:layout_marginStart="6dp" />
+    </LinearLayout>
+
+</LinearLayout>

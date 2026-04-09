@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Brand -->
+    <color name="colorPrimary">#2D5FE5</color>
+    <color name="colorPrimaryDark">#1B49BF</color>
+    <color name="colorPrimaryLight">#5B8CF5</color>
+    <color name="colorOnPrimary">#FFFFFF</color>
+
+    <!-- Semantic -->
+    <color name="colorSuccess">#4CAF50</color>
+    <color name="colorSuccessLight">#EAF7EC</color>
+    <color name="colorOnSuccess">#FFFFFF</color>
+    <color name="colorWarning">#FF9800</color>
+    <color name="colorWarningDark">#E57A00</color>
+    <color name="colorWarningLight">#FFF3E0</color>
+    <color name="colorOnWarning">#FFFFFF</color>
+    <color name="colorError">#E53935</color>
+    <color name="colorErrorDark">#C62828</color>
+    <color name="colorErrorLight">#FFEBEE</color>
+    <color name="colorOnError">#FFFFFF</color>
+
+    <!-- Surfaces -->
+    <color name="colorSurface">#FFFFFF</color>
+    <color name="colorSurfaceVariant">#F5F9FF</color>
+    <color name="colorBackground">#F0F4F8</color>
+    <color name="colorBackgroundGradientStart">#F7FBFF</color>
+    <color name="colorBackgroundGradientMid">#EDF4FF</color>
+    <color name="colorBackgroundGradientEnd">#E8F1FB</color>
+
+    <!-- Content -->
+    <color name="colorOnSurface">#1F2E43</color>
+    <color name="colorOnSurfaceVariant">#5D6B7A</color>
+    <color name="colorOnSurfaceDisabled">#9EA8B4</color>
+    <color name="colorOutline">#D7E0EE</color>
+    <color name="colorOutlineVariant">#E5ECF5</color>
+    <color name="colorHighlight">#EAF2FF</color>
+    <color name="colorPressed">#E5EEFB</color>
+    <color name="colorRipple">#1F2D5FE5</color>
+
+    <!-- Chips -->
+    <color name="chipEnabledBg">#EAF7EC</color>
+    <color name="chipEnabledText">#2E7D32</color>
+    <color name="chipDisabledBg">#F3F5F7</color>
+    <color name="chipDisabledText">#7C8A99</color>
+
+    <!-- Operation type accent colors -->
+    <color name="op_click">#1E88E5</color>
+    <color name="op_click_bg">#E3F2FD</color>
+    <color name="op_delay">#F57C00</color>
+    <color name="op_delay_bg">#FFF3E0</color>
+    <color name="op_gesture">#8E24AA</color>
+    <color name="op_gesture_bg">#F3E5F5</color>
+    <color name="op_crop">#00897B</color>
+    <color name="op_crop_bg">#E0F2F1</color>
+    <color name="op_load_img">#0097A7</color>
+    <color name="op_load_img_bg">#E0F7FA</color>
+    <color name="op_match_template">#43A047</color>
+    <color name="op_match_template_bg">#E8F5E9</color>
+    <color name="op_match_map">#7CB342</color>
+    <color name="op_match_map_bg">#F1F8E9</color>
+    <color name="op_color_match">#D84315</color>
+    <color name="op_color_match_bg">#FBE9E7</color>
+    <color name="op_color_search">#8E24AA</color>
+    <color name="op_color_search_bg">#F3E5F5</color>
+    <color name="op_jump_task">#F4511E</color>
+    <color name="op_jump_task_bg">#FBE9E7</color>
+    <color name="op_ocr">#3949AB</color>
+    <color name="op_ocr_bg">#E8EAF6</color>
+    <color name="op_condition">#F9A825</color>
+    <color name="op_condition_bg">#FFF8E1</color>
+    <color name="op_var_script">#D81B60</color>
+    <color name="op_var_script_bg">#FCE4EC</color>
+    <color name="op_var_math">#6D4C41</color>
+    <color name="op_var_math_bg">#EFEBE9</color>
+    <color name="op_var_template">#546E7A</color>
+    <color name="op_var_template_bg">#ECEFF1</color>
+    <color name="op_app_launch">#E53935</color>
+    <color name="op_app_launch_bg">#FFEBEE</color>
+    <color name="op_back_key">#5E35B1</color>
+    <color name="op_back_key_bg">#EDE7F6</color>
+    <color name="op_unknown">#757575</color>
+    <color name="op_unknown_bg">#F5F5F5</color>
+
+    <!-- Legacy names still used elsewhere -->
+    <color name="act_bg">#F8F8FB</color>
+    <color name="dialog_content_color">#333333</color>
+    <color name="dialog_txt_label">#000000</color>
+    <color name="input_text_color_hint">#9953565D</color>
+    <color name="white">#FFFFFF</color>
+    <color name="black">#FF000000</color>
+    <color name="transparent">#00000000</color>
+    <color name="window_color">#BB000000</color>
+    <color name="addOperationMenuSurface">#18212D</color>
+    <color name="addOperationMenuSurfaceAlt">#1F2A39</color>
+    <color name="addOperationMenuSurfacePressed">#273447</color>
+    <color name="addOperationMenuSurfaceSelected">#22344D</color>
+    <color name="addOperationMenuOutline">#2F3C4E</color>
+    <color name="addOperationMenuOutlineStrong">#41536C</color>
+    <color name="addOperationMenuText">#F4F7FB</color>
+    <color name="addOperationMenuTextSecondary">#93A2B7</color>
+    <color name="addOperationMenuBadge">#2D5FE5</color>
+
+</resources>

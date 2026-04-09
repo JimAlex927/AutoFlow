@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="#1E1E1E">
+
+    <!-- 标题栏 -->
+    <LinearLayout
+        android:id="@+id/panel_header"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="8dp"
+        android:background="#2D2D2D"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="调试控制"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <ImageButton
+            android:id="@+id/btn_close_debug"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_close_clear_cancel"
+            android:tint="#FFFFFF"
+            android:contentDescription="关闭" />
+    </LinearLayout>
+
+    <!-- 执行状态 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp"
+        android:background="#252525">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <View
+                android:id="@+id/debug_status_indicator"
+                android:layout_width="12dp"
+                android:layout_height="12dp"
+                android:background="@android:drawable/presence_offline"
+                android:backgroundTint="#9E9E9E" />
+
+            <TextView
+                android:id="@+id/tv_debug_status"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="未运行"
+                android:textColor="#9E9E9E"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_current_operation"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="当前操作: -"
+            android:textColor="#AAAAAA"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/tv_operation_index"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="索引: -"
+            android:textColor="#AAAAAA"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+    <!-- 控制按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:padding="12dp"
+        android:gravity="center">
+
+        <Button
+            android:id="@+id/btn_debug_continue"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginEnd="4dp"
+            android:text="继续"
+            android:textSize="12sp"
+            android:enabled="false" />
+
+        <Button
+            android:id="@+id/btn_debug_pause"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp"
+            android:text="暂停"
+            android:textSize="12sp"
+            android:enabled="false" />
+
+        <Button
+            android:id="@+id/btn_debug_step"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="4dp"
+            android:text="单步"
+            android:textSize="12sp"
+            android:enabled="false" />
+    </LinearLayout>
+
+    <!-- 调试选项 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <CheckBox
+            android:id="@+id/cb_debug_mode"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="启用调试模式"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+
+        <CheckBox
+            android:id="@+id/cb_record_history"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="记录执行历史"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+
+        <CheckBox
+            android:id="@+id/cb_capture_screenshots"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="捕获截图"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+
+        <CheckBox
+            android:id="@+id/cb_screenshot_comparison"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="启用截图对比"
+            android:textColor="#FFFFFF"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <!-- 快捷面板按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="12dp">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="调试面板"
+            android:textColor="#AAAAAA"
+            android:textSize="12sp"
+            android:layout_marginBottom="8dp" />
+
+        <Button
+            android:id="@+id/btn_show_breakpoints"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="断点管理"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_show_variables"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="变量监控"
+            android:textSize="12sp" />
+
+        <Button
+            android:id="@+id/btn_show_history"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="执行历史"
+            android:textSize="12sp" />
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <!-- Lottie -->
+    <declare-styleable name="LottieAnimationView">
+        <attr name="lottie_fileName" format="string" />
+        <attr name="lottie_autoPlay" format="boolean" />
+        <attr name="lottie_loop" format="boolean" />
+    </declare-styleable>
+
+    <!-- Rounded ImageView / RoundImageView-like -->
+    <declare-styleable name="RoundImageView">
+        <attr name="riv_border_color" format="color|reference" />
+        <attr name="riv_corner_radius" format="dimension" />
+        <attr name="riv_border_width" format="dimension" />
+        <attr name="riv_oval" format="boolean" />
+    </declare-styleable>
+
+    <!-- Project custom attrs used in layouts -->
+    <attr name="content" format="string|reference" />
+    <attr name="help" format="string|reference" />
+    <attr name="items" format="reference|string" />
+    <attr name="unit" format="string|reference" />
+	<attr name="unitHelp" format="string|reference" />
+
+    <declare-styleable name="OperationItemView">
+        <attr name="running" format="boolean" />
+    </declare-styleable>
+
+
+</resources>

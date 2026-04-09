@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="48dp"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:paddingStart="12dp"
+    android:paddingEnd="12dp"
+    android:background="@android:color/white">
+
+    <!-- 运行指示器（红色圆点） -->
+    <View
+        android:id="@+id/running_indicator"
+        android:layout_width="8dp"
+        android:layout_height="8dp"
+        android:background="@drawable/circle_red"
+        android:layout_marginEnd="8dp"
+        android:visibility="gone" />
+
+    <!-- 序号 -->
+    <TextView
+        android:id="@+id/tv_index"
+        android:layout_width="24dp"
+        android:layout_height="wrap_content"
+        android:text="1"
+        android:textSize="12sp"
+        android:textColor="#999999"
+        android:gravity="center" />
+
+    <!-- Operation 名称 -->
+    <TextView
+        android:id="@+id/tv_op_name"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:text="Operation Name"
+        android:textSize="14sp"
+        android:textColor="#333333"
+        android:ellipsize="end"
+        android:maxLines="1"
+        android:layout_marginStart="8dp" />
+
+    <!-- Operation 类型 -->
+    <TextView
+        android:id="@+id/tv_op_type"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="click"
+        android:textSize="11sp"
+        android:textColor="#666666"
+        android:background="#F0F0F0"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp" />
+
+</LinearLayout>

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/dialog_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="8dp">
+
+        <TextView
+            android:id="@+id/tv_picker_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="选择节点"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:textColor="#315dbf"/>
+
+        <TextView
+            android:id="@+id/btn_picker_close"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textStyle="bold"
+            android:textColor="#5f6f84"
+            android:background="@drawable/item_operation_compact_bg" />
+    </LinearLayout>
+
+    <EditText
+        android:id="@+id/edt_picker_search"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:hint="搜索节点序号、名称、类型或ID"
+        android:layout_marginBottom="8dp"/>
+
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_picker"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:clipToPadding="false"
+        android:paddingBottom="10dp"/>
+
+    <TextView
+        android:id="@+id/btn_picker_clear"
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:gravity="center"
+        android:text="清空选择"
+        android:textColor="#5f6f84"
+        android:background="@drawable/item_operation_compact_bg"
+        android:layout_marginTop="6dp"/>
+
+</LinearLayout>

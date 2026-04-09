@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/dialog_background">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="流程图编排"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:textColor="#315dbf" />
+
+        <TextView
+            android:id="@+id/btn_flow_close"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textStyle="bold"
+            android:textColor="#5f6f84"
+            android:background="@drawable/item_operation_compact_bg" />
+    </LinearLayout>
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:layout_marginBottom="8dp"
+        android:text="流程总览（主线绿色，分支红色）"
+        android:textSize="12sp"
+        android:textColor="#6a7682" />
+
+    <com.auto.master.floatwin.FlowGraphView
+        android:id="@+id/flow_graph_view"
+        android:layout_width="match_parent"
+        android:layout_height="300dp"
+        android:background="@drawable/item_operation_compact_bg" />
+
+    <TextView
+        android:id="@+id/tv_flow_selected"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        android:text="未选中节点"
+        android:textSize="12sp"
+        android:textColor="#4e5f74" />
+
+    <TextView
+        android:id="@+id/btn_flow_reset_zoom"
+        android:layout_width="match_parent"
+        android:layout_height="34dp"
+        android:layout_marginTop="6dp"
+        android:gravity="center"
+        android:text="重置缩放/位置"
+        android:textSize="12sp"
+        android:textColor="#2f4f7c"
+        android:background="@drawable/item_operation_compact_bg" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="40dp"
+        android:layout_marginTop="6dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_flow_edit_node"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="编辑节点"
+            android:textColor="#2f4f7c"
+            android:textStyle="bold"
+            android:background="@drawable/item_operation_compact_bg"
+            android:layout_marginEnd="4dp" />
+
+        <TextView
+            android:id="@+id/btn_flow_set_next"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="设置主线"
+            android:textColor="#2f4f7c"
+            android:textStyle="bold"
+            android:background="@drawable/item_operation_compact_bg"
+            android:layout_marginStart="4dp"
+            android:layout_marginEnd="4dp" />
+
+        <TextView
+            android:id="@+id/btn_flow_set_fallback"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="设置分支"
+            android:textColor="#b23b3b"
+            android:textStyle="bold"
+            android:background="@drawable/item_operation_compact_bg"
+            android:layout_marginStart="4dp" />
+    </LinearLayout>
+
+</LinearLayout>

@@ -1,0 +1,163 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <!-- Android 9+ 启动前台服务需要 -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+
+    <!-- Android 14+ MediaProjection 前台服务类型权限（target 34 时建议加） -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+
+<!--    <uses-permission android:name="android.permission.CAMERA" />-->
+<!--    //OPENCV 的存储权限-->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
+    <!-- Android 11+ 推荐使用 scoped storage，但因为你用 getExternalFilesDir()，无需额外权限 -->
+
+<!--    悬浮球权限 -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+
+<!--    http服务器               ！！！！！！！！！！！！需要在手机上开启后台服务 不然外网访问不了！！！-->
+    <uses-permission android:name="android.permission.INTERNET"/>
+
+    <!-- 添加网络状态权限（可选，用于调试） -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- 在 AndroidManifest.xml 中 -->
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <!-- App-launch trigger: query installed packages for picker -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+    <!-- Usage stats for foreground app detection (app-launch trigger) -->
+    <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
+
+    <application
+        android:name=".AtommApplication"
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:usesCleartextTraffic="true"
+        android:theme="@style/Theme.AtomMaster">
+
+        <activity
+            android:name=".MainActivity"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".auto.CropCaptureActivity"
+            android:exported="false"
+            android:theme="@style/Theme.Crop.Transparent"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask" />
+
+        <!-- 新页面：网格视图页 -->
+        <activity
+            android:name=".GridPageActivity"
+            android:exported="true" />
+        <activity
+            android:name=".ProjectExplorerActivity"
+            android:exported="true" />
+        <activity
+            android:name=".FileEditorActivity"
+            android:exported="false" />
+        <!-- 新管理页面 -->
+        <activity
+            android:name=".ManagementPageActivity"
+            android:exported="true" />
+        <activity
+            android:name=".ManagementMultiPageActivity"
+            android:exported="true" />
+
+        <activity
+            android:name=".importer.ScriptImportActivity"
+            android:exported="true"
+            android:excludeFromRecents="true">
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:mimeType="application/zip" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="application/zip" />
+                <data android:mimeType="application/octet-stream" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+        </activity>
+
+        <activity
+            android:name=".importer.ProjectImportPickerActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <service
+            android:name=".auto.AutoAccessibilityService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService"/>
+            </intent-filter>
+
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/auto_accessibility_config"/>
+        </service>
+
+        <service
+            android:name=".floatwin.FloatWindowService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="mediaProjection" />
+
+
+        <!-- MediaProjection 截图前台服务 -->
+        <service
+            android:name="com.auto.master.capture.MediaProjectionCaptureService"
+            android:exported="false"
+            android:foregroundServiceType="mediaProjection" />
+        <receiver
+            android:name=".scheduler.TaskScheduleReceiver"
+            android:enabled="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.LOCKED_BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
+
+
+
+
+    </application>
+
+</manifest>

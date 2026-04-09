@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+
+    <!-- 背景颜色（半透明黑或你喜欢的颜色） -->
+    <solid android:color="#CC000000" />  <!-- 半透明白色：#CCFFFFFF -->
+
+    <!-- 圆角（菜单看起来更现代） -->
+    <corners android:radius="16dp" />
+
+    <!-- 可选：边框 -->
+    <!-- <stroke android:width="1dp" android:color="#80FFFFFF" /> -->
+
+</shape>

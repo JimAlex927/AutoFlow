@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="10dp"
+    android:layout_marginTop="3dp"
+    android:layout_marginBottom="3dp"
+    android:background="@drawable/item_operation_compact_bg">
+
+    <!-- 类型标签 -->
+    <TextView
+        android:id="@+id/tv_trigger_type_badge"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="App"
+        android:textSize="10sp"
+        android:textColor="#FFFFFF"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+        android:background="@drawable/bg_op_type_badge"
+        android:layout_marginEnd="10dp" />
+
+    <!-- 触发条件 + 目标 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tv_trigger_condition"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="启动微信"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            android:textColor="#243446" />
+
+        <TextView
+            android:id="@+id/tv_trigger_target"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="→ 项目/任务"
+            android:textSize="11sp"
+            android:textColor="#6a7682" />
+    </LinearLayout>
+
+    <!-- 启用开关 -->
+    <Switch
+        android:id="@+id/sw_trigger_enabled"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginEnd="8dp" />
+
+    <!-- 删除按钮 -->
+    <TextView
+        android:id="@+id/btn_trigger_delete"
+        android:layout_width="28dp"
+        android:layout_height="28dp"
+        android:gravity="center"
+        android:text="✕"
+        android:textSize="12sp"
+        android:textColor="#B23B3B"
+        android:background="@drawable/item_operation_compact_bg" />
+
+</LinearLayout>

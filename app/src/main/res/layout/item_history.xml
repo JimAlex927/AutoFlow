@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:padding="12dp"
+    android:background="?attr/selectableItemBackground"
+    android:gravity="center_vertical">
+
+    <ImageView
+        android:id="@+id/iv_history_screenshot"
+        android:layout_width="60dp"
+        android:layout_height="60dp"
+        android:scaleType="centerCrop"
+        android:background="#333333"
+        android:contentDescription="截图" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical"
+        android:layout_marginStart="12dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:id="@+id/tv_history_index"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="#0"
+                android:textColor="#9E9E9E"
+                android:textSize="12sp"
+                android:minWidth="30dp" />
+
+            <TextView
+                android:id="@+id/tv_history_operation"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="操作名称"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:maxLines="1"
+                android:ellipsize="end" />
+
+            <View
+                android:id="@+id/indicator_success"
+                android:layout_width="8dp"
+                android:layout_height="8dp"
+                android:layout_marginStart="8dp"
+                android:background="@android:drawable/presence_online"
+                android:backgroundTint="#4CAF50" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_history_timestamp"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="2024-01-01 12:00:00"
+            android:textColor="#666666"
+            android:textSize="11sp" />
+
+        <TextView
+            android:id="@+id/tv_history_error"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="错误信息"
+            android:textColor="#F44336"
+            android:textSize="11sp"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <ImageButton
+        android:id="@+id/btn_replay_to_here"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:src="@android:drawable/ic_media_play"
+        android:tint="#4CAF50"
+        android:contentDescription="回放到此处" />
+
+</LinearLayout>

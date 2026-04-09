@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:gravity="center_vertical"
+    android:padding="12dp"
+    android:layout_marginStart="2dp"
+    android:layout_marginEnd="2dp"
+    android:layout_marginTop="4dp"
+    android:layout_marginBottom="4dp"
+    android:background="@drawable/item_operation_compact_bg">
+
+    <!-- Emoji 图标 -->
+    <TextView
+        android:id="@+id/tv_template_emoji"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:gravity="center"
+        android:text="📋"
+        android:textSize="22sp"
+        android:background="@drawable/bg_op_type_chip"
+        android:layout_marginEnd="12dp" />
+
+    <!-- 名字 + 描述 -->
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tv_template_name"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="模板名称"
+            android:textSize="14sp"
+            android:textStyle="bold"
+            android:textColor="#243446" />
+
+        <TextView
+            android:id="@+id/tv_template_desc"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:text="模板描述"
+            android:textSize="11sp"
+            android:textColor="#6a7682"
+            android:maxLines="2"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- 分类标签 -->
+    <TextView
+        android:id="@+id/tv_template_category"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="常用"
+        android:textSize="10sp"
+        android:textColor="#315dbf"
+        android:paddingStart="6dp"
+        android:paddingEnd="6dp"
+        android:paddingTop="2dp"
+        android:paddingBottom="2dp"
+        android:background="@drawable/bg_op_type_chip"
+        android:layout_marginStart="8dp" />
+
+</LinearLayout>

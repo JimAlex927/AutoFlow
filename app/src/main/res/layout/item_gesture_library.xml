@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/item_operation_compact_bg"
+    android:padding="6dp"
+    android:layout_marginBottom="6dp">
+
+    <com.auto.master.floatwin.GesturePreviewView
+        android:id="@+id/view_gesture_preview"
+        android:layout_width="match_parent"
+        android:layout_height="84dp"
+        android:background="#EEF3FB" />
+
+    <TextView
+        android:id="@+id/tv_gesture_item_name"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="4dp"
+        android:textSize="11sp"
+        android:textColor="#4e5f74"
+        android:maxLines="2"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/tv_gesture_item_meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textSize="10sp"
+        android:textColor="#7a8794"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+</LinearLayout>

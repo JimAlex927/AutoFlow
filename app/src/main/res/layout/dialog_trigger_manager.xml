@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/dialog_background">
+
+    <!-- 标题栏 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="触发器管理"
+            android:textSize="17sp"
+            android:textStyle="bold"
+            android:textColor="#315dbf" />
+
+        <TextView
+            android:id="@+id/btn_trigger_close"
+            android:layout_width="30dp"
+            android:layout_height="30dp"
+            android:gravity="center"
+            android:text="✕"
+            android:textStyle="bold"
+            android:textColor="#5f6f84"
+            android:background="@drawable/item_operation_compact_bg" />
+    </LinearLayout>
+
+    <!-- 说明 -->
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="8dp"
+        android:text="除定时外，支持「App 启动触发」和「通知触发」，自动运行指定任务"
+        android:textSize="12sp"
+        android:textColor="#6a7682" />
+
+    <!-- 现有触发器列表 -->
+    <androidx.recyclerview.widget.RecyclerView
+        android:id="@+id/rv_triggers"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:maxHeight="200dp"
+        android:paddingStart="10dp"
+        android:paddingEnd="10dp"
+        android:clipToPadding="false" />
+
+    <!-- 空状态 -->
+    <TextView
+        android:id="@+id/tv_trigger_empty"
+        android:layout_width="match_parent"
+        android:layout_height="48dp"
+        android:gravity="center"
+        android:text="暂无触发器"
+        android:textSize="13sp"
+        android:textColor="#AAB0BC"
+        android:visibility="gone" />
+
+    <!-- 新增触发器按钮 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="52dp"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp"
+        android:paddingTop="8dp"
+        android:paddingBottom="8dp">
+
+        <TextView
+            android:id="@+id/btn_add_app_trigger"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="+ App 启动"
+            android:textSize="13sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:background="@drawable/panel_btn_primary_selector"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/btn_add_notif_trigger"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="+ 通知触发"
+            android:textSize="13sp"
+            android:textColor="#FFFFFF"
+            android:textStyle="bold"
+            android:background="@drawable/panel_btn_secondary_selector"
+            android:layout_marginEnd="6dp" />
+
+        <TextView
+            android:id="@+id/btn_trigger_open_settings"
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_weight="1"
+            android:gravity="center"
+            android:text="授权设置"
+            android:textSize="12sp"
+            android:textColor="#2f4f7c"
+            android:background="@drawable/item_operation_compact_bg" />
+    </LinearLayout>
+
+</LinearLayout>

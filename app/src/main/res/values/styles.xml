@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="TextAppearance.AtomMaster" parent="@android:style/TextAppearance" />
+
+    <style name="TextAppearance.AtomMaster.Display" parent="TextAppearance.AtomMaster">
+        <item name="android:textSize">@dimen/text_display</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/colorOnSurface</item>
+    </style>
+
+    <style name="TextAppearance.AtomMaster.Title" parent="TextAppearance.AtomMaster">
+        <item name="android:textSize">@dimen/text_title</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/colorOnSurface</item>
+    </style>
+
+    <style name="TextAppearance.AtomMaster.Subtitle" parent="TextAppearance.AtomMaster">
+        <item name="android:textSize">@dimen/text_subtitle</item>
+        <item name="android:textColor">@color/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="TextAppearance.AtomMaster.Body" parent="TextAppearance.AtomMaster">
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:textColor">@color/colorOnSurface</item>
+    </style>
+
+    <style name="TextAppearance.AtomMaster.Caption" parent="TextAppearance.AtomMaster">
+        <item name="android:textSize">@dimen/text_caption</item>
+        <item name="android:textColor">@color/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="TextAppearance.AtomMaster.Label" parent="TextAppearance.AtomMaster">
+        <item name="android:textSize">@dimen/text_label</item>
+        <item name="android:textColor">@color/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="TextAppearance.AtomMaster.SectionHeader" parent="TextAppearance.AtomMaster">
+        <item name="android:textSize">15sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">@color/colorOnSurface</item>
+    </style>
+
+    <!-- Small section label for config dialogs -->
+    <style name="CfgSectionLabel">
+        <item name="android:layout_width">match_parent</item>
+        <item name="android:layout_height">wrap_content</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:textColor">#5A6978</item>
+        <item name="android:layout_marginBottom">6dp</item>
+    </style>
+
+    <style name="Widget.AtomMaster" parent="@android:style/Widget" />
+
+    <style name="Widget.AtomMaster.Button" parent="@android:style/Widget.Button">
+        <item name="android:minHeight">@dimen/button_height</item>
+        <item name="android:textAllCaps">false</item>
+        <item name="android:textSize">@dimen/text_body</item>
+        <item name="android:paddingStart">@dimen/spacing_lg</item>
+        <item name="android:paddingEnd">@dimen/spacing_lg</item>
+        <item name="android:gravity">center</item>
+    </style>
+
+    <style name="Widget.AtomMaster.Button.Primary" parent="Widget.AtomMaster.Button">
+        <item name="android:background">@drawable/btn_primary_selector</item>
+        <item name="android:textColor">@color/colorOnPrimary</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Widget.AtomMaster.Button.Secondary" parent="Widget.AtomMaster.Button">
+        <item name="android:background">@drawable/btn_secondary_selector</item>
+        <item name="android:textColor">@color/colorPrimary</item>
+    </style>
+
+    <style name="Widget.AtomMaster.Button.Tertiary" parent="Widget.AtomMaster.Button">
+        <item name="android:background">@drawable/btn_tertiary_selector</item>
+        <item name="android:textColor">@color/colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="Widget.AtomMaster.Button.Warning" parent="Widget.AtomMaster.Button">
+        <item name="android:background">@drawable/btn_warning_selector</item>
+        <item name="android:textColor">@color/colorOnWarning</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="Widget.AtomMaster.StatusChip">
+        <item name="android:minHeight">@dimen/chip_height</item>
+        <item name="android:gravity">center</item>
+        <item name="android:textSize">@dimen/text_label</item>
+        <item name="android:paddingStart">@dimen/spacing_md</item>
+        <item name="android:paddingEnd">@dimen/spacing_md</item>
+    </style>
+
+    <style name="Widget.AtomMaster.StatusChip.Enabled" parent="Widget.AtomMaster.StatusChip">
+        <item name="android:background">@drawable/bg_chip_enabled</item>
+        <item name="android:textColor">@color/chipEnabledText</item>
+    </style>
+
+    <style name="Widget.AtomMaster.StatusChip.Disabled" parent="Widget.AtomMaster.StatusChip">
+        <item name="android:background">@drawable/bg_chip_disabled</item>
+        <item name="android:textColor">@color/chipDisabledText</item>
+    </style>
+
+    <style name="Widget.AtomMaster.Card">
+        <item name="android:padding">@dimen/card_padding</item>
+        <item name="android:background">@drawable/bg_status_card</item>
+        <item name="android:elevation">@dimen/card_elevation</item>
+    </style>
+
+    <style name="Theme.Crop.Transparent" parent="Theme.AppCompat.NoActionBar">
+        <item name="android:windowIsTranslucent">true</item>
+        <item name="android:windowBackground">@android:color/transparent</item>
+        <item name="android:backgroundDimEnabled">false</item>
+        <item name="android:windowFullscreen">true</item>
+    </style>
+
+</resources>

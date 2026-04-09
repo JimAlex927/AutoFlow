@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#EEF2F6"
+    android:orientation="vertical">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="50dp"
+        android:background="#FFFFFF"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp">
+
+        <TextView
+            android:id="@+id/tv_permission_status"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:text="权限检查中"
+            android:textColor="#314153"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btn_permission_sheet"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:background="@drawable/project_panel_toolbar_icon_bg"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="6dp"
+            android:text="权限"
+            android:textColor="#4B5A6C"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/btn_permission_quick"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/project_panel_btn_secondary"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="6dp"
+            android:text="一键获取"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/btn_toggle_float"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:background="@drawable/project_panel_btn_primary"
+            android:paddingStart="10dp"
+            android:paddingTop="6dp"
+            android:paddingEnd="10dp"
+            android:paddingBottom="6dp"
+            android:text="@string/main_float_start"
+            android:textColor="@android:color/white"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1"
+        android:background="@android:color/transparent">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:orientation="vertical">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="46dp"
+                android:background="@drawable/project_panel_toolbar_bg"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp">
+
+                <ImageView
+                    android:id="@+id/btn_panel_back"
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:background="@drawable/project_panel_toolbar_icon_bg"
+                    android:padding="6dp"
+                    android:src="@drawable/ic_back"
+                    android:tint="#2E3B4E"
+                    android:visibility="gone" />
+
+                <LinearLayout
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:orientation="vertical">
+
+                    <TextView
+                        android:id="@+id/tv_panel_title"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Projects"
+                        android:textColor="#213043"
+                        android:textSize="15sp"
+                        android:textStyle="bold" />
+
+                    <TextView
+                        android:id="@+id/tv_panel_breadcrumb"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="1dp"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        android:textColor="#7B8795"
+                        android:textSize="10sp"
+                        android:visibility="gone" />
+                </LinearLayout>
+
+                <ImageView
+                    android:id="@+id/btn_panel_add"
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/project_panel_toolbar_icon_bg"
+                    android:padding="6dp"
+                    android:src="@android:drawable/ic_input_add"
+                    android:tint="#4B5A6C" />
+
+                <ImageView
+                    android:id="@+id/btn_panel_refresh"
+                    android:layout_width="26dp"
+                    android:layout_height="26dp"
+                    android:layout_marginStart="4dp"
+                    android:background="@drawable/project_panel_toolbar_icon_bg"
+                    android:padding="6dp"
+                    android:src="@android:drawable/ic_menu_rotate"
+                    android:tint="#4B5A6C" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/tv_panel_hint"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="#F7FAFD"
+                android:paddingStart="10dp"
+                android:paddingTop="6dp"
+                android:paddingEnd="10dp"
+                android:paddingBottom="6dp"
+                android:text="主界面的项目面板使用独立实现，不和悬浮窗面板混用。"
+                android:textColor="#7B8795"
+                android:textSize="10sp" />
+
+            <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
+                android:id="@+id/swipe_refresh_projects"
+                android:layout_width="match_parent"
+                android:layout_height="0dp"
+                android:layout_weight="1">
+
+                <FrameLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="match_parent">
+
+                    <androidx.recyclerview.widget.RecyclerView
+                        android:id="@+id/rv_projects"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:clipToPadding="false"
+                        android:paddingTop="4dp"
+                        android:paddingBottom="10dp" />
+
+                    <LinearLayout
+                        android:id="@+id/layout_empty_projects"
+                        android:layout_width="match_parent"
+                        android:layout_height="match_parent"
+                        android:gravity="center"
+                        android:orientation="vertical"
+                        android:padding="20dp"
+                        android:visibility="gone">
+
+                        <TextView
+                            android:id="@+id/tv_empty_title"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="暂无内容"
+                            android:textColor="#415064"
+                            android:textSize="16sp"
+                            android:textStyle="bold" />
+
+                        <TextView
+                            android:id="@+id/tv_empty_hint"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:gravity="center"
+                            android:text="点击右上角添加"
+                            android:textColor="#8A97A6"
+                            android:textSize="11sp" />
+
+                        <Button
+                            android:id="@+id/btn_empty_action"
+                            style="@style/Widget.AtomMaster.Button.Primary"
+                            android:layout_width="220dp"
+                            android:layout_height="@dimen/button_height"
+                            android:layout_marginTop="16dp"
+                            android:text="创建" />
+                    </LinearLayout>
+                </FrameLayout>
+            </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
+        </LinearLayout>
+    </FrameLayout>
+
+</LinearLayout>

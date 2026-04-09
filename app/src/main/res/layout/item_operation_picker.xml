@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:minHeight="52dp"
+    android:orientation="vertical"
+    android:gravity="center_vertical"
+    android:paddingStart="12dp"
+    android:paddingTop="6dp"
+    android:paddingEnd="12dp"
+    android:paddingBottom="6dp"
+    android:background="@drawable/item_operation_compact_bg">
+
+    <TextView
+        android:id="@+id/tv_operation_id"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#253342"
+        android:textStyle="bold"
+        android:textSize="13sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+    <TextView
+        android:id="@+id/tv_operation_meta"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:textColor="#6a7682"
+        android:textSize="11sp"
+        android:maxLines="1"
+        android:ellipsize="end" />
+
+</LinearLayout>

@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp"
+    android:background="@drawable/dialog_background">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="运行模式"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        android:textColor="#315dbf"
+        android:gravity="center"
+        android:layout_marginBottom="10dp" />
+
+    <TextView
+        android:id="@+id/btn_run_with_panel"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:gravity="center"
+        android:text="运行并显示状态面板"
+        android:textColor="#2f4f7c"
+        android:textStyle="bold"
+        android:background="@drawable/item_operation_compact_bg"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/btn_run_background"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:gravity="center"
+        android:text="后台运行（隐藏状态面板）"
+        android:textColor="#2f4f7c"
+        android:textStyle="bold"
+        android:background="@drawable/item_operation_compact_bg"
+        android:layout_marginBottom="8dp" />
+
+    <TextView
+        android:id="@+id/btn_run_mode_cancel"
+        android:layout_width="match_parent"
+        android:layout_height="38dp"
+        android:gravity="center"
+        android:text="取消"
+        android:textColor="#6a7682"
+        android:background="@drawable/item_operation_compact_bg" />
+
+</LinearLayout>

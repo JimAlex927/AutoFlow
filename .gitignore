@@ -1,0 +1,40 @@
+*.iml
+.DS_Store
+Thumbs.db
+
+# Android Studio / IntelliJ
+.idea/
+.kotlin/
+captures/
+analytics.settings
+
+# Local machine configuration
+local.properties
+.android/
+.android-home/
+.claude/
+.claude -official/
+
+# Gradle caches and build outputs
+.gradle/
+.gradle-home/
+.gradle-temp/
+build/
+*/build/
+.externalNativeBuild/
+.cxx/
+
+# Packaged artifacts and logs
+*.apk
+*.aab
+*.ap_
+*.log
+*.hprof
+
+# Signing files
+*.jks
+*.keystore
+*.p12
+
+# Optional local SDK dumps
+opencv/
