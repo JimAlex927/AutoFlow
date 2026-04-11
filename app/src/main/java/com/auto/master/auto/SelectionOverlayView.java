@@ -91,6 +91,7 @@ public class SelectionOverlayView extends FrameLayout {
     private final OverlayCanvasView canvasView;
 
     private Bitmap frozenBackground;   // 新增
+    private boolean ownsFrozenBackground;
 
     public SelectionOverlayView(Context context) {
         this(context, null);
@@ -100,10 +101,13 @@ public class SelectionOverlayView extends FrameLayout {
     private long lastMagTs = 0L;
     // 或通过 setter
     public void setFrozenBackground(Bitmap bmp) {
-        if (this.frozenBackground != bmp && this.frozenBackground != null) {
-            this.frozenBackground.recycle();
-        }
+        setFrozenBackground(bmp, true);
+    }
+
+    public void setFrozenBackground(Bitmap bmp, boolean ownsBitmap) {
+        releaseFrozenBackground();
         this.frozenBackground = bmp;
+        this.ownsFrozenBackground = ownsBitmap;
         canvasView.invalidate();
     }
 
@@ -260,6 +264,21 @@ public class SelectionOverlayView extends FrameLayout {
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         requestApplyInsets();
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        hideMagnifier();
+        releaseFrozenBackground();
+        super.onDetachedFromWindow();
+    }
+
+    private void releaseFrozenBackground() {
+        if (ownsFrozenBackground && frozenBackground != null && !frozenBackground.isRecycled()) {
+            frozenBackground.recycle();
+        }
+        frozenBackground = null;
+        ownsFrozenBackground = false;
     }
 
     // ===================== 内部画布 View =====================

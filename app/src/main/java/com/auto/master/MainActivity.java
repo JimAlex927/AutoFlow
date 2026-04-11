@@ -259,15 +259,8 @@ public class MainActivity extends AppCompatActivity {
             registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), result -> {
                 if (result.getResultCode() == Activity.RESULT_OK && result.getData() != null) {
                     ScreenCapture.saveProjectionPermission(result.getResultCode(), result.getData());
-                    boolean success = ScreenCaptureManager.getInstance()
-                            .startCapture(result.getResultCode(), result.getData());
-                    Toast.makeText(
-                            this,
-                            success
-                                    ? getString(R.string.toast_projection_granted)
-                                    : getString(R.string.toast_projection_granted_but_failed),
-                            Toast.LENGTH_SHORT
-                    ).show();
+                    ScreenCaptureManager.getInstance().init(this);
+                    Toast.makeText(this, R.string.toast_projection_granted, Toast.LENGTH_SHORT).show();
                 } else {
                     Toast.makeText(this, R.string.toast_projection_denied, Toast.LENGTH_SHORT).show();
                 }

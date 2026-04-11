@@ -102,6 +102,7 @@ public class ScreenCaptureManager {
 
     // 空闲自动暂停 VirtualDisplay：无人 poll 超过此时长则暂停，下次 poll 自动恢复
     private static final long IDLE_PAUSE_THRESHOLD_MS = 3000L;
+    private static final long FULL_CLEANUP_IDLE_THRESHOLD_MS = 45_000L;
     private volatile boolean displayPaused = false;
     private volatile long lastPollMs = 0;
     private final Runnable idleCheckRunnable = new Runnable() {
@@ -109,12 +110,18 @@ public class ScreenCaptureManager {
         public void run() {
             if (!isRunning.get()) return;
             long now = System.currentTimeMillis();
+            long idleMs = now - lastPollMs;
+            if (idleMs > FULL_CLEANUP_IDLE_THRESHOLD_MS) {
+                Log.i(TAG, "capture idle too long, cleanup session: " + idleMs + "ms");
+                cleanup();
+                return;
+            }
             if (!displayPaused && virtualDisplay != null
-                    && (now - lastPollMs) > IDLE_PAUSE_THRESHOLD_MS) {
+                    && idleMs > IDLE_PAUSE_THRESHOLD_MS) {
                 displayPaused = true;
                 try {
                     virtualDisplay.setSurface(null);
-                    Log.d(TAG, "VirtualDisplay paused (idle " + (now - lastPollMs) + "ms)");
+                    Log.d(TAG, "VirtualDisplay paused (idle " + idleMs + "ms)");
                 } catch (Throwable t) {
                     Log.w(TAG, "pause surface failed", t);
                 }

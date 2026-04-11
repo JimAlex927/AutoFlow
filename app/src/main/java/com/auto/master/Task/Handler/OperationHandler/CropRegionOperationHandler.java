@@ -419,8 +419,20 @@ public class CropRegionOperationHandler extends OperationHandler {
                 });
             }
 
-            wm.addView(overlay, lp);
-            toastOnMain("精选模式：请先选左上角，再选右下角");
+            try {
+                wm.addView(overlay, lp);
+                toastOnMain("精选模式：请先选左上角，再选右下角");
+            } catch (Throwable t) {
+                recyclePreviewBitmap(previewBitmapHolder);
+                pickerView.release();
+                Log.e(TAG, "add refine overlay failed", t);
+                if (onCancel != null) {
+                    onCancel.run();
+                } else {
+                    recycleBitmap(sourceBitmap);
+                }
+                toastOnMain("创建精选界面失败：" + t.getMessage());
+            }
         });
     }
 
@@ -488,6 +500,12 @@ public class CropRegionOperationHandler extends OperationHandler {
             preview.recycle();
         }
         previewHolder[0] = null;
+    }
+
+    private void recycleBitmap(@Nullable Bitmap bitmap) {
+        if (bitmap != null && !bitmap.isRecycled()) {
+            bitmap.recycle();
+        }
     }
 
     private void updateTemplateRefinePreview(ImageView previewView,
@@ -561,16 +579,21 @@ public class CropRegionOperationHandler extends OperationHandler {
             toastOnMain("选区太小");
             return;
         }
-        Bitmap cropped = Bitmap.createBitmap(sourceBitmap,
-                safeRect.left, safeRect.top, safeRect.width(), safeRect.height());
-        List<Integer> bbox = Arrays.asList(
-                safeRect.left,
-                safeRect.top,
-                safeRect.width(),
-                safeRect.height()
-        );
-        saveImg(cropped, context, projectName, taskName, saveFileName, bbox);
-        notifyTemplateSaved(projectName, taskName, saveFileName, safeRect);
+        Bitmap cropped = null;
+        try {
+            cropped = Bitmap.createBitmap(sourceBitmap,
+                    safeRect.left, safeRect.top, safeRect.width(), safeRect.height());
+            List<Integer> bbox = Arrays.asList(
+                    safeRect.left,
+                    safeRect.top,
+                    safeRect.width(),
+                    safeRect.height()
+            );
+            saveImg(cropped, context, projectName, taskName, saveFileName, bbox);
+            notifyTemplateSaved(projectName, taskName, saveFileName, safeRect);
+        } finally {
+            recycleBitmap(cropped);
+        }
     }
 
 
@@ -690,10 +713,12 @@ public class CropRegionOperationHandler extends OperationHandler {
             saveImg(cropped,a,projectName,taskName,saveFileName,stdBbox);
 
             Map<String, Object> res = new HashMap<>();
-            res.put(MetaOperation.FULLBITMAPRES,full);
-            res.put(MetaOperation.CROPPEDBITMAPRES,cropped);
+            res.put(MetaOperation.BBOX, stdBbox.isEmpty() ? null : stdBbox);
+            res.put(MetaOperation.RESULT, saveFileName);
             ctx.currentResponse = res;
             ctx.lastOperation = obj;
+            recycleBitmap(cropped);
+            recycleBitmap(full);
             return true;
             //todo 记得回收
             //这里把mat 存在缓存里
@@ -727,7 +752,7 @@ public class CropRegionOperationHandler extends OperationHandler {
 
             final SelectionOverlayView overlay = new SelectionOverlayView(ctx1);
             Bitmap finalFull = full;
-            overlay.setFrozenBackground(finalFull);
+            overlay.setFrozenBackground(finalFull, false);
             overlay.setRefineEnabled(true);
             overlay.setListener(new SelectionOverlayView.Listener() {
                 @Override
@@ -737,12 +762,22 @@ public class CropRegionOperationHandler extends OperationHandler {
                     overlay.setVisibility(View.INVISIBLE);
                     safeRemove(wm, overlay);
                     promptTemplateSaveMode(ctx1, coarseRect,
-                            () -> saveTemplateFromRect(finalFull, coarseRect, ctx1, projectName, taskName, saveFileName),
+                            () -> {
+                                saveTemplateFromRect(finalFull, coarseRect, ctx1, projectName, taskName, saveFileName);
+                                recycleBitmap(finalFull);
+                            },
                             () -> showTemplateRefinePointPicker(ctx1, wm, finalFull, coarseRect,
-                                    finalRect -> saveTemplateFromRect(finalFull, finalRect, ctx1, projectName, taskName, saveFileName),
-                                    () -> notifyTemplateCaptureCancelled(projectName, taskName, saveFileName)),
+                                    finalRect -> {
+                                        saveTemplateFromRect(finalFull, finalRect, ctx1, projectName, taskName, saveFileName);
+                                        recycleBitmap(finalFull);
+                                    },
+                                    () -> {
+                                        recycleBitmap(finalFull);
+                                        notifyTemplateCaptureCancelled(projectName, taskName, saveFileName);
+                                    }),
                             () -> {
                                 toastOnMain("已取消");
+                                recycleBitmap(finalFull);
                                 notifyTemplateCaptureCancelled(projectName, taskName, saveFileName);
                             });
                 }
@@ -751,6 +786,7 @@ public class CropRegionOperationHandler extends OperationHandler {
                 public void onCancel() {
                     toastOnMain("已取消");
                     safeRemove(wm, overlay);
+                    recycleBitmap(finalFull);
                     notifyTemplateCaptureCancelled(projectName, taskName, saveFileName);
                 }
             });
@@ -760,8 +796,14 @@ public class CropRegionOperationHandler extends OperationHandler {
                 overlay.setVisibility(View.INVISIBLE);
                 safeRemove(wm, overlay);
                 showTemplateRefinePointPicker(ctx1, wm, finalFull, coarseRect,
-                        finalRect -> saveTemplateFromRect(finalFull, finalRect, ctx1, projectName, taskName, saveFileName),
-                        () -> notifyTemplateCaptureCancelled(projectName, taskName, saveFileName));
+                        finalRect -> {
+                            saveTemplateFromRect(finalFull, finalRect, ctx1, projectName, taskName, saveFileName);
+                            recycleBitmap(finalFull);
+                        },
+                        () -> {
+                            recycleBitmap(finalFull);
+                            notifyTemplateCaptureCancelled(projectName, taskName, saveFileName);
+                        });
             });
 
             getMainHandler().post(() -> {
@@ -769,6 +811,7 @@ public class CropRegionOperationHandler extends OperationHandler {
                     wm.addView(overlay, params);
                     toastOnMain("拖动框选区域，调整后点“确定”保存");
                 } catch (Throwable t) {
+                    recycleBitmap(finalFull);
                     Log.e(TAG, "addView failed", t);
                     toastOnMain("创建选区失败：" + t.getMessage());
                 }

@@ -23,6 +23,8 @@ public class NodeFloatButtonConfig {
     public float alpha;
     /** If true, hide the button while the node is executing. */
     public boolean hideWhileRunning;
+    /** Runtime variable overrides injected before launching from this node button. */
+    public String runtimeVariablesText;
 
     public NodeFloatButtonConfig() {}
 
@@ -48,5 +50,6 @@ public class NodeFloatButtonConfig {
         if (textColor == 0) textColor = 0xFFFFFFFF;
         if (sizeDp   <= 0) sizeDp    = 48;
         if (alpha    <= 0) alpha     = 1.0f;
+        if (runtimeVariablesText == null) runtimeVariablesText = "";
     }
 }

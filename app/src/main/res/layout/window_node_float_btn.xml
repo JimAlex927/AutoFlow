@@ -4,7 +4,7 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="center_horizontal"
-    android:padding="1dp">
+    android:padding="0dp">
 
     <!-- Circular button body — background set programmatically to support custom color -->
     <FrameLayout
@@ -13,7 +13,8 @@
         android:layout_height="48dp"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="6dp">
+        android:elevation="0dp"
+        android:stateListAnimator="@null">
 
         <TextView
             android:id="@+id/node_btn_label"

@@ -9,6 +9,8 @@ import android.media.projection.MediaProjectionManager;
 import android.os.SystemClock;
 import android.util.Log;
 
+import com.auto.master.auto.ActivityHolder;
+
 import org.opencv.core.Mat;
 
 public final class ScreenCapture {
@@ -33,49 +35,46 @@ public final class ScreenCapture {
         return sResultCode != 0 && sResultData != null;
     }
 
+    private static boolean ensureCaptureSession(Activity activity) {
+        if (!hasProjectionPermission()) {
+            Log.e(TAG, "缺少录屏权限");
+            return false;
+        }
+        ScreenCaptureManager manager = ScreenCaptureManager.getInstance();
+        if (activity != null) {
+            manager.init(activity);
+        }
+        if (manager.isRunning()) {
+            return true;
+        }
+        if (sResultData == null) {
+            Log.e(TAG, "录屏权限数据为空");
+            return false;
+        }
+        boolean started = manager.startCapture(sResultCode, sResultData);
+        if (!started) {
+            Log.e(TAG, "启动录屏失败");
+        }
+        return started;
+    }
+
     /**
      * 统一截图入口 实际开启录屏的 入口 初始化
      */
     public static Mat captureNow(Activity activity, Method method, String outName) {
         Log.d(TAG, "captureNow: method=" + method + ", name=" + outName);
 
-        if (!hasProjectionPermission()) {
-            Log.e(TAG, "缺少录屏权限");
+        if (method != Method.MEDIA_PROJECTION_SINGLE_SHOOT && method != Method.MEDIA_PROJECTION) {
+            Log.e(TAG, "不支持的截图方式或服务未启动");
             return null;
         }
 
         ScreenCaptureManager manager = ScreenCaptureManager.getInstance();
-
-        // 确保初始化
-        manager.init(activity);
-
-        // 确保已启动
-        if (!manager.isRunning()) {
-            if (method == Method.MEDIA_PROJECTION_SINGLE_SHOOT || method == Method.MEDIA_PROJECTION) {
-                manager.startCapture(sResultCode, sResultData);
-                // 等待启动（简单轮询）
-                Mat mat = null;
-                long start = System.currentTimeMillis();
-                while (System.currentTimeMillis() - start < 3000) {
-                    mat = manager.getLatestMat(false); // 内部会 poll
-                    if (mat != null && !mat.empty()) {
-                        return mat;
-                    }
-                    SystemClock.sleep(199);
-                }
-                if (!manager.isRunning()) {
-                    Log.e(TAG, "启动录屏失败");
-                    return null;
-                }
-            } else {
-                Log.e(TAG, "不支持的截图方式或服务未启动");
-                return null;
-            }
+        if (!ensureCaptureSession(activity)) {
+            return null;
         }
 
         //如果启动成功了这个时候返回可能是null  manager.getLatestScreenshot()
-        long start = System.currentTimeMillis();
-//        Bitmap bitmap = null;
         Mat mat = null;
         long start1 = System.currentTimeMillis();
         while (System.currentTimeMillis() - start1 < 3000) {
@@ -95,21 +94,14 @@ public final class ScreenCapture {
         if (roi == null || roi.isEmpty()) {
             return captureNow(activity, method, outName);
         }
-        if (!hasProjectionPermission()) {
-            Log.e(TAG, "缺少录屏权限");
+        if (method != Method.MEDIA_PROJECTION_SINGLE_SHOOT && method != Method.MEDIA_PROJECTION) {
+            Log.e(TAG, "不支持的截图方式或服务未启动");
             return null;
         }
 
         ScreenCaptureManager manager = ScreenCaptureManager.getInstance();
-        manager.init(activity);
-
-        if (!manager.isRunning()) {
-            if (method == Method.MEDIA_PROJECTION_SINGLE_SHOOT || method == Method.MEDIA_PROJECTION) {
-                manager.startCapture(sResultCode, sResultData);
-            } else {
-                Log.e(TAG, "不支持的截图方式或服务未启动");
-                return null;
-            }
+        if (!ensureCaptureSession(activity)) {
+            return null;
         }
 
         long start = System.currentTimeMillis();
@@ -131,6 +123,10 @@ public final class ScreenCapture {
      */
     public static Mat getSingleBitMapWhileInContinous(boolean clone){
 
+        if (!ScreenCaptureManager.getInstance().isRunning()) {
+            ensureCaptureSession(ActivityHolder.getTopActivity());
+        }
+
         /**
          * 如果clone 为 true ，多线程安全，则消费者自行release
          * 如果clone为 false，只允许单线程使用，消费者无需release。
@@ -145,6 +141,9 @@ public final class ScreenCapture {
     public static Mat getSingleBitMapRoiWhileInContinous(Rect roi, boolean clone) {
         if (roi == null || roi.isEmpty()) {
             return getSingleBitMapWhileInContinous(clone);
+        }
+        if (!ScreenCaptureManager.getInstance().isRunning()) {
+            ensureCaptureSession(ActivityHolder.getTopActivity());
         }
         return ScreenCaptureManager.getInstance().getLatestRoiMat(roi, clone);
     }

@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="320dp"
+    android:layout_height="wrap_content"
+    android:background="@drawable/project_panel_shell_bg"
+    android:fillViewport="true"
+    android:scrollbars="none">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:id="@+id/tv_runtime_cfg_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center"
+            android:text="节点运行配置"
+            android:textColor="#243244"
+            android:textSize="15sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="10dp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="每行一项，格式：变量名=值"
+            android:textColor="#526273"
+            android:textSize="12sp" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="支持 true/false、数字、文本。空行和 # 注释会自动忽略。"
+            android:textColor="#7B8794"
+            android:textSize="11sp"
+            android:layout_marginTop="4dp"
+            android:layout_marginBottom="10dp" />
+
+        <EditText
+            android:id="@+id/et_runtime_variables"
+            android:layout_width="match_parent"
+            android:layout_height="160dp"
+            android:background="@drawable/item_operation_compact_bg"
+            android:gravity="top|start"
+            android:hint="mode=fast&#10;retry_count=3&#10;debug=true"
+            android:inputType="textMultiLine|textNoSuggestions"
+            android:minLines="6"
+            android:padding="10dp"
+            android:scrollbars="vertical"
+            android:textColor="#243244"
+            android:textColorHint="#AABBCC"
+            android:textSize="12sp" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="14dp">
+
+            <TextView
+                android:id="@+id/btn_runtime_cfg_clear"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="清空"
+                android:textColor="#F44336"
+                android:textSize="13sp"
+                android:background="@drawable/item_operation_compact_bg"
+                android:layout_marginEnd="6dp" />
+
+            <TextView
+                android:id="@+id/btn_runtime_cfg_cancel"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="取消"
+                android:textColor="#6A7682"
+                android:textSize="13sp"
+                android:background="@drawable/item_operation_compact_bg"
+                android:layout_marginEnd="6dp" />
+
+            <TextView
+                android:id="@+id/btn_runtime_cfg_save"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="保存"
+                android:textColor="#2F4F7C"
+                android:textSize="13sp"
+                android:textStyle="bold"
+                android:background="@drawable/item_operation_compact_bg" />
+        </LinearLayout>
+
+    </LinearLayout>
+</ScrollView>

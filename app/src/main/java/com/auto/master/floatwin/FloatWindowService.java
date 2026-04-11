@@ -10,6 +10,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.res.Configuration;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -240,6 +241,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private OperationPanelAdapter.ActionSheetAdapter taskActionSheetAdapter;
     @Nullable
     private java.util.function.Consumer<OperationPanelAdapter.ActionItem> taskActionSheetHandler;
+    private PopupWindow nodeFloatActionPopupWindow;
+    private TextView nodeFloatActionPopupTitleView;
+    private RecyclerView nodeFloatActionPopupListView;
+    private final List<OperationPanelAdapter.ActionItem> nodeFloatActionSheetItems = new ArrayList<>();
+    private OperationPanelAdapter.ActionSheetAdapter nodeFloatActionSheetAdapter;
+    @Nullable
+    private java.util.function.Consumer<OperationPanelAdapter.ActionItem> nodeFloatActionSheetHandler;
     private ItemTouchHelper operationDragHelper;
     private boolean projectPanelContentDirty = true;
     private long projectListCacheVersion = Long.MIN_VALUE;
@@ -429,6 +437,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        uiHandler.post(this::refreshNodeFloatButtonsForCurrentScreen);
+    }
+
+    @Override
     public void onDestroy() {
         super.onDestroy();
         
@@ -443,6 +457,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             appLaunchPollThread.quitSafely();
             appLaunchPollThread = null;
             appLaunchPollHandler = null;
+        }
+        if (taskActionPopupWindow != null) {
+            taskActionPopupWindow.dismiss();
+            taskActionPopupWindow = null;
+        }
+        if (nodeFloatActionPopupWindow != null) {
+            nodeFloatActionPopupWindow.dismiss();
+            nodeFloatActionPopupWindow = null;
         }
         
         removeAllNodeFloatButtons();
@@ -909,6 +931,32 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return def; }
     }
 
+    private boolean isNodeFloatBtnVisibleForCurrentScreen(NodeFloatButtonConfig cfg) {
+        if (cfg == null) {
+            return false;
+        }
+        cfg.ensureDefaults();
+        int[] screen = getScreenSizePx();
+        int sizePx = dp(cfg.sizeDp);
+        return cfg.posX >= 0
+                && cfg.posY >= 0
+                && cfg.posX + sizePx <= screen[0]
+                && cfg.posY + sizePx <= screen[1];
+    }
+
+    private void refreshNodeFloatButtonsForCurrentScreen() {
+        Map<String, NodeFloatButtonConfig> configs = nodeFloatBtnManager == null
+                ? Collections.emptyMap()
+                : new HashMap<>(nodeFloatBtnManager.getAllConfigs());
+        removeAllNodeFloatButtons();
+        for (NodeFloatButtonConfig cfg : configs.values()) {
+            if (cfg != null) {
+                addNodeFloatBtn(cfg);
+            }
+        }
+        refreshFloatBtnBadges();
+    }
+
     /**
      * 把一个节点悬浮按钮添加到 WindowManager，应用所有配置字段。
      */
@@ -916,6 +964,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private void addNodeFloatBtn(NodeFloatButtonConfig cfg) {
         if (nodeFloatBtnViews.containsKey(cfg.operationId)) return;
         cfg.ensureDefaults(); // 防止旧存档缺字段
+        if (!isNodeFloatBtnVisibleForCurrentScreen(cfg)) {
+            return;
+        }
 
         View root = LayoutInflater.from(this).inflate(R.layout.window_node_float_btn, null);
         FrameLayout container = root.findViewById(R.id.node_btn_container);
@@ -960,7 +1011,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         lp.y = cfg.posY;
 
         // 拖拽
-        container.setOnTouchListener(new DragTouchListener(lp, wm, root, this) {
+        container.setOnTouchListener(new DragTouchListener(lp, wm, root, this, true) {
             @Override
             protected void onDragEnd(int finalX, int finalY) {
                 // 拖拽结束后持久化新位置
@@ -1010,47 +1061,74 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
     }
 
+    private void ensureNodeFloatActionPopup() {
+        if (nodeFloatActionPopupWindow != null) {
+            return;
+        }
+        View popupView = LayoutInflater.from(this).inflate(R.layout.dialog_node_action_sheet, null);
+        nodeFloatActionPopupTitleView = popupView.findViewById(R.id.tv_action_title);
+        nodeFloatActionPopupListView = popupView.findViewById(R.id.rv_action_list);
+        if (nodeFloatActionPopupListView != null) {
+            nodeFloatActionPopupListView.setLayoutManager(new LinearLayoutManager(this));
+            nodeFloatActionSheetAdapter = new OperationPanelAdapter.ActionSheetAdapter(
+                    nodeFloatActionSheetItems,
+                    action -> {
+                        if (action == null || !action.enabled) {
+                            return;
+                        }
+                        if (nodeFloatActionPopupWindow != null) {
+                            nodeFloatActionPopupWindow.dismiss();
+                        }
+                        if (nodeFloatActionSheetHandler != null) {
+                            nodeFloatActionSheetHandler.accept(action);
+                        }
+                    });
+            nodeFloatActionPopupListView.setAdapter(nodeFloatActionSheetAdapter);
+        }
+        nodeFloatActionPopupWindow = new PopupWindow(
+                popupView,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                true);
+        nodeFloatActionPopupWindow.setOutsideTouchable(true);
+        nodeFloatActionPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        nodeFloatActionPopupWindow.setElevation(10f);
+    }
+
     /**
      * 长按悬浮按钮弹出可扩展菜单。
      * 菜单项可随需求继续追加 ActionItem(id, title, desc, enabled)。
      */
     private void showNodeFloatBtnMenu(View anchor, NodeFloatButtonConfig cfg) {
-        List<OperationPanelAdapter.ActionItem> menuItems = new ArrayList<>();
-        menuItems.add(new OperationPanelAdapter.ActionItem(1, "运行节点",   "立即运行这个节点",               true));
-        menuItems.add(new OperationPanelAdapter.ActionItem(2, "编辑配置",   "修改文字、颜色、大小等配置",      true));
-        menuItems.add(new OperationPanelAdapter.ActionItem(3, "定位节点",   "打开面板并高亮这个节点",          true));
-        menuItems.add(new OperationPanelAdapter.ActionItem(4, "移除悬浮按钮", "删除这个悬浮按钮（不影响节点）", true));
-        // 如需扩展：继续追加 ActionItem ────────────────────────────────
-
-        View popupView = LayoutInflater.from(this).inflate(R.layout.dialog_node_action_sheet, null);
-        TextView tvTitle = popupView.findViewById(R.id.tv_action_title);
-        RecyclerView rvActions = popupView.findViewById(R.id.rv_action_list);
-        if (tvTitle != null) tvTitle.setText(cfg.operationName);
-        rvActions.setLayoutManager(new LinearLayoutManager(this));
-
-        PopupWindow pw = new PopupWindow(
-                popupView,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                true);
-        pw.setOutsideTouchable(true);
-        pw.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        pw.setElevation(12f);
-
-        rvActions.setAdapter(new OperationPanelAdapter.ActionSheetAdapter(menuItems, action -> {
-            pw.dismiss();
+        ensureNodeFloatActionPopup();
+        if (nodeFloatActionPopupWindow == null
+                || nodeFloatActionPopupTitleView == null
+                || nodeFloatActionSheetAdapter == null) {
+            return;
+        }
+        nodeFloatActionPopupTitleView.setText(cfg.operationName);
+        nodeFloatActionSheetItems.clear();
+        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(1, "运行节点", "立即运行这个节点", true));
+        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(2, "配置修改", "修改运行前注入的变量配置", true));
+        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(3, "按钮设置", "修改文字、颜色、大小和位置", true));
+        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(4, "定位节点", "打开面板并高亮这个节点", true));
+        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(5, "移除悬浮按钮", "删除这个悬浮按钮（不影响节点）", true));
+        nodeFloatActionSheetHandler = action -> {
             switch (action.id) {
                 case 1:
                     runFromNodeFloatBtn(cfg);
                     break;
                 case 2:
+                    showNodeRuntimeConfigDialog(cfg);
+                    break;
+                case 3:
                     OperationItem fakeItem = new OperationItem(cfg.operationName, cfg.operationId, "", 0);
                     showNodeFloatBtnConfig(fakeItem);
                     break;
-                case 3:
+                case 4:
                     navigateToNodeInPanel(cfg);
                     break;
-                case 4:
+                case 5:
                     nodeFloatBtnManager.removeConfig(cfg.operationId);
                     removeNodeFloatBtn(cfg.operationId);
                     refreshFloatBtnBadges();
@@ -1059,8 +1137,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 default:
                     break;
             }
-        }));
-        pw.showAsDropDown(anchor, 0, dp(4), Gravity.START);
+        };
+        nodeFloatActionSheetAdapter.notifyDataSetChanged();
+        if (nodeFloatActionPopupWindow.isShowing()) {
+            nodeFloatActionPopupWindow.dismiss();
+        }
+        nodeFloatActionPopupWindow.showAsDropDown(anchor, -dp(180), dp(4), Gravity.END);
     }
 
     /**
@@ -1096,6 +1178,137 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
             }, 120);
         });
+    }
+
+    private void showNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg) {
+        if (cfg == null) {
+            return;
+        }
+        cfg.ensureDefaults();
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_node_runtime_config, null);
+        WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(320, true);
+        wm.addView(dialogView, dialogLp);
+
+        TextView titleView = dialogView.findViewById(R.id.tv_runtime_cfg_title);
+        EditText variablesInput = dialogView.findViewById(R.id.et_runtime_variables);
+        if (titleView != null) {
+            titleView.setText("运行配置: " + abbreviate(cfg.operationName, 14));
+        }
+        if (variablesInput != null) {
+            variablesInput.setText(cfg.runtimeVariablesText == null ? "" : cfg.runtimeVariablesText);
+            variablesInput.setSelection(variablesInput.getText() == null ? 0 : variablesInput.getText().length());
+        }
+
+        dialogView.findViewById(R.id.btn_runtime_cfg_clear).setOnClickListener(v -> {
+            if (variablesInput != null) {
+                variablesInput.setText("");
+            }
+        });
+        dialogView.findViewById(R.id.btn_runtime_cfg_cancel).setOnClickListener(v -> safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_runtime_cfg_save).setOnClickListener(v -> {
+            String raw = variablesInput == null || variablesInput.getText() == null
+                    ? ""
+                    : variablesInput.getText().toString();
+            List<String> invalidLines = collectInvalidRuntimeVariableLines(raw);
+            if (!invalidLines.isEmpty()) {
+                Toast.makeText(this, "格式错误，请检查第 " + invalidLines.get(0) + " 行", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            NodeFloatButtonConfig updated = nodeFloatBtnManager.getConfig(cfg.operationId);
+            if (updated == null) {
+                updated = cfg;
+            }
+            updated.ensureDefaults();
+            updated.runtimeVariablesText = raw.trim();
+            nodeFloatBtnManager.saveConfig(updated);
+            safeRemoveView(dialogView);
+            Toast.makeText(this, "运行配置已保存", Toast.LENGTH_SHORT).show();
+        });
+    }
+
+    private List<String> collectInvalidRuntimeVariableLines(@Nullable String raw) {
+        List<String> invalid = new ArrayList<>();
+        if (TextUtils.isEmpty(raw)) {
+            return invalid;
+        }
+        String[] lines = raw.split("\\r?\\n");
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i] == null ? "" : lines[i].trim();
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+            int eq = line.indexOf('=');
+            if (eq <= 0) {
+                invalid.add(String.valueOf(i + 1));
+                continue;
+            }
+            String key = line.substring(0, eq).trim();
+            if (key.isEmpty()) {
+                invalid.add(String.valueOf(i + 1));
+            }
+        }
+        return invalid;
+    }
+
+    private void applyNodeRuntimeVariables(OperationContext ctx, @Nullable NodeFloatButtonConfig cfg) {
+        if (ctx == null || cfg == null) {
+            return;
+        }
+        cfg.ensureDefaults();
+        if (ctx.variables == null) {
+            ctx.variables = new HashMap<>();
+        }
+        if (TextUtils.isEmpty(cfg.runtimeVariablesText)) {
+            return;
+        }
+        String[] lines = cfg.runtimeVariablesText.split("\\r?\\n");
+        for (String rawLine : lines) {
+            String line = rawLine == null ? "" : rawLine.trim();
+            if (line.isEmpty() || line.startsWith("#")) {
+                continue;
+            }
+            int eq = line.indexOf('=');
+            if (eq <= 0) {
+                continue;
+            }
+            String key = line.substring(0, eq).trim();
+            String value = line.substring(eq + 1).trim();
+            if (!key.isEmpty()) {
+                ctx.variables.put(key, coerceNodeRuntimeValue(value));
+            }
+        }
+    }
+
+    private Object coerceNodeRuntimeValue(String value) {
+        if (value == null) {
+            return "";
+        }
+        String trimmed = value.trim();
+        if (trimmed.isEmpty()) {
+            return "";
+        }
+        if ((trimmed.startsWith("\"") && trimmed.endsWith("\""))
+                || (trimmed.startsWith("'") && trimmed.endsWith("'"))) {
+            return trimmed.substring(1, trimmed.length() - 1);
+        }
+        if ("true".equalsIgnoreCase(trimmed)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(trimmed)) {
+            return false;
+        }
+        try {
+            if (trimmed.contains(".")) {
+                return Double.parseDouble(trimmed);
+            }
+            long longValue = Long.parseLong(trimmed);
+            if (longValue >= Integer.MIN_VALUE && longValue <= Integer.MAX_VALUE) {
+                return (int) longValue;
+            }
+            return longValue;
+        } catch (NumberFormatException ignored) {
+            return trimmed;
+        }
     }
 
     /**
@@ -1187,6 +1400,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         List<OperationItem> ops = buildOperationItemsFromTask(task);
         OperationContext ctx = new OperationContext();
         ctx.anchorProject = project;
+        NodeFloatButtonConfig cfg = nodeFloatBtnManager == null ? null : nodeFloatBtnManager.getConfig(operationId);
+        applyNodeRuntimeVariables(ctx, cfg);
 
         RunLaunchData data = new RunLaunchData();
         data.startOperation = startOp;
@@ -9894,7 +10109,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     restoreViews.run();
                 });
 
-                overlayWm.addView(overlay, lp);
+                try {
+                    overlayWm.addView(overlay, lp);
+                } catch (Throwable t) {
+                    pickerView.release();
+                    throw t;
+                }
             } catch (Exception e) {
                 restoreViews.run();
                 Toast.makeText(this, "打开取点器失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -9964,7 +10184,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     restoreViews.run();
                 });
 
-                overlayWm.addView(overlay, lp);
+                try {
+                    overlayWm.addView(overlay, lp);
+                } catch (Throwable t) {
+                    pickerView.release();
+                    throw t;
+                }
             } catch (Exception e) {
                 restoreViews.run();
                 Toast.makeText(this, "打开取色器失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
@@ -10465,7 +10690,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
 
                 SelectionOverlayView overlay = new SelectionOverlayView(ctx);
-                overlay.setFrozenBackground(fullBitmap);
+                overlay.setFrozenBackground(fullBitmap, true);
                 overlay.setListener(new SelectionOverlayView.Listener() {
                     @Override
                     public void onConfirm(Rect rectInOverlay, Bitmap croppedBitmap) {
@@ -10493,7 +10718,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         restoreViews.run();
                     }
                 });
-                wm.addView(overlay, lp);
+                try {
+                    wm.addView(overlay, lp);
+                } catch (Throwable t) {
+                    if (!fullBitmap.isRecycled()) {
+                        fullBitmap.recycle();
+                    }
+                    throw t;
+                }
                 toastOnMain("请拖动框选OCR区域，然后点确定");
             } catch (Exception e) {
                 restoreViews.run();
