@@ -27,6 +27,8 @@ public class ClickOperationHandler extends OperationHandler {
     private static final long FAST_DISPATCH_TIMEOUT_MS = 250L;
     private static final long FAST_SETTLE_MS = 32L;
     private static final long STRICT_WAIT_TIMEOUT_MS = 3000L;
+    // 复用主线程 Handler，避免每次 handle() 重新构造
+    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
     private static class ClickConfig {
         final boolean fastMode;
@@ -95,7 +97,7 @@ public class ClickOperationHandler extends OperationHandler {
         ClickResult result = new ClickResult();
         ClickConfig config = resolveClickConfig(inputMap);
 
-        new Handler(Looper.getMainLooper()).post(() -> {
+        MAIN_HANDLER.post(() -> {
             svc.showClickFeedback((int) p.x, (int) p.y, 280);
             boolean accepted = svc.click((int) p.x, (int) p.y,
                     () -> {

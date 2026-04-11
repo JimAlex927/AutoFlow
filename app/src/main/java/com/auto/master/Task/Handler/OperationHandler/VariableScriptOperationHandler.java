@@ -24,7 +24,15 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class VariableScriptOperationHandler extends OperationHandler {
     private static final String TAG = "VariableScriptHandler";
-    private static final Map<String, Script> SCRIPT_CACHE = new ConcurrentHashMap<>();
+    // LRU 脚本缓存：超出上限淘汰最久未用的，避免全量 clear 带来的冷启动抖动
+    private static final int MAX_SCRIPT_CACHE = 128;
+    private static final Map<String, Script> SCRIPT_CACHE = java.util.Collections.synchronizedMap(
+            new java.util.LinkedHashMap<String, Script>(MAX_SCRIPT_CACHE + 1, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(java.util.Map.Entry<String, Script> eldest) {
+                    return size() > MAX_SCRIPT_CACHE;
+                }
+            });
     private static final ScriptContextFactory SCRIPT_CONTEXT_FACTORY = new ScriptContextFactory();
 
     VariableScriptOperationHandler() {
@@ -98,9 +106,6 @@ public class VariableScriptOperationHandler extends OperationHandler {
             Script compiled = SCRIPT_CACHE.get(cacheKey);
             if (compiled == null) {
                 compiled = js.compileString(wrapped, "var_script", 1, null);
-                if (SCRIPT_CACHE.size() > 128) {
-                    SCRIPT_CACHE.clear();
-                }
                 SCRIPT_CACHE.put(cacheKey, compiled);
             }
             Object result = compiled.exec(js, scope);

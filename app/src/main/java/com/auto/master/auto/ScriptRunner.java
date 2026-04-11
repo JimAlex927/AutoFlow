@@ -382,8 +382,10 @@ public final class ScriptRunner {
                         currentExecuteThread = Thread.currentThread();
                         while (Boolean.TRUE.equals(scriptExecuteContext.running)) {
                             try {
-                                while (scriptExecuteContext.paused && Boolean.TRUE.equals(scriptExecuteContext.running)) {
-                                    Thread.sleep(100);
+                                synchronized (scriptExecuteContext.pauseLock) {
+                                    while (scriptExecuteContext.paused && Boolean.TRUE.equals(scriptExecuteContext.running)) {
+                                        scriptExecuteContext.pauseLock.wait();
+                                    }
                                 }
 
                                 if (scriptExecuteContext.stopped) {

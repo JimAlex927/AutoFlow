@@ -33,6 +33,11 @@ import java.util.Map;
  */
 public class GestureOperationHandler extends OperationHandler {
 
+    // Gson 实例是线程安全的，静态复用避免每次反射初始化
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    // 复用主线程 Handler，避免每次 handle() 重新构造
+    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
+
     GestureOperationHandler() {
         this.setType(5);
     }
@@ -47,8 +52,7 @@ public class GestureOperationHandler extends OperationHandler {
         }
         File gestureDataFile = new File(gestureDir, saveFileName);
         try (FileWriter writer = new FileWriter(gestureDataFile)) {
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            gson.toJson(node, writer);
+            GSON.toJson(node, writer);
         } catch (Exception e) {
             throw new RuntimeException("保存手势数据 JSON 失败", e);
         }
@@ -77,9 +81,8 @@ public class GestureOperationHandler extends OperationHandler {
                 return null;
             }
 
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
             try (FileReader reader = new FileReader(gestureDataFile)) {
-                GestureOverlayView.GestureNode node = gson.fromJson(reader, GestureOverlayView.GestureNode.class);
+                GestureOverlayView.GestureNode node = GSON.fromJson(reader, GestureOverlayView.GestureNode.class);
                 if (node == null) {
                     Log.e("GestureLoader", "反序列化結果為 null");
                 } else {
@@ -114,7 +117,7 @@ public class GestureOperationHandler extends OperationHandler {
 
         if (obj.getResponseType() == 1) {
             // 录制模式
-            new Handler(Looper.getMainLooper()).post(() -> {
+            MAIN_HANDLER.post(() -> {
                 Activity topActivity = ActivityHolder.getTopActivity();
                 if (topActivity == null || topActivity.isFinishing()) {
                     Log.w(TAG, "沒有可用的 Activity，無法開始手勢錄製");
@@ -122,7 +125,7 @@ public class GestureOperationHandler extends OperationHandler {
                 }
 
                 svc.startGestureRecording(externalNode -> {
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    MAIN_HANDLER.postDelayed(() -> {
                         svc.replayGesture(externalNode, null);
                         saveGestureData(externalNode, topActivity, projectName, taskName, gestureTemplateId);
                         if (!TextUtils.equals(gestureTemplateId, saveFileName)) {
@@ -162,7 +165,7 @@ public class GestureOperationHandler extends OperationHandler {
             final boolean[] callbackInvoked = new boolean[]{false};
 
             // 先显示手势轨迹
-            new Handler(Looper.getMainLooper()).post(() -> svc.showGestureTrail(finalGestureNode));
+            MAIN_HANDLER.post(() -> svc.showGestureTrail(finalGestureNode));
             
             // 在同步块内调用 replayGesture，确保 wait 在 notify 之前
             synchronized (lock) {

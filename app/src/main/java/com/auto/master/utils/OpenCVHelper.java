@@ -56,16 +56,32 @@ public class OpenCVHelper {
     // 复用模板匹配的 result Mat：避免轮询热路径上每次 new/release native 内存
     private static final ThreadLocal<Mat> sResultMat = new ThreadLocal<>();
 
-    // 灰度模板缓存：key = templateMat.nativeObj，避免 matchTemplate 每次都 cvtColor 模板
-    // ConcurrentHashMap 线程安全；模板很少变化，缓存条目极少
-    private final Map<Long, Mat> grayTemplateCache = new ConcurrentHashMap<>();
+    // 复用 NMS 抑制 mask Mat，避免 while 循环内每次 new Mat.zeros()
+    private static final ThreadLocal<Mat> sSuppressionMask = new ThreadLocal<>();
+
+    // 灰度模板缓存上限：超过 MAX_GRAY_CACHE 条时淘汰最旧的（LinkedHashMap accessOrder）
+    private static final int MAX_GRAY_CACHE = 40;
+    private final Map<Long, Mat> grayTemplateCache = java.util.Collections.synchronizedMap(
+            new java.util.LinkedHashMap<Long, Mat>(MAX_GRAY_CACHE + 1, 0.75f, true) {
+                @Override
+                protected boolean removeEldestEntry(java.util.Map.Entry<Long, Mat> eldest) {
+                    if (size() > MAX_GRAY_CACHE) {
+                        Mat m = eldest.getValue();
+                        try { if (m != null && !m.empty()) m.release(); } catch (Throwable ignored) {}
+                        return true;
+                    }
+                    return false;
+                }
+            });
 
     /** 清除灰度模板缓存（模板文件更新后调用）*/
     public void clearGrayTemplateCache() {
-        for (Mat m : grayTemplateCache.values()) {
-            try { if (m != null && !m.empty()) m.release(); } catch (Throwable ignored) {}
+        synchronized (grayTemplateCache) {
+            for (Mat m : grayTemplateCache.values()) {
+                try { if (m != null && !m.empty()) m.release(); } catch (Throwable ignored) {}
+            }
+            grayTemplateCache.clear();
         }
-        grayTemplateCache.clear();
     }
     
 
@@ -605,7 +621,9 @@ public class OpenCVHelper {
         Mat grayTemplate = new Mat();
         boolean grayTemplateFromCache = false;
         List<MatchResult> matches = new ArrayList<>();
-        Mat result = new Mat();
+        // 复用 ThreadLocal result Mat，避免每次 new/release native 内存
+        Mat result = sResultMat.get();
+        if (result == null) { result = new Mat(); sResultMat.set(result); }
         try {
             // 在 try 块开始后，记录实际使用的模板尺寸
             int tplWidth;
@@ -643,6 +661,10 @@ public class OpenCVHelper {
             boolean isSqDiff = (method == Imgproc.TM_SQDIFF || method == Imgproc.TM_SQDIFF_NORMED);
             double suppressionValue = isSqDiff ? 1e10 : -1e10;  // SQDIFF 用大正数抑制，其他用负大数
 
+            // 复用 NMS suppressionMask，避免每次 new Mat.zeros()（热路径）
+            Mat suppressionMask = sSuppressionMask.get();
+            if (suppressionMask == null) { suppressionMask = new Mat(); sSuppressionMask.set(suppressionMask); }
+
             while (true) {
                 Core.MinMaxLocResult minMax = Core.minMaxLoc(result);
 
@@ -661,8 +683,9 @@ public class OpenCVHelper {
                 double confidence = isSqDiff ? (1 - matchValue) : matchValue;
                 matches.add(new MatchResult(correctedLoc, confidence));
 
-                // NMS 抑制
-                Mat suppressionMask = Mat.zeros(result.size(), CvType.CV_8UC1);
+                // NMS 抑制：复用 suppressionMask，create() 只在尺寸/类型变化时重新分配 native 内存
+                suppressionMask.create(result.rows(), result.cols(), CvType.CV_8UC1);
+                suppressionMask.setTo(new Scalar(0));
                 int pad = Math.max(5, Math.min(tplWidth / 4, tplHeight / 4));   // 20px模板 → pad ≈ 5
                 Imgproc.rectangle(
                         suppressionMask,
@@ -673,7 +696,7 @@ public class OpenCVHelper {
                 );
 
                 result.setTo(new Scalar(suppressionValue), suppressionMask);
-                suppressionMask.release();
+                // suppressionMask 来自 ThreadLocal，不 release，留给下次复用
 
                 if (matches.size() >= 10) break;
             }

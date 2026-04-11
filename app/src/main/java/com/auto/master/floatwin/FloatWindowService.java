@@ -1010,11 +1010,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         lp.x = cfg.posX;
         lp.y = cfg.posY;
 
-        // 拖拽
+        // 拖拽（含长按检测）
+        // 注意：setOnTouchListener 返回 true 会拦截所有事件，系统 setOnLongClickListener 失效，
+        // 因此长按逻辑统一由 DragTouchListener 内部计时完成。
         container.setOnTouchListener(new DragTouchListener(lp, wm, root, this, true) {
             @Override
             protected void onDragEnd(int finalX, int finalY) {
-                // 拖拽结束后持久化新位置
                 NodeFloatButtonConfig updated = nodeFloatBtnManager.getConfig(cfg.operationId);
                 if (updated != null) {
                     updated.posX = finalX;
@@ -1022,16 +1023,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     nodeFloatBtnManager.saveConfig(updated);
                 }
             }
+
+            @Override
+            protected void onLongPress() {
+                showNodeFloatBtnMenu(container, cfg);
+            }
         });
 
         // 单击 → 运行节点
         container.setOnClickListener(v -> runFromNodeFloatBtn(cfg));
-
-        // 长按 → 扩展菜单
-        container.setOnLongClickListener(v -> {
-            showNodeFloatBtnMenu(v, cfg);
-            return true;
-        });
 
         wm.addView(root, lp);
         nodeFloatBtnViews.put(cfg.operationId, new NodeFloatBtnEntry(root, lp));
@@ -1197,6 +1197,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (variablesInput != null) {
             variablesInput.setText(cfg.runtimeVariablesText == null ? "" : cfg.runtimeVariablesText);
             variablesInput.setSelection(variablesInput.getText() == null ? 0 : variablesInput.getText().length());
+            // 提示用户两种脚本访问方式
+            variablesInput.setHint("每行 key=value\n# 注释行\n\n脚本中可通过：\n  vars.myKey        （独立变量）\n  vars.configMap.myKey （字典访问）");
         }
 
         dialogView.findViewById(R.id.btn_runtime_cfg_clear).setOnClickListener(v -> {
@@ -1259,8 +1261,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             ctx.variables = new HashMap<>();
         }
         if (TextUtils.isEmpty(cfg.runtimeVariablesText)) {
+            // 没有配置时也保证 configMap 存在（空 Map），脚本无需判空
+            ctx.variables.put("configMap", new HashMap<String, Object>());
             return;
         }
+        // 解析 key=value 行，同时注入为独立变量和 configMap 字典两种形式
+        Map<String, Object> configMap = new HashMap<>();
         String[] lines = cfg.runtimeVariablesText.split("\\r?\\n");
         for (String rawLine : lines) {
             String line = rawLine == null ? "" : rawLine.trim();
@@ -1274,9 +1280,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             String key = line.substring(0, eq).trim();
             String value = line.substring(eq + 1).trim();
             if (!key.isEmpty()) {
-                ctx.variables.put(key, coerceNodeRuntimeValue(value));
+                Object coerced = coerceNodeRuntimeValue(value);
+                // 1. 注入为独立变量（兼容旧用法：直接 vars.myKey）
+                ctx.variables.put(key, coerced);
+                // 2. 同时收入 configMap（新用法：vars.configMap.myKey）
+                configMap.put(key, coerced);
             }
         }
+        // configMap 作为一个整体字典注入，脚本中通过 vars.configMap 访问
+        ctx.variables.put("configMap", configMap);
     }
 
     private Object coerceNodeRuntimeValue(String value) {
@@ -5404,10 +5416,17 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         private int startX, startY;
 
         private boolean moved = false;
+        private boolean longPressFired = false;
         private final int slopPx;
         private long lastUpdateMs;
         private int pendingX;
         private int pendingY;
+
+        private final android.os.Handler longPressHandler =
+                new android.os.Handler(android.os.Looper.getMainLooper());
+        private Runnable longPressRunnable;
+        private final long longPressTimeoutMs =
+                android.view.ViewConfiguration.getLongPressTimeout();
 
         DragTouchListener(WindowManager.LayoutParams lp, WindowManager wm, View targetView, FloatWindowService service) {
             this(lp, wm, targetView, service, false);
@@ -5428,6 +5447,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             switch (e.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
                     moved = false;
+                    longPressFired = false;
                     downRawX = e.getRawX();
                     downRawY = e.getRawY();
                     startX = lp.x;
@@ -5436,6 +5456,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     pendingY = lp.y;
                     lastUpdateMs = 0L;
                     setDraggingVisualState(true);
+                    longPressRunnable = () -> {
+                        if (!moved) {
+                            longPressFired = true;
+                            v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
+                            onLongPress();
+                        }
+                    };
+                    longPressHandler.postDelayed(longPressRunnable, longPressTimeoutMs);
                     return true;
 
                 case MotionEvent.ACTION_MOVE: {
@@ -5444,6 +5472,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
                     if (!moved && (Math.abs(dx) > slopPx || Math.abs(dy) > slopPx)) {
                         moved = true;
+                        cancelLongPress();
                     }
 
                     if (moved) {
@@ -5472,12 +5501,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
+                    cancelLongPress();
                     if (moved) {
                         applyPendingPosition();
                         onDragEnd(lp.x, lp.y);
                     }
                     setDraggingVisualState(false);
-                    if (!moved) {
+                    if (!moved && !longPressFired) {
                         v.performClick();
                     }
                     return true;
@@ -5485,8 +5515,18 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             return false;
         }
 
+        private void cancelLongPress() {
+            if (longPressRunnable != null) {
+                longPressHandler.removeCallbacks(longPressRunnable);
+                longPressRunnable = null;
+            }
+        }
+
         /** 拖拽结束回调，子类可覆盖以持久化位置。 */
         protected void onDragEnd(int finalX, int finalY) {}
+
+        /** 长按回调，子类可覆盖以响应长按手势。 */
+        protected void onLongPress() {}
 
         private void applyPendingPosition() {
             if (lp.x == pendingX && lp.y == pendingY) {

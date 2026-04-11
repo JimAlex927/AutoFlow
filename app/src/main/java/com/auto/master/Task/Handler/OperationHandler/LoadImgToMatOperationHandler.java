@@ -54,6 +54,8 @@ import java.util.Map;
  */
 public class LoadImgToMatOperationHandler extends OperationHandler {
 
+    // Gson 实例线程安全，静态复用避免反射初始化开销
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
     //    和operation 对应
     public LoadImgToMatOperationHandler() {
@@ -120,15 +122,12 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
             File imgDir = new File(task, "img");
             File gestureDir = new File(task, "gesture");
             File[] gestureFiles = gestureDir.listFiles();
-            Gson gson = new GsonBuilder()
-                    .setPrettyPrinting()
-                    .create();
             Map<String, GestureOverlayView.GestureNode> taskGestureNodes = new HashMap<>();
             if (gestureFiles != null) {
                 for (File gestureDataFile : gestureFiles) {
                     try (FileReader reader = new FileReader(gestureDataFile)) {
                         // 直接反序列化為 GestureNode
-                        GestureOverlayView.GestureNode node = gson.fromJson(reader, GestureOverlayView.GestureNode.class);
+                        GestureOverlayView.GestureNode node = GSON.fromJson(reader, GestureOverlayView.GestureNode.class);
 
                         if (node == null) {
                             Log.e("GestureLoader", "反序列化結果為 null");
@@ -160,7 +159,7 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
                 String jsonContent = CropRegionOperationHandler.readFileToString(oldManifest);
                 Type type = new TypeToken<Map<String, List<Integer>>>() {
                 }.getType();
-                Map<String, List<Integer>> existingManifest = new Gson().fromJson(jsonContent, type);
+                Map<String, List<Integer>> existingManifest = GSON.fromJson(jsonContent, type);
                 if (existingManifest == null) {
                     existingManifest = new HashMap<>();
                 }

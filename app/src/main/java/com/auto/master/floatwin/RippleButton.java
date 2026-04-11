@@ -19,7 +19,11 @@ import android.widget.FrameLayout;
  * 点击时会产生水波纹扩散效果
  */
 public class RippleButton extends FrameLayout {
-    
+
+    // 静态复用，避免每次点击 new 一个 Interpolator
+    private static final android.view.animation.Interpolator RIPPLE_INTERPOLATOR =
+            new AccelerateDecelerateInterpolator();
+
     private Paint ripplePaint;
     private float rippleRadius = 0f;
     private float rippleX = 0f;
@@ -83,7 +87,7 @@ public class RippleButton extends FrameLayout {
         
         rippleAnimator = ValueAnimator.ofFloat(0f, maxRadius);
         rippleAnimator.setDuration(400);
-        rippleAnimator.setInterpolator(new AccelerateDecelerateInterpolator());
+        rippleAnimator.setInterpolator(RIPPLE_INTERPOLATOR);
         rippleAnimator.addUpdateListener(animation -> {
             rippleRadius = (float) animation.getAnimatedValue();
             // 渐变透明度
