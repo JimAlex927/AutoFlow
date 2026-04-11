@@ -14,6 +14,10 @@ public final class OcrEngine {
     private OcrEngine() {
     }
 
+    public static boolean isAvailable() {
+        return false;
+    }
+
     public static String recognize(Context context, Bitmap src, String engine, boolean accurateMode, long timeoutMs) {
         Log.w(TAG, "OCR is disabled in this build");
         return "";

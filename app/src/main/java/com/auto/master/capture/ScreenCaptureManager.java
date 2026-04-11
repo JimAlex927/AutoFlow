@@ -94,8 +94,10 @@ public class ScreenCaptureManager {
     private static final int MAX_POLLS_PER_SECOND = 5;
     private static final int MAX_CONSECUTIVE_FRAME_ERRORS = 7;
     private static final long MAX_STALE_FRAME_AGE_MS = 300L;
+    private static final long FRAME_HEALTH_CHECK_INTERVAL_MS = 1200L;
     private int consecutiveFrameFailures = 0;
     private long lastSuccessfulFrameMs = 0L;
+    private long lastFrameHealthCheckMs = 0L;
     private volatile boolean resetScheduled = false;
 
     // 空闲自动暂停 VirtualDisplay：无人 poll 超过此时长则暂停，下次 poll 自动恢复
@@ -202,6 +204,7 @@ public class ScreenCaptureManager {
             frameSeq.set(0);
             lastPollMs = System.currentTimeMillis(); // 避免刚启动就被暂停
             lastSuccessfulFrameMs = 0L;
+            lastFrameHealthCheckMs = 0L;
             consecutiveFrameFailures = 0;
             resetScheduled = false;
             captureHandler.postDelayed(idleCheckRunnable, IDLE_PAUSE_THRESHOLD_MS);
@@ -318,16 +321,15 @@ public class ScreenCaptureManager {
                 return false;
             }
 
-            // 可选：中心点黑帧检查（你也可以关掉以追求极限性能）
-            if (isImageBlackOrEmptyCenter(image)) {
-                recordFrameFailure("black_or_empty_center");
-                return false;
-            }
-
-            // 可选：中心点黑帧检查（你也可以关掉以追求极限性能）
-            if (hasTransparentBorders(image)) {
-                recordFrameFailure("has transparent border");
-                return false;
+            if (shouldRunFrameHealthCheck(now)) {
+                if (isImageBlackOrEmptyCenter(image)) {
+                    recordFrameFailure("black_or_empty_center");
+                    return false;
+                }
+                if (hasTransparentBorders(image)) {
+                    recordFrameFailure("has transparent border");
+                    return false;
+                }
             }
 
             if (!copyImageToMatFast(image)) {
@@ -472,7 +474,7 @@ public class ScreenCaptureManager {
                 recordFrameFailure("size_mismatch_roi");
                 return false;
             }
-            if (isImageBlackOrEmptyCenter(image)) {
+            if (shouldRunFrameHealthCheck(now) && isImageBlackOrEmptyCenter(image)) {
                 recordFrameFailure("black_or_empty_center_roi");
                 return false;
             }
@@ -576,6 +578,7 @@ public class ScreenCaptureManager {
         lastRotation = getCurrentPhysicalRotation(appContext);
         displayPaused = false;
         consecutiveFrameFailures = 0;
+        lastFrameHealthCheckMs = 0L;
 
         Log.i(TAG, "resetVirtualDisplay rot=" + rotationToString(lastRotation)
                 + " size=" + screenWidth + "x" + screenHeight);
@@ -691,6 +694,18 @@ public class ScreenCaptureManager {
         } catch (Throwable ignored) {}
 
         Log.i(TAG, "cleanup done");
+    }
+
+    private boolean shouldRunFrameHealthCheck(long nowMs) {
+        if (lastSuccessfulFrameMs <= 0L || consecutiveFrameFailures > 0) {
+            lastFrameHealthCheckMs = nowMs;
+            return true;
+        }
+        if ((nowMs - lastFrameHealthCheckMs) >= FRAME_HEALTH_CHECK_INTERVAL_MS) {
+            lastFrameHealthCheckMs = nowMs;
+            return true;
+        }
+        return false;
     }
 
     // ===== 轻量黑帧检测：可关掉换极限性能 =====

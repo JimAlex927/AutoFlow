@@ -70,34 +70,35 @@ public class OcrOperationHandler extends OperationHandler {
     }
 
     private String recognizeOnce(Rect cropRect, long timeoutMs, boolean accurateMode, String engine) {
-        Mat mat = ScreenCapture.getSingleBitMapWhileInContinous(false);
+        if (!OcrEngine.isAvailable()) {
+            Log.i(TAG, "OCR engine unavailable, skip bitmap conversion");
+            return "";
+        }
+
+        Mat mat = cropRect == null
+                ? ScreenCapture.getSingleBitMapWhileInContinous(false)
+                : ScreenCapture.getSingleBitMapRoiWhileInContinous(cropRect, false);
         if (mat == null || mat.empty()) {
             Log.w(TAG, "OCR截图失败，screenMat为空");
             return null;
         }
 
-        Bitmap full = com.auto.master.utils.OpenCVHelper.getInstance().matToBitmap(mat);
-        if (full == null || full.isRecycled()) {
+        Bitmap target = com.auto.master.utils.OpenCVHelper.getInstance().matToBitmap(mat);
+        if (target == null || target.isRecycled()) {
             return null;
         }
 
-        Bitmap target = full;
-        if (cropRect != null) {
-            Rect safe = new Rect(cropRect);
-            safe.left = Math.max(0, Math.min(safe.left, full.getWidth()));
-            safe.top = Math.max(0, Math.min(safe.top, full.getHeight()));
-            safe.right = Math.max(safe.left, Math.min(safe.right, full.getWidth()));
-            safe.bottom = Math.max(safe.top, Math.min(safe.bottom, full.getHeight()));
-            if (safe.width() > 1 && safe.height() > 1) {
-                target = Bitmap.createBitmap(full, safe.left, safe.top, safe.width(), safe.height());
+        try {
+            AutoAccessibilityService service = AutoAccessibilityService.get();
+            if (service == null) {
+                return OcrEngine.recognize(null, target, engine, accurateMode, timeoutMs);
+            }
+            return OcrEngine.recognize(service, target, engine, accurateMode, timeoutMs);
+        } finally {
+            if (!target.isRecycled()) {
+                target.recycle();
             }
         }
-
-        AutoAccessibilityService service = AutoAccessibilityService.get();
-        if (service == null) {
-            return OcrEngine.recognize(null, target, engine, accurateMode, timeoutMs);
-        }
-        return OcrEngine.recognize(service, target, engine, accurateMode, timeoutMs);
     }
 
     private String getStringSafe(Map<String, Object> map, String key, String def) {

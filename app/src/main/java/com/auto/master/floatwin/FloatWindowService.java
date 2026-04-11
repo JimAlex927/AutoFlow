@@ -216,10 +216,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private int opFailureCount = 0;
     private String latestFailureReason = "-";
     private long currentRunStartMs = 0L;
-    private static final long DELAY_PROGRESS_UPDATE_INTERVAL_MS = 120L;
+    private static final long DELAY_PROGRESS_UPDATE_INTERVAL_MS = 220L;
     private String activeDelayOperationId;
     private long activeDelayDurationMs = 0L;
     private long activeDelayStartMs = 0L;
+    private int lastDelayOverlayProgress = -1;
+    private String lastDelayOverlayText = "";
 
     private String currentSearchQuery = "";
     private final List<OperationClipboardEntry> operationClipboardLibrary = new ArrayList<>();
@@ -6469,6 +6471,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     private void renderDelayProgress(boolean visible, long elapsedMs, long durationMs) {
         if (!visible || durationMs <= 0L) {
+            lastDelayOverlayProgress = -1;
+            lastDelayOverlayText = "";
             hideDelayOverlay();
             return;
         }
@@ -6481,8 +6485,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         long safeElapsed = Math.max(0L, Math.min(elapsedMs, durationMs));
         int progress = (int) Math.min(1000L, (safeElapsed * 1000L) / durationMs);
-        delayOverlayProgressBar.setProgress(progress);
-        delayOverlayValueText.setText("延迟 " + formatDelayDuration(safeElapsed) + " / " + formatDelayDuration(durationMs));
+        String progressText = "延迟 " + formatDelayDuration(safeElapsed) + " / " + formatDelayDuration(durationMs);
+        if (progress != lastDelayOverlayProgress) {
+            delayOverlayProgressBar.setProgress(progress);
+            lastDelayOverlayProgress = progress;
+        }
+        if (!progressText.equals(lastDelayOverlayText)) {
+            delayOverlayValueText.setText(progressText);
+            lastDelayOverlayText = progressText;
+        }
     }
 
     private void ensureDelayOverlay() {
@@ -6534,6 +6545,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         delayOverlayLp = null;
         delayOverlayProgressBar = null;
         delayOverlayValueText = null;
+        lastDelayOverlayProgress = -1;
+        lastDelayOverlayText = "";
     }
 
     private String formatDelayDuration(long durationMs) {
