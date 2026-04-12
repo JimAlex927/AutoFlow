@@ -149,14 +149,14 @@ public class JumpTaskResponseHandler extends DefaultResponseHandler {
         ScriptRunner.ScriptExecutionListener listener = ScriptRunner.getCurrentListener();
         if (listener != null) {
             // 构建 operations 列表
-            List<com.auto.master.floatwin.FloatWindowService.OperationItem> operationItems = 
+            List<com.auto.master.floatwin.OperationItem> operationItems =
                 new java.util.ArrayList<>();
-            
+
             if (targetTask.getOperationMap() != null) {
                 int index = 0;
                 for (MetaOperation op : targetTask.getOperationMap().values()) {
                     String typeName = getOperationTypeName(op.getType());
-                    operationItems.add(new com.auto.master.floatwin.FloatWindowService.OperationItem(
+                    operationItems.add(new com.auto.master.floatwin.OperationItem(
                         op.getName(),
                         op.getId(),
                         typeName,

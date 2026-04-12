@@ -9,10 +9,11 @@ public class OperationItem {
     public boolean delayShowCountdown;
 
     public OperationItem(String name, String id, String type, int index) {
-        this.name = name;
-        this.id = id;
-        this.type = type;
-        this.index = index;
+        this(name, id, type, index, 0L, true);
+    }
+
+    public OperationItem(String name, String id, String type, int index, long delayDurationMs) {
+        this(name, id, type, index, delayDurationMs, true);
     }
 
     public OperationItem(String name, String id, String type, int index, long delayDurationMs, boolean delayShowCountdown) {
@@ -20,7 +21,7 @@ public class OperationItem {
         this.id = id;
         this.type = type;
         this.index = index;
-        this.delayDurationMs = delayDurationMs;
+        this.delayDurationMs = Math.max(0L, delayDurationMs);
         this.delayShowCountdown = delayShowCountdown;
     }
 }

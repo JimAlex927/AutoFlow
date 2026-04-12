@@ -102,7 +102,7 @@ public final class ScriptRunner {
          * @param taskName Task 的显示名称
          * @param operations Task 中的 operation 列表
          */
-        void onTaskSwitch(String taskId, String taskName, List<com.auto.master.floatwin.FloatWindowService.OperationItem> operations);
+        void onTaskSwitch(String taskId, String taskName, List<com.auto.master.floatwin.OperationItem> operations);
     }
     
     // 当前监听器
@@ -414,12 +414,12 @@ public final class ScriptRunner {
                                                         final ScriptExecutionListener listener = currentListener;
                                                         final String taskName = originTask.getName();
                                                         final String taskId = jumpOp.taskId;
-                                                        final java.util.List<com.auto.master.floatwin.FloatWindowService.OperationItem> operationItems =
+                                                        final java.util.List<com.auto.master.floatwin.OperationItem> operationItems =
                                                                 new java.util.ArrayList<>();
                                                         int index = 0;
                                                         for (com.auto.master.Task.Operation.MetaOperation op : originTask.getOperationMap().values()) {
                                                             String typeName = getOperationTypeName(op.getType());
-                                                            operationItems.add(new com.auto.master.floatwin.FloatWindowService.OperationItem(
+                                                            operationItems.add(new com.auto.master.floatwin.OperationItem(
                                                                     op.getName(),
                                                                     op.getId(),
                                                                     typeName,

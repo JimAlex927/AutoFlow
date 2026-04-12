@@ -229,19 +229,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private int opFailureCount = 0;
     private String latestFailureReason = "-";
     private long currentRunStartMs = 0L;
-    private static final long DELAY_PROGRESS_UPDATE_INTERVAL_MS = 220L;
-    private String activeDelayOperationId;
-    private long activeDelayDurationMs = 0L;
-    private long activeDelayStartMs = 0L;
-    private int lastDelayOverlayProgress = -1;
-    private String lastDelayOverlayText = "";
+    // delay overlay state moved to StepAndDelayOverlayManager
 
     private String currentSearchQuery = "";
     private final List<OperationClipboardEntry> operationClipboardLibrary = new ArrayList<>();
     private static final int OPERATION_CLIPBOARD_LIMIT = 24;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private final Runnable searchRefreshRunnable = this::refreshCurrentLevelList;
-    private final Runnable delayProgressRunnable = this::tickDelayProgress;
     private RecyclerView projectPanelRecyclerView;
     private ProjectPanelAdapter projectPanelAdapter;
     private TaskPanelAdapter taskPanelAdapter;
@@ -307,23 +301,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private OperationDialogFactory dialogFactory;
     private FileIOManager fileIOManager;
     
-    // ==================== Phase 4: Step Overlay ====================
-    private View stepOverlayView;
-    private WindowManager.LayoutParams stepOverlayLp;
-    private View delayOverlayView;
-    private WindowManager.LayoutParams delayOverlayLp;
-    private ProgressBar delayOverlayProgressBar;
-    private TextView delayOverlayValueText;
-
-    // ==================== Phase 4: App-launch trigger polling ====================
-    private static final boolean TRIGGER_FEATURE_ENABLED = false;
-    private HandlerThread appLaunchPollThread;
-    private Handler appLaunchPollHandler;
-    private final Object appLaunchTriggerCacheLock = new Object();
-    private List<com.auto.master.scheduler.AppNotificationTrigger> cachedAppLaunchTriggers =
-            Collections.emptyList();
-    private String lastForegroundPackage = "";
-    private static final long APP_LAUNCH_POLL_INTERVAL_MS = 2000L;
+    // ── 拆分出的管理器 ──────────────────────────────────────────────────────
+    /** 步骤指示器 & 延迟进度悬浮层（从本类拆分，见 StepAndDelayOverlayManager）。 */
+    private StepAndDelayOverlayManager stepDelayOverlayManager;
+    /** App 启动触发器轮询（从本类拆分，见 AppLaunchTriggerManager）。 */
+    private AppLaunchTriggerManager appLaunchTriggerManager;
 
 
 
@@ -340,6 +322,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         // 初始化节点悬浮按钮管理器并恢复已保存的按钮
         nodeFloatBtnManager = new NodeFloatButtonManager(this);
         configUiStore = new ConfigUiStore(this);
+
+        // 初始化拆分出的管理器
+        stepDelayOverlayManager = new StepAndDelayOverlayManager(this);
+        appLaunchTriggerManager = new AppLaunchTriggerManager(this);
         restoreNodeFloatButtons();
         
         startMyForeground();
@@ -349,13 +335,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         renderProjectItems(filterProjectItems(projectListCache, currentSearchQuery));
         preloadProjectDataAsync();
 
-        if (TRIGGER_FEATURE_ENABLED) {
-            initAppLaunchPollThreadIfNeeded();
-            refreshAppLaunchTriggerCache();
-            if (!getCachedAppLaunchTriggersSnapshot().isEmpty()) {
-                startAppLaunchPolling();
-            }
-        }
+        appLaunchTriggerManager.initIfNeeded();
     }
 
     private void startMyForeground() {
@@ -464,14 +444,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (uiHandler != null) {
             uiHandler.removeCallbacksAndMessages(null);
         }
-        if (appLaunchPollHandler != null) {
-            appLaunchPollHandler.removeCallbacksAndMessages(null);
-        }
-        if (appLaunchPollThread != null) {
-            appLaunchPollThread.quitSafely();
-            appLaunchPollThread = null;
-            appLaunchPollHandler = null;
-        }
+        // appLaunchPollThread / appLaunchPollHandler 已由 AppLaunchTriggerManager.destroy() 清理
         if (taskActionPopupWindow != null) {
             taskActionPopupWindow.dismiss();
             taskActionPopupWindow = null;
@@ -494,9 +467,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         taskPanelAdapter = null;
         operationPanelAdapter = null;
         currentOperationAdapter = null;
-        hideStepOverlay();
-        destroyDelayOverlay();
-        stopAppLaunchPolling();
+        if (stepDelayOverlayManager != null) stepDelayOverlayManager.destroy();
+        if (appLaunchTriggerManager != null) appLaunchTriggerManager.destroy();
         
         // 关闭IO管理器
         if (fileIOManager != null) {
@@ -5636,86 +5608,26 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     // ==================== Phase 4B: Execution Step Overlay ====================
+    // 实现已迁移至 StepAndDelayOverlayManager，此处保留薄封装供内部调用。
 
     private void showStepOverlay(String operationName, String typeLabel, int stepIndex, int total) {
-        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
-            if (stepOverlayView == null) {
-                stepOverlayView = LayoutInflater.from(this).inflate(
-                        R.layout.overlay_step_indicator, null);
-                stepOverlayLp = new WindowManager.LayoutParams(
-                        WindowManager.LayoutParams.WRAP_CONTENT,
-                        WindowManager.LayoutParams.WRAP_CONTENT,
-                        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                                : WindowManager.LayoutParams.TYPE_PHONE,
-                        WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                                | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                                | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                                | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                        PixelFormat.TRANSLUCENT);
-                stepOverlayLp.gravity = android.view.Gravity.TOP | android.view.Gravity.CENTER_HORIZONTAL;
-                stepOverlayLp.x = 0;
-                stepOverlayLp.y = getStatusBarHeightPx() + dp(6);
-                try {
-                    wm.addView(stepOverlayView, stepOverlayLp);
-                } catch (Exception e) {
-                    Log.e(TAG, "add step overlay failed", e);
-                    stepOverlayView = null;
-                    return;
-                }
-            }
-            TextView tvName = stepOverlayView.findViewById(R.id.tv_step_op_name);
-            TextView tvInfo = stepOverlayView.findViewById(R.id.tv_step_info);
-            View typeBar = stepOverlayView.findViewById(R.id.step_type_bar);
-            if (tvName != null) tvName.setText(operationName);
-            if (tvInfo != null) tvInfo.setText("步骤 " + stepIndex + " / " + total
-                    + (typeLabel != null ? "  [" + typeLabel + "]" : ""));
-            if (typeBar != null) {
-                int color = getTypeColorForOverlay(typeLabel);
-                typeBar.setBackgroundColor(color);
-            }
-        });
+        stepDelayOverlayManager.showStep(operationName, typeLabel, stepIndex, total);
+    }
+
+    private void hideStepOverlay() {
+        stepDelayOverlayManager.hideStep();
+    }
+
+    private int getTypeColorForOverlay(String typeLabel) {
+        return stepDelayOverlayManager.getTypeColor(typeLabel);
     }
 
     private int getStatusBarHeightPx() {
         int resId = getResources().getIdentifier("status_bar_height", "dimen", "android");
         if (resId > 0) {
-            try {
-                return getResources().getDimensionPixelSize(resId);
-            } catch (Exception ignored) {
-            }
+            try { return getResources().getDimensionPixelSize(resId); } catch (Exception ignored) {}
         }
         return 0;
-    }
-
-    private void hideStepOverlay() {
-        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
-            if (stepOverlayView != null) {
-                try {
-                    wm.removeView(stepOverlayView);
-                } catch (Exception ignored) {
-                }
-                stepOverlayView = null;
-                stepOverlayLp = null;
-            }
-        });
-    }
-
-    private int getTypeColorForOverlay(String typeLabel) {
-        if (typeLabel == null) return 0xFF4CAF50;
-        switch (typeLabel) {
-            case "点击": return 0xFF1E88E5;
-            case "延时": return 0xFFFB8C00;
-            case "手势": return 0xFF8E24AA;
-            case "截图区域": return 0xFF039BE5;
-            case "模板匹配": return 0xFF00897B;
-            case "颜色匹配": return 0xFFD84315;
-            case "跳转Task": return 0xFFE53935;
-            case "OCR": return 0xFF3949AB;
-            case "条件分支": return 0xFFFF6F00;
-            case "启动应用": return 0xFF43A047;
-            default: return 0xFF4CAF50;
-        }
     }
 
     // ==================== Phase 4C: Project Templates ====================
@@ -5793,7 +5705,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     // ==================== Phase 4D: Trigger Manager ====================
 
     private void showTriggerManager() {
-        if (!TRIGGER_FEATURE_ENABLED) {
+        if (!AppLaunchTriggerManager.TRIGGER_FEATURE_ENABLED) {
             Toast.makeText(this, "触发器功能已停用", Toast.LENGTH_SHORT).show();
             return;
         }
@@ -5963,139 +5875,30 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     // ==================== Phase 4D: App-launch polling ====================
+    // 实现已迁移至 AppLaunchTriggerManager，此处保留薄封装供内部调用。
 
     private void initAppLaunchPollThreadIfNeeded() {
-        if (!TRIGGER_FEATURE_ENABLED) {
-            return;
-        }
-        if (appLaunchPollThread != null) {
-            return;
-        }
-        appLaunchPollThread = new HandlerThread("Atomm-AppLaunchPoll");
-        appLaunchPollThread.start();
-        appLaunchPollHandler = new Handler(appLaunchPollThread.getLooper());
+        appLaunchTriggerManager.initIfNeeded();
     }
 
     private void refreshAppLaunchTriggerCache() {
-        if (!TRIGGER_FEATURE_ENABLED) {
-            synchronized (appLaunchTriggerCacheLock) {
-                cachedAppLaunchTriggers = Collections.emptyList();
-            }
-            return;
-        }
-        List<com.auto.master.scheduler.AppNotificationTrigger> active =
-                com.auto.master.scheduler.TriggerStore.getByType(
-                        this, com.auto.master.scheduler.AppNotificationTrigger.TYPE_APP_LAUNCH);
-        synchronized (appLaunchTriggerCacheLock) {
-            cachedAppLaunchTriggers = active == null
-                    ? Collections.emptyList()
-                    : new ArrayList<>(active);
-        }
+        appLaunchTriggerManager.refreshCache();
     }
 
     private List<com.auto.master.scheduler.AppNotificationTrigger> getCachedAppLaunchTriggersSnapshot() {
-        synchronized (appLaunchTriggerCacheLock) {
-            if (cachedAppLaunchTriggers.isEmpty()) {
-                return Collections.emptyList();
-            }
-            return new ArrayList<>(cachedAppLaunchTriggers);
-        }
+        return appLaunchTriggerManager.getSnapshot();
     }
 
     private void refreshAppLaunchPollingState() {
-        refreshAppLaunchTriggerCache();
-        if (getCachedAppLaunchTriggersSnapshot().isEmpty()) {
-            stopAppLaunchPolling();
-        } else {
-            startAppLaunchPolling();
-        }
+        appLaunchTriggerManager.refreshPollingState();
     }
 
     private void startAppLaunchPolling() {
-        if (!TRIGGER_FEATURE_ENABLED || ScriptRunner.isCurrentScriptRunning()) {
-            stopAppLaunchPolling();
-            return;
-        }
-        initAppLaunchPollThreadIfNeeded();
-        refreshAppLaunchTriggerCache();
-        if (getCachedAppLaunchTriggersSnapshot().isEmpty()) {
-            stopAppLaunchPolling();
-            return;
-        }
-        if (appLaunchPollHandler == null) {
-            return;
-        }
-        appLaunchPollHandler.removeCallbacks(appLaunchPollRunnable);
-        appLaunchPollHandler.postDelayed(appLaunchPollRunnable, APP_LAUNCH_POLL_INTERVAL_MS);
+        appLaunchTriggerManager.startPolling();
     }
 
     private void stopAppLaunchPolling() {
-        if (appLaunchPollHandler != null) {
-            appLaunchPollHandler.removeCallbacks(appLaunchPollRunnable);
-        }
-    }
-
-    private final Runnable appLaunchPollRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (ScriptRunner.isCurrentScriptRunning()) {
-                stopAppLaunchPolling();
-                return;
-            }
-            checkAppLaunchTriggers();
-            // Continue polling only if there are active app-launch triggers
-            java.util.List<com.auto.master.scheduler.AppNotificationTrigger> active =
-                    getCachedAppLaunchTriggersSnapshot();
-            if (!active.isEmpty()) {
-                appLaunchPollHandler.postDelayed(this, APP_LAUNCH_POLL_INTERVAL_MS);
-            }
-        }
-    };
-
-    private void checkAppLaunchTriggers() {
-        if (!TRIGGER_FEATURE_ENABLED || ScriptRunner.isCurrentScriptRunning()) return;
-        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.LOLLIPOP) return;
-        try {
-            android.app.usage.UsageStatsManager usm = (android.app.usage.UsageStatsManager)
-                    getSystemService(android.content.Context.USAGE_STATS_SERVICE);
-            if (usm == null) return;
-            long now = System.currentTimeMillis();
-            java.util.List<android.app.usage.UsageStats> stats =
-                    usm.queryUsageStats(android.app.usage.UsageStatsManager.INTERVAL_DAILY,
-                            now - 5000, now);
-            if (stats == null || stats.isEmpty()) return;
-
-            String foreground = null;
-            long maxTime = 0;
-            for (android.app.usage.UsageStats us : stats) {
-                if (us.getLastTimeUsed() > maxTime) {
-                    maxTime = us.getLastTimeUsed();
-                    foreground = us.getPackageName();
-                }
-            }
-            if (foreground == null || foreground.equals(lastForegroundPackage)) return;
-
-            String newPkg = foreground;
-            lastForegroundPackage = newPkg;
-
-            java.util.List<com.auto.master.scheduler.AppNotificationTrigger> triggers =
-                    getCachedAppLaunchTriggersSnapshot();
-            for (com.auto.master.scheduler.AppNotificationTrigger t : triggers) {
-                if (t.enabled && newPkg.equals(t.watchPackage)) {
-                    Log.d(TAG, "app-launch trigger fired: pkg=" + newPkg + " -> " + t.projectName);
-                    com.auto.master.scheduler.ScheduledTask spec =
-                            new com.auto.master.scheduler.ScheduledTask();
-                    spec.id = t.id;
-                    spec.projectName = t.projectName;
-                    spec.taskId = t.taskId;
-                    spec.operationId = t.operationId;
-                    spec.enabled = true;
-                    com.auto.master.scheduler.TaskScheduleExecutor.execute(this, spec);
-                }
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "checkAppLaunchTriggers failed", e);
-        }
+        appLaunchTriggerManager.stopPolling();
     }
 
     // ==================== FloatWindowHost Implementation ====================
@@ -6495,31 +6298,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
     }
 
-    public static class OperationItem {
-        public String name;
-        public String type;
-        public String id;
-        public int index;
-        public long delayDurationMs;
-        public boolean delayShowCountdown;
-
-        public OperationItem(String name, String id, String type, int index) {
-            this(name, id, type, index, 0L, true);
-        }
-
-        public OperationItem(String name, String id, String type, int index, long delayDurationMs) {
-            this(name, id, type, index, delayDurationMs, true);
-        }
-
-        public OperationItem(String name, String id, String type, int index, long delayDurationMs, boolean delayShowCountdown) {
-            this.name = name;
-            this.id = id;
-            this.type = type;
-            this.index = index;
-            this.delayDurationMs = Math.max(0L, delayDurationMs);
-            this.delayShowCountdown = delayShowCountdown;
-        }
-    }
+    // OperationItem 已提取至独立文件 com.auto.master.floatwin.OperationItem
 
     private static class OperationClipboardEntry {
         final JSONObject operationJson;
@@ -7513,138 +7292,18 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         return true;
     }
 
-    private void maybeStartDelayProgress(@Nullable OperationItem opItem) {
-        stopDelayProgress();
-        if (opItem == null || opItem.delayDurationMs <= 0L || !opItem.delayShowCountdown) {
-            return;
-        }
-        activeDelayOperationId = opItem.id;
-        activeDelayDurationMs = opItem.delayDurationMs;
-        activeDelayStartMs = SystemClock.uptimeMillis();
-        renderDelayProgress(true, 0L, activeDelayDurationMs);
-        uiHandler.postDelayed(delayProgressRunnable, DELAY_PROGRESS_UPDATE_INTERVAL_MS);
-    }
+    // ── 延迟进度悬浮层：实现已迁移至 StepAndDelayOverlayManager，此处仅保留薄封装。
 
-    private void tickDelayProgress() {
-        if (TextUtils.isEmpty(activeDelayOperationId) || activeDelayDurationMs <= 0L) {
-            renderDelayProgress(false, 0L, 0L);
-            return;
-        }
-        long elapsed = Math.min(activeDelayDurationMs, Math.max(0L, SystemClock.uptimeMillis() - activeDelayStartMs));
-        renderDelayProgress(true, elapsed, activeDelayDurationMs);
-        if (elapsed < activeDelayDurationMs) {
-            uiHandler.postDelayed(delayProgressRunnable, DELAY_PROGRESS_UPDATE_INTERVAL_MS);
-        }
+    private void maybeStartDelayProgress(@Nullable OperationItem opItem) {
+        stepDelayOverlayManager.maybeStartDelay(opItem);
     }
 
     private void stopDelayProgress() {
-        uiHandler.removeCallbacks(delayProgressRunnable);
-        activeDelayOperationId = null;
-        activeDelayDurationMs = 0L;
-        activeDelayStartMs = 0L;
-        renderDelayProgress(false, 0L, 0L);
+        stepDelayOverlayManager.stopDelay();
     }
 
     private void renderDelayProgressState() {
-        if (!TextUtils.isEmpty(activeDelayOperationId) && activeDelayDurationMs > 0L) {
-            long elapsed = Math.min(activeDelayDurationMs, Math.max(0L, SystemClock.uptimeMillis() - activeDelayStartMs));
-            renderDelayProgress(true, elapsed, activeDelayDurationMs);
-            return;
-        }
-        renderDelayProgress(false, 0L, 0L);
-    }
-
-    private void renderDelayProgress(boolean visible, long elapsedMs, long durationMs) {
-        if (!visible || durationMs <= 0L) {
-            lastDelayOverlayProgress = -1;
-            lastDelayOverlayText = "";
-            hideDelayOverlay();
-            return;
-        }
-        ensureDelayOverlay();
-        if (delayOverlayProgressBar == null || delayOverlayValueText == null) {
-            return;
-        }
-        if (delayOverlayView.getVisibility() != View.VISIBLE) {
-            delayOverlayView.setVisibility(View.VISIBLE);
-        }
-        long safeElapsed = Math.max(0L, Math.min(elapsedMs, durationMs));
-        int progress = (int) Math.min(1000L, (safeElapsed * 1000L) / durationMs);
-        String progressText = "延迟 " + formatDelayDuration(safeElapsed) + " / " + formatDelayDuration(durationMs);
-        if (progress != lastDelayOverlayProgress) {
-            delayOverlayProgressBar.setProgress(progress);
-            lastDelayOverlayProgress = progress;
-        }
-        if (!progressText.equals(lastDelayOverlayText)) {
-            delayOverlayValueText.setText(progressText);
-            lastDelayOverlayText = progressText;
-        }
-    }
-
-    private void ensureDelayOverlay() {
-        if (delayOverlayView != null && delayOverlayView.getParent() != null) {
-            return;
-        }
-        try {
-            if (delayOverlayView == null) {
-                delayOverlayView = LayoutInflater.from(this).inflate(R.layout.overlay_delay_progress, null);
-                delayOverlayProgressBar = delayOverlayView.findViewById(R.id.progress_delay_overlay);
-                delayOverlayValueText = delayOverlayView.findViewById(R.id.tv_delay_overlay_value);
-            }
-            delayOverlayLp = new WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                            ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                            : WindowManager.LayoutParams.TYPE_PHONE,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                            | WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
-                            | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                    PixelFormat.TRANSLUCENT);
-            delayOverlayLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-            delayOverlayLp.x = 0;
-            delayOverlayLp.y = getStatusBarHeightPx() + dp(38);
-            wm.addView(delayOverlayView, delayOverlayLp);
-        } catch (Exception e) {
-            Log.e(TAG, "add delay overlay failed", e);
-            delayOverlayLp = null;
-            delayOverlayProgressBar = null;
-            delayOverlayValueText = null;
-            if (delayOverlayView != null && delayOverlayView.getParent() == null) {
-                delayOverlayView = null;
-            }
-        }
-    }
-
-    private void hideDelayOverlay() {
-        if (delayOverlayView != null) {
-            delayOverlayView.setVisibility(View.GONE);
-        }
-    }
-
-    private void destroyDelayOverlay() {
-        if (delayOverlayView != null) {
-            safeRemoveView(delayOverlayView);
-        }
-        delayOverlayView = null;
-        delayOverlayLp = null;
-        delayOverlayProgressBar = null;
-        delayOverlayValueText = null;
-        lastDelayOverlayProgress = -1;
-        lastDelayOverlayText = "";
-    }
-
-    private String formatDelayDuration(long durationMs) {
-        if (durationMs <= 0L) {
-            return "0s";
-        }
-        if (durationMs < 1000L) {
-            return durationMs + "ms";
-        }
-        if (durationMs % 1000L == 0L) {
-            return (durationMs / 1000L) + "s";
-        }
-        return String.format(Locale.getDefault(), "%.1fs", durationMs / 1000f);
+        stepDelayOverlayManager.syncDelayState();
     }
 
     private FlowGraphView currentFlowGraphView;
@@ -7662,9 +7321,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     @Override
     public void onOperationComplete(String operationId, boolean success) {
-        if (TextUtils.equals(activeDelayOperationId, operationId)) {
-            stopDelayProgress();
-        }
+        stepDelayOverlayManager.stopDelayIfMatch(operationId);
         Long startMs = opStartTimeMs.remove(operationId);
         long cost = startMs == null ? -1 : (System.currentTimeMillis() - startMs);
         appendRunLog("[done] " + operationId + " | success=" + success + (cost >= 0 ? (" | " + cost + "ms") : ""));
