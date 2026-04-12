@@ -59,6 +59,9 @@ public class OpenCVHelper {
     // 复用 NMS 抑制 mask Mat，避免 while 循环内每次 new Mat.zeros()
     private static final ThreadLocal<Mat> sSuppressionMask = new ThreadLocal<>();
 
+    // 复用灰度搜索图 Mat：fastSingleMatch 热路径灰度转换时避免每次分配
+    private static final ThreadLocal<Mat> sGraySearchMat = new ThreadLocal<>();
+
     // 灰度模板缓存上限：超过 MAX_GRAY_CACHE 条时淘汰最旧的（LinkedHashMap accessOrder）
     private static final int MAX_GRAY_CACHE = 40;
     private final Map<Long, Mat> grayTemplateCache = java.util.Collections.synchronizedMap(
@@ -107,52 +110,39 @@ public class OpenCVHelper {
     }
     
     public Point fastSingleMatchKleidiCV(Mat screenMat, Mat templateMat, Rect region, double minScore, String method) {
-        Mat result = null;
         Mat searchMat = null;
-        
+        // 复用 ThreadLocal result Mat，避免热路径 new/release native 内存
+        Mat result = sResultMat.get();
+        if (result == null) { result = new Mat(); sResultMat.set(result); }
+
         try {
-            // 使用KleidiCV加速的匹配
-            long startTime = System.nanoTime();
-            
             Point roiOffset = new Point(0, 0);
-            
+
             if (region != null && region.x >= 0 && region.y >= 0 && region.width > 0 && region.height > 0) {
                 searchMat = new Mat(screenMat, region);
                 roiOffset = new Point(region.x, region.y);
             } else {
                 searchMat = screenMat;
             }
-            
-            // 使用KleidiCV优化的匹配方法
-            result = new Mat();
-            
-            // 根据方法选择不同的匹配模式
+
             int matchMethod = getMatchMethod(method);
-            
-            // KleidiCV优化的匹配
             Imgproc.matchTemplate(searchMat, templateMat, result, matchMethod);
-            
+
             Core.MinMaxLocResult mm = Core.minMaxLoc(result);
-            double maxVal = mm.maxVal;
-            
-            if (maxVal < minScore) {
+            if (mm.maxVal < minScore) {
                 return new Point(-1, -1);
             }
-            
+
             Point loc = mm.maxLoc;
             loc.x += roiOffset.x;
             loc.y += roiOffset.y;
-            
             return loc;
-            
+
         } catch (Exception e) {
             Log.e(TAG, "KleidiCV匹配失败: " + e.getMessage());
             return new Point(-1, -1);
         } finally {
-            // 确保所有Mat都被释放
-            if (result != null) {
-                result.release();
-            }
+            // result 来自 ThreadLocal，不 release，留给下次复用
             if (searchMat != null && searchMat != screenMat) {
                 searchMat.release();
             }
@@ -453,7 +443,9 @@ public class OpenCVHelper {
      */
     public Point fastSingleMatch(Mat screenMat, Mat templateMat, Rect roi, double minScore, Mat mask) {
         Mat searchMat = null;
-        Mat result = null;
+        // 复用 ThreadLocal result Mat，避免热路径 new/release native 内存
+        Mat result = sResultMat.get();
+        if (result == null) { result = new Mat(); sResultMat.set(result); }
         Point roiOffset = new Point(0, 0);
 
         try {
@@ -464,10 +456,7 @@ public class OpenCVHelper {
                 searchMat = screenMat;
             }
 
-            result = new Mat();
-            // 用 TM_CCOEFF_NORMED（归一化，准确性更好）
-            // 如果想极致快，可改成 TM_CCORR，但分数需手动调阈值
-            Imgproc.matchTemplate(searchMat, templateMat, result, Imgproc.TM_CCOEFF_NORMED, mask);  // ← 加 mask 参数
+            Imgproc.matchTemplate(searchMat, templateMat, result, Imgproc.TM_CCOEFF_NORMED, mask);
 
             Core.MinMaxLocResult mm = Core.minMaxLoc(result);
             if (mm.maxVal < minScore) {
@@ -477,19 +466,15 @@ public class OpenCVHelper {
             Point loc = mm.maxLoc;
             loc.x += roiOffset.x;
             loc.y += roiOffset.y;
-
             return loc;
 
         } catch (Exception e) {
             Log.d(TAG, "fastSingleMatch: " + e.getMessage());
             return new Point(-1, -1);
-
         } finally {
+            // result 来自 ThreadLocal，不 release，留给下次复用
             if (searchMat != null && searchMat != screenMat) {
                 searchMat.release();
-            }
-            if (result != null) {
-                result.release();
             }
         }
     }
@@ -504,10 +489,14 @@ public class OpenCVHelper {
      */
     public Point fastSingleMatch(Mat screenMat, Mat templateMat, Rect roi, double threshold) {
         Mat searchMat = null;
-        // 复用 ThreadLocal result Mat，避免每次 new/release native 内存（轮询热路径）
+        // 复用 ThreadLocal Mat，避免轮询热路径每次分配原生内存
         Mat result = sResultMat.get();
         if (result == null) { result = new Mat(); sResultMat.set(result); }
+        Mat graySearch = sGraySearchMat.get();
+        if (graySearch == null) { graySearch = new Mat(); sGraySearchMat.set(graySearch); }
         Point roiOffset = new Point(0, 0);
+
+        Mat grayTemplate = null;
 
         try {
             if (screenMat == null || screenMat.empty() || templateMat == null || templateMat.empty()) {
@@ -521,20 +510,17 @@ public class OpenCVHelper {
                 int h = Math.min(roi.height, screenMat.rows() - y);
 
                 if (w <= 0 || h <= 0) {
-                    Log.e(TAG, "ROI越界: roi=" + roi +
-                            ", screen=" + screenMat.cols() + "x" + screenMat.rows());
+                    Log.e(TAG, "ROI越界: roi=" + roi
+                            + ", screen=" + screenMat.cols() + "x" + screenMat.rows());
                     return new Point(-1, -1);
                 }
-
                 if (templateMat.cols() > w || templateMat.rows() > h) {
                     Log.e(TAG, "模板比ROI大: tpl=" + templateMat.cols() + "x" + templateMat.rows()
                             + ", roi=" + w + "x" + h);
                     return new Point(-1, -1);
                 }
-
-                Rect safeRoi = new Rect(x, y, w, h);
-                searchMat = new Mat(screenMat, safeRoi);
-                roiOffset = new Point(safeRoi.x, safeRoi.y);
+                searchMat = new Mat(screenMat, new Rect(x, y, w, h));
+                roiOffset = new Point(x, y);
             } else {
                 if (templateMat.cols() > screenMat.cols() || templateMat.rows() > screenMat.rows()) {
                     Log.e(TAG, "模板比screen大");
@@ -543,21 +529,41 @@ public class OpenCVHelper {
                 searchMat = screenMat;
             }
 
-            Imgproc.matchTemplate(searchMat, templateMat, result, TM_CCOEFF_NORMED);
+            // 灰度匹配：单通道 matchTemplate 约为 RGBA 4通道的 4 倍速
+            // 屏幕帧和模板均为 CV_8UC4（RGBA），统一用 COLOR_RGBA2GRAY 转换
+            int colorCode = (searchMat.channels() == 3)
+                    ? Imgproc.COLOR_BGR2GRAY : Imgproc.COLOR_RGBA2GRAY;
+            Imgproc.cvtColor(searchMat, graySearch, colorCode);
+
+            // 从缓存取灰度模板，避免每帧重复转换（key = nativeObj 地址）
+            long cacheKey = templateMat.nativeObj;
+            Mat cached = grayTemplateCache.get(cacheKey);
+            if (cached != null && !cached.empty()) {
+                grayTemplate = cached;
+            } else {
+                grayTemplate = new Mat();
+                int tplCode = (templateMat.channels() == 3)
+                        ? Imgproc.COLOR_BGR2GRAY : Imgproc.COLOR_RGBA2GRAY;
+                Imgproc.cvtColor(templateMat, grayTemplate, tplCode);
+                grayTemplateCache.put(cacheKey, grayTemplate);
+                // 灰度模板现由 grayTemplateCache 持有，不在此 release
+            }
+
+            Imgproc.matchTemplate(graySearch, grayTemplate, result, TM_CCOEFF_NORMED);
 
             Core.MinMaxLocResult minMax = Core.minMaxLoc(result);
             if (minMax.maxVal < threshold) {
                 return new Point(-1, -1);
             }
 
-            Point loc = minMax.maxLoc;
-            return new Point(loc.x + roiOffset.x, loc.y + roiOffset.y);
+            return new Point(minMax.maxLoc.x + roiOffset.x, minMax.maxLoc.y + roiOffset.y);
 
         } catch (Throwable t) {
             Log.e(TAG, "fastSingleMatch异常", t);
             return new Point(-1, -1);
         } finally {
-            // result 来自 ThreadLocal，不 release，留给下次复用
+            // result、graySearch 来自 ThreadLocal，不 release，留给下次复用
+            // grayTemplate 由 grayTemplateCache 管理，不 release
             if (searchMat != null && searchMat != screenMat) searchMat.release();
         }
     }
@@ -711,9 +717,8 @@ public class OpenCVHelper {
                 scaledTemplate.release();
             }
             if (searchMat != screenMat) searchMat.release();
-            if (result!=null){
-                result.release();
-            }
+            // result 来自 ThreadLocal，不 release，留给下次复用；
+            // 此处曾错误地 release，导致每次调用均重新分配原生内存。
         }
     }
 

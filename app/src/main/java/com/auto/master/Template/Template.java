@@ -3,6 +3,7 @@ package com.auto.master.Template;
 import android.util.Log;
 
 import com.auto.master.auto.GestureOverlayView;
+import com.auto.master.utils.OpenCVHelper;
 
 import org.opencv.core.Mat;
 
@@ -229,6 +230,12 @@ public class Template {
             }
         }
         matMap.clear();
+        // 模板 Mat 释放后，其 nativeObj 地址可能被新 Mat 复用，
+        // 导致 OpenCVHelper 中的灰度模板缓存命中错误条目。
+        // 模板重载是低频事件，此处清空灰度缓存确保下次重建正确。
+        try {
+            OpenCVHelper.getInstance().clearGrayTemplateCache();
+        } catch (Throwable ignored) {}
     }
     
     private static void cleanupOldestMats(Map<String, Mat> matMap, int count) {

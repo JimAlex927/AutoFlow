@@ -100,8 +100,10 @@ public class ScreenCaptureManager {
     private long lastFrameHealthCheckMs = 0L;
     private volatile boolean resetScheduled = false;
 
-    // 空闲自动暂停 VirtualDisplay：无人 poll 超过此时长则暂停，下次 poll 自动恢复
-    private static final long IDLE_PAUSE_THRESHOLD_MS = 3000L;
+    // 空闲自动暂停 VirtualDisplay：无人 poll 超过此时长则暂停，下次 poll 自动恢复。
+    // 设为 8s：手势/延迟等操作通常在 3~5s 内，3s 阈值太激进，
+    // 容易在下一次模板匹配开始时触发 VirtualDisplay reset，造成明显卡顿。
+    private static final long IDLE_PAUSE_THRESHOLD_MS = 5000L;
     private static final long FULL_CLEANUP_IDLE_THRESHOLD_MS = 45_000L;
     private volatile boolean displayPaused = false;
     private volatile long lastPollMs = 0;
