@@ -134,7 +134,7 @@ public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHand
                     }
                     targetId = fallBackId;
                 } else {
-                    Boolean click = true;
+                    Boolean click = false;
 //                    MatchResult matchResult = (MatchResult) o;
 //                    找到点了 就点击bbox todo  这里是否点击从 inputMap里面看
                     Object o1 = inputMap.get(MetaOperation.SUCCEESCLICK);
