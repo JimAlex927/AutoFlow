@@ -19,6 +19,7 @@ import com.auto.master.Task.Operation.VariableScriptOperation;
 import com.auto.master.Task.Operation.VariableSetOperation;
 import com.auto.master.Task.Operation.VariableTemplateOperation;
 import com.auto.master.Task.Operation.BackKeyOperation;
+import com.auto.master.Task.Operation.HttpRequestOperation;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -64,6 +65,8 @@ public class ResponseHandlerManager {
         register(BackKeyOperation.class, 1, JumpToNextOperationResponseHandler::new);
         register(ColorMatchOperation.class, 1, ColorMatchResponseHandler::new);
         register(ColorSearchOperation.class, 1, ColorMatchResponseHandler::new);
+        // HTTP 请求：复用 ColorMatchResponseHandler，依据 MATCHED 字段路由成功/失败分支
+        register(HttpRequestOperation.class, 1, ColorMatchResponseHandler::new);
     }
 
     private static void register(Class<? extends MetaOperation> operationClass, int responseType, Supplier<DefaultResponseHandler> handlerFactory) {

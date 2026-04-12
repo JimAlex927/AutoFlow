@@ -43,6 +43,7 @@ public class OperationHandlerManager {
             case BACK_KEY:           return new BackKeyOperationHandler();
             case COLOR_MATCH:        return new ColorMatchOperationHandler();
             case COLOR_SEARCH:       return new ColorSearchOperationHandler();
+            case HTTP_REQUEST:       return new HttpRequestOperationHandler();
             default:                 return null;
         }
     }

@@ -4615,6 +4615,199 @@ public class OperationDialogFactory {
         });
     }
 
+    // ==================== HTTP 请求操作 ====================
+
+    public void showAddHttpRequestDialog() {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_http_request, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 500, null);
+
+        bindHttpRequestDialog(dialogView, null, null);
+    }
+
+    public void showEditHttpRequestDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_http_request, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 500, null);
+
+        android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) btnConfirm.setText("保存");
+
+        bindHttpRequestDialog(dialogView, operationId, operationObject);
+    }
+
+    private void bindHttpRequestDialog(View dialogView, String operationId, JSONObject operationObject) {
+        EditText edtName          = dialogView.findViewById(R.id.edt_name);
+        EditText edtUrl           = dialogView.findViewById(R.id.edt_url);
+        android.widget.Spinner spinnerMethod = dialogView.findViewById(R.id.spinner_method);
+        EditText edtHeaders       = dialogView.findViewById(R.id.edt_headers);
+        View tvBodyLabel          = dialogView.findViewById(R.id.tv_body_label);
+        EditText edtBody          = dialogView.findViewById(R.id.edt_body);
+        EditText edtResponseVar   = dialogView.findViewById(R.id.edt_response_var);
+        EditText edtStatusVar     = dialogView.findViewById(R.id.edt_status_var);
+        EditText edtTimeoutMs     = dialogView.findViewById(R.id.edt_timeout_ms);
+        AutoCompleteTextView edtNextOperation     = dialogView.findViewById(R.id.edt_next_operation);
+        AutoCompleteTextView edtFallbackOperation = dialogView.findViewById(R.id.edt_fallback_operation);
+
+        // 方法列表
+        String[] methods = {"GET", "POST", "PUT", "DELETE", "PATCH", "HEAD"};
+        android.widget.ArrayAdapter<String> methodAdapter = new android.widget.ArrayAdapter<>(
+                host.getContext(), android.R.layout.simple_spinner_item, methods);
+        methodAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        spinnerMethod.setAdapter(methodAdapter);
+
+        // 根据方法显示/隐藏请求体
+        Runnable updateBodyVisibility = () -> {
+            Object sel = spinnerMethod.getSelectedItem();
+            String m = sel != null ? sel.toString() : "GET";
+            boolean hasBody = !m.equals("GET") && !m.equals("HEAD");
+            if (tvBodyLabel != null) tvBodyLabel.setVisibility(hasBody ? View.VISIBLE : View.GONE);
+            if (edtBody != null)     edtBody.setVisibility(hasBody ? View.VISIBLE : View.GONE);
+        };
+        spinnerMethod.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(android.widget.AdapterView<?> parent, View view, int position, long id) {
+                updateBodyVisibility.run();
+            }
+            @Override
+            public void onNothingSelected(android.widget.AdapterView<?> parent) {}
+        });
+
+        // 预填充（编辑模式）
+        if (operationObject != null) {
+            try {
+                edtName.setText(operationObject.optString("name", ""));
+                JSONObject im = operationObject.optJSONObject("inputMap");
+                if (im != null) {
+                    edtUrl.setText(im.optString(MetaOperation.HTTP_URL, ""));
+                    String savedMethod = im.optString(MetaOperation.HTTP_METHOD, "GET").toUpperCase();
+                    for (int i = 0; i < methods.length; i++) {
+                        if (methods[i].equals(savedMethod)) { spinnerMethod.setSelection(i); break; }
+                    }
+                    edtHeaders.setText(im.optString(MetaOperation.HTTP_HEADERS, ""));
+                    edtBody.setText(im.optString(MetaOperation.HTTP_BODY, ""));
+                    edtResponseVar.setText(im.optString(MetaOperation.HTTP_RESPONSE_VAR, ""));
+                    edtStatusVar.setText(im.optString(MetaOperation.HTTP_STATUS_VAR, ""));
+                    long timeout = im.optLong(MetaOperation.HTTP_TIMEOUT_MS, 0);
+                    if (timeout > 0) edtTimeoutMs.setText(String.valueOf(timeout));
+                    setOperationReferenceText(edtNextOperation,     im.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                    setOperationReferenceText(edtFallbackOperation, im.optString(MetaOperation.FALLBACKOPERATIONID, ""));
+                }
+            } catch (Exception e) {
+                host.showToast("加载操作数据失败: " + e.getMessage());
+            }
+        }
+        updateBodyVisibility.run();
+
+        // 绑定下一节点自动补全
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null)
+                showOperationPickerForField("选择成功后节点", operationId, edtNextOperation);
+        });
+        dialogView.findViewById(R.id.btn_pick_fallback).setOnClickListener(v -> {
+            if (operationPickerLauncher != null)
+                showOperationPickerForField("选择失败后节点", operationId, edtFallbackOperation);
+        });
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+
+        android.widget.TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) {
+            btnConfirm.setOnClickListener(v -> saveHttpRequestOperation(
+                    dialogView, operationId, operationObject,
+                    edtName, edtUrl, spinnerMethod, edtHeaders, edtBody,
+                    edtResponseVar, edtStatusVar, edtTimeoutMs,
+                    edtNextOperation, edtFallbackOperation));
+        }
+    }
+
+    private void saveHttpRequestOperation(
+            View dialogView,
+            String operationId,
+            JSONObject existingObject,
+            EditText edtName,
+            EditText edtUrl,
+            android.widget.Spinner spinnerMethod,
+            EditText edtHeaders,
+            EditText edtBody,
+            EditText edtResponseVar,
+            EditText edtStatusVar,
+            EditText edtTimeoutMs,
+            AutoCompleteTextView edtNextOperation,
+            AutoCompleteTextView edtFallbackOperation) {
+
+        String name        = edtName.getText().toString().trim();
+        String url         = edtUrl.getText().toString().trim();
+        String method      = spinnerMethod.getSelectedItem() != null ? spinnerMethod.getSelectedItem().toString() : "GET";
+        String headers     = edtHeaders.getText().toString();
+        String body        = edtBody.isShown() ? edtBody.getText().toString() : "";
+        String responseVar = edtResponseVar.getText().toString().trim();
+        String statusVar   = edtStatusVar.getText().toString().trim();
+        String timeoutStr  = edtTimeoutMs.getText().toString().trim();
+        String nextOp      = safeText(edtNextOperation);
+        String fallbackOp  = safeText(edtFallbackOperation);
+
+        if (TextUtils.isEmpty(name))  { edtName.setError("请填写操作名称"); return; }
+        if (TextUtils.isEmpty(url))   { edtUrl.setError("请填写请求 URL"); return; }
+
+        try {
+            JSONObject inputMap = new JSONObject();
+            inputMap.put(MetaOperation.HTTP_URL,    url);
+            inputMap.put(MetaOperation.HTTP_METHOD, method);
+            if (!TextUtils.isEmpty(headers))     inputMap.put(MetaOperation.HTTP_HEADERS,      headers);
+            if (!TextUtils.isEmpty(body))        inputMap.put(MetaOperation.HTTP_BODY,         body);
+            if (!TextUtils.isEmpty(responseVar)) inputMap.put(MetaOperation.HTTP_RESPONSE_VAR, responseVar);
+            if (!TextUtils.isEmpty(statusVar))   inputMap.put(MetaOperation.HTTP_STATUS_VAR,   statusVar);
+            if (!TextUtils.isEmpty(timeoutStr)) {
+                try { inputMap.put(MetaOperation.HTTP_TIMEOUT_MS, Long.parseLong(timeoutStr)); }
+                catch (NumberFormatException ignored) {}
+            }
+            if (!TextUtils.isEmpty(nextOp))     inputMap.put(MetaOperation.NEXT_OPERATION_ID,    nextOp);
+            if (!TextUtils.isEmpty(fallbackOp)) inputMap.put(MetaOperation.FALLBACKOPERATIONID, fallbackOp);
+
+            boolean isEdit = operationId != null;
+            if (isEdit) {
+                // 编辑模式：更新现有操作
+                JSONObject updated = new JSONObject();
+                updated.put("id",           operationId);
+                updated.put("name",         name);
+                updated.put("type",         20);
+                updated.put("responseType", 1);
+                updated.put("inputMap",     inputMap);
+                if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, updated.toString(2))) {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (updateListener != null) updateListener.onOperationUpdated();
+                }
+            } else {
+                // 新增模式
+                JSONObject operationObject = new JSONObject();
+                if (idGenerator != null) operationObject.put("id", idGenerator.generateId());
+                operationObject.put("name",         name);
+                operationObject.put("type",         20);
+                operationObject.put("responseType", 1);
+                operationObject.put("inputMap",     inputMap);
+
+                JSONArray operations = crudHelper.readOperationsArray();
+                operations.put(operationObject);
+                crudHelper.writeOperationsArray(operations, "已添加 HTTP 请求节点", () -> {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (addListener != null) addListener.onOperationAdded();
+                });
+            }
+        } catch (Exception e) {
+            host.showToast("保存失败: " + e.getMessage());
+        }
+    }
+
     private org.json.JSONArray collectSwitchCases(LinearLayout container) throws org.json.JSONException {
         org.json.JSONArray arr = new org.json.JSONArray();
         for (int i = 0; i < container.getChildCount(); i++) {

@@ -79,6 +79,8 @@
     <color name="op_app_launch_bg">#FFEBEE</color>
     <color name="op_back_key">#5E35B1</color>
     <color name="op_back_key_bg">#EDE7F6</color>
+    <color name="op_http_request">#00838F</color>
+    <color name="op_http_request_bg">#E0F7FA</color>
     <color name="op_unknown">#757575</color>
     <color name="op_unknown_bg">#F5F5F5</color>
 

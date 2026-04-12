@@ -1761,6 +1761,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogFactory.showEditColorSearchDialog(selected.id, operationObject);
                 return;
             }
+            if (type == 20) {
+                dialogFactory.showEditHttpRequestDialog(selected.id, operationObject);
+                return;
+            }
         } catch (Exception e) {
             Log.w(TAG, "解析 operation 失败，回退到 JSON 编辑", e);
         }
@@ -2325,6 +2329,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 )));
 
         sections.add(new AddOperationMenuAdapter.MenuSection(
+                "网络节点",
+                null,
+                Arrays.asList(
+                        new AddOperationMenuAdapter.MenuItem("http_request", "HTTP 请求", "发起 HTTP 请求，响应体存入变量", "网", R.color.op_http_request, true)
+                )));
+
+        sections.add(new AddOperationMenuAdapter.MenuSection(
                 "即将支持",
                 null,
                 Arrays.asList(
@@ -2389,6 +2400,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "launch_app":
                 dialogFactory.showAddLaunchAppDialog();
+                return;
+            case "http_request":
+                dialogFactory.showAddHttpRequestDialog();
                 return;
             case "crop_region":
                 Toast.makeText(this, "该类型将很快支持", Toast.LENGTH_SHORT).show();

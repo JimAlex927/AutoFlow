@@ -177,6 +177,8 @@ public class OperationGsonHelper {
                             case "color": return 18;
                             case "color_search":
                             case "find_color": return 19;
+                            case "http_request":
+                            case "http": return 20;
                             default: return 1;
                         }
                     }
@@ -223,6 +225,8 @@ public class OperationGsonHelper {
                     return new ColorMatchOperation();
                 case 19:
                     return new ColorSearchOperation();
+                case 20:
+                    return new HttpRequestOperation();
                 default:
                     return new ClickOperation();
             }

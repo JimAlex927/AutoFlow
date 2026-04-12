@@ -23,7 +23,8 @@ public enum OperationType {
     LOOP(16, "二分路", "loop"),
     BACK_KEY(17, "返回按键", "back"),
     COLOR_MATCH(18, "颜色匹配", "color"),
-    COLOR_SEARCH(19, "区域找色", "color_search");
+    COLOR_SEARCH(19, "区域找色", "color_search"),
+    HTTP_REQUEST(20, "HTTP请求", "http_request");
 
     private final int code;
     private final String displayName;
