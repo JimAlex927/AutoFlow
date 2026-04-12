@@ -15,30 +15,45 @@ import java.util.Map;
 
 /**
  * Manages persistence and retrieval of {@link NodeFloatButtonConfig} entries.
- * Configs are saved as a single JSON file alongside project data.
+ *
+ * <p>Each config is stored as an individual JSON file inside the owning task's directory:
+ * {@code projects/<projectName>/<taskName>/node_buttons/<operationId>.json}
+ *
+ * <p>This mirrors how {@code img/} and {@code gesture/} assets live inside task folders,
+ * so project export/import (which zips the entire {@code projects/} tree) is complete
+ * with no data loss.
+ *
+ * <p>A one-time migration from the old flat {@code node_float_buttons.json} file is
+ * performed on first construction if that legacy file still exists.
  */
 public class NodeFloatButtonManager {
-    private static final String FILE_NAME = "node_float_buttons.json";
 
-    private final File configFile;
+    private static final String SUBDIR = "node_buttons";
+    private static final String LEGACY_FILE = "node_float_buttons.json";
+
+    private final File projectsRoot;
     private final Gson gson = new Gson();
-    private Map<String, NodeFloatButtonConfig> configs = new HashMap<>();
+    /** In-memory map keyed by operationId. */
+    private final Map<String, NodeFloatButtonConfig> configs = new HashMap<>();
 
     public NodeFloatButtonManager(Context context) {
-        File dir = context.getExternalFilesDir(null);
-        if (dir == null) dir = context.getFilesDir();
-        configFile = new File(dir, FILE_NAME);
+        File base = context.getExternalFilesDir(null);
+        if (base == null) base = context.getFilesDir();
+        projectsRoot = new File(base, "projects");
         load();
+        migrateLegacy(base);
     }
+
+    // ── Public API (unchanged from old version) ───────────────────────────────
 
     public void saveConfig(NodeFloatButtonConfig config) {
         configs.put(config.operationId, config);
-        persist();
+        persistOne(config);
     }
 
     public void removeConfig(String operationId) {
-        configs.remove(operationId);
-        persist();
+        NodeFloatButtonConfig cfg = configs.remove(operationId);
+        if (cfg != null) deleteFile(cfg);
     }
 
     public NodeFloatButtonConfig getConfig(String operationId) {
@@ -54,23 +69,87 @@ public class NodeFloatButtonManager {
         return Collections.unmodifiableMap(configs);
     }
 
-    private void load() {
-        if (!configFile.exists()) return;
-        try (FileReader reader = new FileReader(configFile)) {
-            Type type = new TypeToken<Map<String, NodeFloatButtonConfig>>() {}.getType();
-            Map<String, NodeFloatButtonConfig> loaded = gson.fromJson(reader, type);
-            if (loaded != null) {
-                configs = new HashMap<>(loaded);
-                for (NodeFloatButtonConfig cfg : configs.values()) {
-                    if (cfg != null) cfg.ensureDefaults();
-                }
-            }
+    // ── Storage helpers ───────────────────────────────────────────────────────
+
+    private File configFile(NodeFloatButtonConfig cfg) {
+        return new File(projectsRoot,
+                cfg.projectName + File.separator
+                + cfg.taskName   + File.separator
+                + SUBDIR         + File.separator
+                + cfg.operationId + ".json");
+    }
+
+    private void persistOne(NodeFloatButtonConfig cfg) {
+        if (cfg.projectName == null || cfg.projectName.isEmpty()
+                || cfg.taskName == null || cfg.taskName.isEmpty()) {
+            return;
+        }
+        File f = configFile(cfg);
+        //noinspection ResultOfMethodCallIgnored
+        f.getParentFile().mkdirs();
+        try (FileWriter w = new FileWriter(f)) {
+            gson.toJson(cfg, w);
         } catch (Exception ignored) {}
     }
 
-    private void persist() {
-        try (FileWriter writer = new FileWriter(configFile)) {
-            gson.toJson(configs, writer);
+    private void deleteFile(NodeFloatButtonConfig cfg) {
+        if (cfg.projectName == null || cfg.taskName == null) return;
+        //noinspection ResultOfMethodCallIgnored
+        configFile(cfg).delete();
+    }
+
+    /** Scans every task directory under {@code projects/} for {@code node_buttons/*.json}. */
+    private void load() {
+        if (!projectsRoot.exists()) return;
+        File[] projects = projectsRoot.listFiles(File::isDirectory);
+        if (projects == null) return;
+        for (File proj : projects) {
+            File[] tasks = proj.listFiles(File::isDirectory);
+            if (tasks == null) continue;
+            for (File task : tasks) {
+                File btnDir = new File(task, SUBDIR);
+                if (!btnDir.isDirectory()) continue;
+                File[] files = btnDir.listFiles(
+                        f -> f.isFile() && f.getName().endsWith(".json"));
+                if (files == null) continue;
+                for (File f : files) {
+                    try (FileReader r = new FileReader(f)) {
+                        NodeFloatButtonConfig cfg =
+                                gson.fromJson(r, NodeFloatButtonConfig.class);
+                        if (cfg != null && cfg.operationId != null) {
+                            cfg.ensureDefaults();
+                            configs.put(cfg.operationId, cfg);
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+    }
+
+    /**
+     * One-time migration: reads the old flat {@code node_float_buttons.json},
+     * writes each entry to its per-task file, then deletes the legacy file.
+     */
+    private void migrateLegacy(File baseDir) {
+        File legacy = new File(baseDir, LEGACY_FILE);
+        if (!legacy.exists()) return;
+        try (FileReader r = new FileReader(legacy)) {
+            Type type = new TypeToken<Map<String, NodeFloatButtonConfig>>() {}.getType();
+            Map<String, NodeFloatButtonConfig> old = gson.fromJson(r, type);
+            if (old != null) {
+                for (NodeFloatButtonConfig cfg : old.values()) {
+                    if (cfg != null && cfg.operationId != null
+                            && cfg.projectName != null && !cfg.projectName.isEmpty()
+                            && cfg.taskName    != null && !cfg.taskName.isEmpty()) {
+                        cfg.ensureDefaults();
+                        // Only migrate if not already loaded from per-task file
+                        configs.putIfAbsent(cfg.operationId, cfg);
+                        persistOne(cfg);
+                    }
+                }
+            }
         } catch (Exception ignored) {}
+        //noinspection ResultOfMethodCallIgnored
+        legacy.delete();
     }
 }

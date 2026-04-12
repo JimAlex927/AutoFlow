@@ -12,28 +12,39 @@ import java.lang.reflect.Type;
 import java.util.HashMap;
 import java.util.Map;
 
+/**
+ * Persists {@link ConfigUiSchema} objects one-file-per-schema inside the owning task directory:
+ * {@code projects/<projectName>/<taskName>/config_ui/<schemaId>.json}
+ *
+ * <p>This mirrors how {@code img/} and {@code gesture/} live inside task folders,
+ * so project export/import (which zips the entire {@code projects/} tree) automatically
+ * includes all ConfigUI schemas with no extra packaging logic.
+ *
+ * <p>A one-time migration from the old flat {@code config_ui_schemas.json} file is
+ * performed on first construction if that legacy file still exists.
+ */
 public class ConfigUiStore {
-    private static final String FILE_NAME = "config_ui_schemas.json";
 
-    private final File storeFile;
+    private static final String SUBDIR = "config_ui";
+    private static final String LEGACY_FILE = "config_ui_schemas.json";
+
+    private final File projectsRoot;
     private final Gson gson = new Gson();
-    private final Type mapType = new TypeToken<Map<String, ConfigUiSchema>>() {}.getType();
-    private Map<String, ConfigUiSchema> schemaMap = new HashMap<>();
+    private final Map<String, ConfigUiSchema> schemaMap = new HashMap<>();
 
     public ConfigUiStore(Context context) {
-        File dir = context.getExternalFilesDir(null);
-        if (dir == null) {
-            dir = context.getFilesDir();
-        }
-        storeFile = new File(dir, FILE_NAME);
+        File base = context.getExternalFilesDir(null);
+        if (base == null) base = context.getFilesDir();
+        projectsRoot = new File(base, "projects");
         load();
+        migrateLegacy(base);
     }
+
+    // ── Public API ────────────────────────────────────────────────────────────
 
     public synchronized ConfigUiSchema getSchema(String schemaId) {
         ConfigUiSchema schema = schemaMap.get(schemaId);
-        if (schema != null) {
-            schema.ensureDefaults();
-        }
+        if (schema != null) schema.ensureDefaults();
         return schema;
     }
 
@@ -44,31 +55,83 @@ public class ConfigUiStore {
         schema.updatedAt = System.currentTimeMillis();
         schema.ensureDefaults();
         schemaMap.put(schema.schemaId, schema);
-        persist();
+        persistOne(schema);
     }
 
-    private void load() {
-        if (!storeFile.exists()) {
+    // ── Storage helpers ───────────────────────────────────────────────────────
+
+    private File schemaFile(ConfigUiSchema schema) {
+        return new File(projectsRoot,
+                schema.projectName + File.separator
+                + schema.taskName  + File.separator
+                + SUBDIR           + File.separator
+                + schema.schemaId  + ".json");
+    }
+
+    private void persistOne(ConfigUiSchema schema) {
+        if (schema.projectName == null || schema.projectName.isEmpty()
+                || schema.taskName == null || schema.taskName.isEmpty()) {
             return;
         }
-        try (FileReader reader = new FileReader(storeFile)) {
-            Map<String, ConfigUiSchema> loaded = gson.fromJson(reader, mapType);
-            if (loaded != null) {
-                schemaMap = new HashMap<>(loaded);
-                for (ConfigUiSchema schema : schemaMap.values()) {
-                    if (schema != null) {
+        File f = schemaFile(schema);
+        //noinspection ResultOfMethodCallIgnored
+        f.getParentFile().mkdirs();
+        try (FileWriter w = new FileWriter(f)) {
+            gson.toJson(schema, w);
+        } catch (Exception ignored) {}
+    }
+
+    /** Scans every task directory under {@code projects/} for {@code config_ui/*.json}. */
+    private void load() {
+        if (!projectsRoot.exists()) return;
+        File[] projects = projectsRoot.listFiles(File::isDirectory);
+        if (projects == null) return;
+        for (File proj : projects) {
+            File[] tasks = proj.listFiles(File::isDirectory);
+            if (tasks == null) continue;
+            for (File task : tasks) {
+                File cfgDir = new File(task, SUBDIR);
+                if (!cfgDir.isDirectory()) continue;
+                File[] files = cfgDir.listFiles(
+                        f -> f.isFile() && f.getName().endsWith(".json"));
+                if (files == null) continue;
+                for (File f : files) {
+                    try (FileReader r = new FileReader(f)) {
+                        ConfigUiSchema schema = gson.fromJson(r, ConfigUiSchema.class);
+                        if (schema != null && schema.schemaId != null) {
+                            schema.ensureDefaults();
+                            schemaMap.put(schema.schemaId, schema);
+                        }
+                    } catch (Exception ignored) {}
+                }
+            }
+        }
+    }
+
+    /**
+     * One-time migration: reads the old flat {@code config_ui_schemas.json},
+     * writes each entry that has projectName+taskName to its per-task file,
+     * then deletes the legacy file.
+     */
+    private void migrateLegacy(File baseDir) {
+        File legacy = new File(baseDir, LEGACY_FILE);
+        if (!legacy.exists()) return;
+        try (FileReader r = new FileReader(legacy)) {
+            Type mapType = new TypeToken<Map<String, ConfigUiSchema>>() {}.getType();
+            Map<String, ConfigUiSchema> old = gson.fromJson(r, mapType);
+            if (old != null) {
+                for (ConfigUiSchema schema : old.values()) {
+                    if (schema != null && schema.schemaId != null
+                            && schema.projectName != null && !schema.projectName.isEmpty()
+                            && schema.taskName    != null && !schema.taskName.isEmpty()) {
                         schema.ensureDefaults();
+                        schemaMap.putIfAbsent(schema.schemaId, schema);
+                        persistOne(schema);
                     }
                 }
             }
-        } catch (Exception ignored) {
-        }
-    }
-
-    private void persist() {
-        try (FileWriter writer = new FileWriter(storeFile)) {
-            gson.toJson(schemaMap, mapType, writer);
-        } catch (Exception ignored) {
-        }
+        } catch (Exception ignored) {}
+        //noinspection ResultOfMethodCallIgnored
+        legacy.delete();
     }
 }

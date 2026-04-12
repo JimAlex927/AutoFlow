@@ -12,6 +12,10 @@ public class ConfigUiSchema {
     public String name;
     public List<ConfigUiPage> pages = new ArrayList<>();
     public long updatedAt;
+    /** Project the schema belongs to — used for per-task file storage. */
+    public String projectName;
+    /** Task the schema belongs to — used for per-task file storage. */
+    public String taskName;
 
     public ConfigUiSchema() {}
 
