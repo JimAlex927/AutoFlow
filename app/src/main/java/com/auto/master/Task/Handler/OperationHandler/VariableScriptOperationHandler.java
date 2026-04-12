@@ -10,14 +10,18 @@ import android.util.Log;
 import org.mozilla.javascript.Context;
 import org.mozilla.javascript.ContextFactory;
 import org.mozilla.javascript.Function;
+import org.mozilla.javascript.NativeArray;
 import org.mozilla.javascript.NativeJavaObject;
+import org.mozilla.javascript.NativeObject;
 import org.mozilla.javascript.Script;
 import org.mozilla.javascript.Scriptable;
 import org.mozilla.javascript.ScriptableObject;
 import org.mozilla.javascript.Undefined;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -84,7 +88,7 @@ public class VariableScriptOperationHandler extends OperationHandler {
             for (Map.Entry<String, Object> entry : ctx.variables.entrySet()) {
                 String key = entry.getKey();
                 if (key == null || key.isEmpty()) continue;
-                ScriptableObject.putProperty(varsObj, key, Context.javaToJS(entry.getValue(), scope));
+                ScriptableObject.putProperty(varsObj, key, toScriptValue(js, scope, entry.getValue()));
             }
             ScriptableObject.putProperty(scope, "vars", varsObj);
 
@@ -158,11 +162,66 @@ public class VariableScriptOperationHandler extends OperationHandler {
 
     private Object toPlainJava(Object value) {
         if (value == null || value == Undefined.instance) return null;
-        if (value instanceof NativeJavaObject) return ((NativeJavaObject) value).unwrap();
+        if (value instanceof NativeJavaObject) return toPlainJava(((NativeJavaObject) value).unwrap());
+        if (value instanceof NativeArray) {
+            NativeArray array = (NativeArray) value;
+            ArrayList<Object> list = new ArrayList<>();
+            long length = array.getLength();
+            for (int i = 0; i < length; i++) {
+                list.add(toPlainJava(array.get(i, array)));
+            }
+            return list;
+        }
+        if (value instanceof NativeObject) {
+            NativeObject object = (NativeObject) value;
+            LinkedHashMap<String, Object> map = new LinkedHashMap<>();
+            for (Object id : object.getIds()) {
+                if (!(id instanceof String)) {
+                    continue;
+                }
+                String key = (String) id;
+                map.put(key, toPlainJava(object.get(key, object)));
+            }
+            return map;
+        }
         if (value instanceof Double) return VariableRuntimeUtils.normalizeNumber((Double) value);
         if (value instanceof Float) return VariableRuntimeUtils.normalizeNumber(((Float) value).doubleValue());
         if (value instanceof Number || value instanceof Boolean || value instanceof String) return value;
         return String.valueOf(value);
+    }
+
+    private Object toScriptValue(Context js, Scriptable scope, Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Map<?, ?>) {
+            Scriptable obj = js.newObject(scope);
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) value).entrySet()) {
+                Object rawKey = entry.getKey();
+                if (rawKey == null) {
+                    continue;
+                }
+                ScriptableObject.putProperty(obj, String.valueOf(rawKey),
+                        toScriptValue(js, scope, entry.getValue()));
+            }
+            return obj;
+        }
+        if (value instanceof Iterable<?>) {
+            ArrayList<Object> items = new ArrayList<>();
+            for (Object item : (Iterable<?>) value) {
+                items.add(toScriptValue(js, scope, item));
+            }
+            return js.newArray(scope, items.toArray());
+        }
+        if (value.getClass().isArray() && value instanceof Object[]) {
+            Object[] raw = (Object[]) value;
+            Object[] converted = new Object[raw.length];
+            for (int i = 0; i < raw.length; i++) {
+                converted[i] = toScriptValue(js, scope, raw[i]);
+            }
+            return js.newArray(scope, converted);
+        }
+        return Context.javaToJS(value, scope);
     }
 
     private void syncVariablesBackToContext(OperationContext ctx, Scriptable scope, Scriptable varsObj, Set<String> scopeBaselineKeys) {

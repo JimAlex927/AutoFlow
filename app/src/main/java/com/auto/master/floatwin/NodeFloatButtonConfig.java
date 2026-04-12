@@ -25,6 +25,10 @@ public class NodeFloatButtonConfig {
     public boolean hideWhileRunning;
     /** Runtime variable overrides injected before launching from this node button. */
     public String runtimeVariablesText;
+    /** Bound visual config UI schema id. Empty = use legacy text editor only. */
+    public String configUiSchemaId;
+    /** Whether the floating button itself should be rendered. */
+    public Boolean buttonEnabled;
 
     public NodeFloatButtonConfig() {}
 
@@ -51,5 +55,7 @@ public class NodeFloatButtonConfig {
         if (sizeDp   <= 0) sizeDp    = 48;
         if (alpha    <= 0) alpha     = 1.0f;
         if (runtimeVariablesText == null) runtimeVariablesText = "";
+        if (configUiSchemaId == null) configUiSchemaId = "";
+        if (buttonEnabled == null) buttonEnabled = true;
     }
 }

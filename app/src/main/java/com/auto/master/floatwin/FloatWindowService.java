@@ -10,6 +10,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.content.ClipData;
 import android.content.res.Configuration;
 import android.content.Context;
 import android.content.Intent;
@@ -90,6 +91,15 @@ import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
 import com.auto.master.Task.Handler.OperationHandler.CropRegionOperationHandler;
+import com.auto.master.configui.ConfigUiComponent;
+import com.auto.master.configui.ConfigUiCanvasEditorView;
+import com.auto.master.configui.ConfigUiDesignerAdapter;
+import com.auto.master.configui.ConfigUiFormRenderer;
+import com.auto.master.configui.ConfigUiOption;
+import com.auto.master.configui.ConfigUiPage;
+import com.auto.master.configui.ConfigUiSchema;
+import com.auto.master.configui.ConfigUiStore;
+import com.auto.master.configui.ConfigUiValueCodec;
 import com.auto.master.floatwin.adapter.FlowNodeAdapter;
 import com.auto.master.floatwin.adapter.GestureLibraryAdapter;
 import com.auto.master.floatwin.adapter.LaunchAppPickerAdapter;
@@ -118,6 +128,7 @@ import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.CrashLogger;
 import com.auto.master.utils.OpenCVHelper;
 import com.auto.master.utils.OperationGsonUtils;
+import com.auto.master.utils.UUIDGenerator;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 
@@ -138,6 +149,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     public static final String EXTRA_PROJECT_PATH = "project_path";
     public static final String EXTRA_TASK_PATH = "task_path";
     private static final long TASK_REMOVED_RESTART_DELAY_MS = 600L;
+    private static final String CONFIG_UI_DRAG_LABEL = "config_ui_component";
     private WindowManager wm;
 
     private View ballView;
@@ -270,6 +282,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     // ========== 节点悬浮按钮 ==========
     private NodeFloatButtonManager nodeFloatBtnManager;
+    private ConfigUiStore configUiStore;
     private final Map<String, NodeFloatBtnEntry> nodeFloatBtnViews = new HashMap<>();
 
     private static class NodeFloatBtnEntry {
@@ -326,6 +339,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
         // 初始化节点悬浮按钮管理器并恢复已保存的按钮
         nodeFloatBtnManager = new NodeFloatButtonManager(this);
+        configUiStore = new ConfigUiStore(this);
         restoreNodeFloatButtons();
         
         startMyForeground();
@@ -674,6 +688,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     @SuppressLint("ClickableViewAccessibility")
     private void showNodeFloatBtnConfig(OperationItem item) {
         NodeFloatButtonConfig existing = nodeFloatBtnManager.getConfig(item.id);
+        if (existing != null) {
+            existing.ensureDefaults();
+        }
 
         // 可变配置状态
         final int[]   selColor     = {existing != null ? existing.color                    : NODE_BTN_COLORS[0]};
@@ -807,7 +824,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             btnDelete.setVisibility(View.VISIBLE);
             btnDelete.setOnClickListener(v -> {
                 safeRemoveView(dv);
-                nodeFloatBtnManager.removeConfig(item.id);
+                if (shouldRetainNodeConfigMetadata(existing)) {
+                    existing.buttonEnabled = false;
+                    nodeFloatBtnManager.saveConfig(existing);
+                } else {
+                    nodeFloatBtnManager.removeConfig(item.id);
+                }
                 removeNodeFloatBtn(item.id);
                 refreshFloatBtnBadges();
                 Toast.makeText(this, "已删除悬浮按钮", Toast.LENGTH_SHORT).show();
@@ -823,14 +845,24 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             int posX = parseIntDefault(etX.getText().toString(), defaultX);
             int posY = parseIntDefault(etY.getText().toString(), defaultY);
             String labelTxt = etLabel.getText().toString().trim();
-
-            NodeFloatButtonConfig cfg = new NodeFloatButtonConfig(
+            NodeFloatButtonConfig cfg = existing != null
+                    ? existing
+                    : new NodeFloatButtonConfig(
                     item.id, item.name, projectName, taskName, selColor[0], posX, posY);
+            cfg.ensureDefaults();
+            cfg.operationId = item.id;
+            cfg.operationName = item.name;
+            cfg.projectName = projectName;
+            cfg.taskName = taskName;
+            cfg.color = selColor[0];
+            cfg.posX = posX;
+            cfg.posY = posY;
             cfg.labelText        = labelTxt.isEmpty() ? null : labelTxt;
             cfg.textColor        = selTextColor[0];
             cfg.sizeDp           = selSize[0];
             cfg.alpha            = selAlpha[0] / 100f;
             cfg.hideWhileRunning = chkHide.isChecked();
+            cfg.buttonEnabled    = true;
 
             nodeFloatBtnManager.saveConfig(cfg);
             removeNodeFloatBtn(item.id);
@@ -936,6 +968,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             return false;
         }
         cfg.ensureDefaults();
+        if (!Boolean.TRUE.equals(cfg.buttonEnabled)) {
+            return false;
+        }
         int[] screen = getScreenSizePx();
         int sizePx = dp(cfg.sizeDp);
         return cfg.posX >= 0
@@ -950,7 +985,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 : new HashMap<>(nodeFloatBtnManager.getAllConfigs());
         removeAllNodeFloatButtons();
         for (NodeFloatButtonConfig cfg : configs.values()) {
-            if (cfg != null) {
+            if (cfg != null && Boolean.TRUE.equals(cfg.buttonEnabled)) {
                 addNodeFloatBtn(cfg);
             }
         }
@@ -1057,7 +1092,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private void restoreNodeFloatButtons() {
         if (nodeFloatBtnManager == null) return;
         for (NodeFloatButtonConfig cfg : nodeFloatBtnManager.getAllConfigs().values()) {
-            addNodeFloatBtn(cfg);
+            if (cfg != null && Boolean.TRUE.equals(cfg.buttonEnabled)) {
+                addNodeFloatBtn(cfg);
+            }
         }
     }
 
@@ -1109,10 +1146,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         nodeFloatActionPopupTitleView.setText(cfg.operationName);
         nodeFloatActionSheetItems.clear();
         nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(1, "运行节点", "立即运行这个节点", true));
-        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(2, "配置修改", "修改运行前注入的变量配置", true));
-        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(3, "按钮设置", "修改文字、颜色、大小和位置", true));
-        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(4, "定位节点", "打开面板并高亮这个节点", true));
-        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(5, "移除悬浮按钮", "删除这个悬浮按钮（不影响节点）", true));
+        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(2, "配置修改", "弹出运行时配置，可切换成可视化表单", true));
+        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(3, "ConfigUI 设计", "拖动排序组件，设计这个节点的可视化配置界面", true));
+        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(4, "按钮设置", "修改文字、颜色、大小和位置", true));
+        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(5, "定位节点", "打开面板并高亮这个节点", true));
+        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(6, "移除悬浮按钮", "删除这个悬浮按钮（不影响节点）", true));
         nodeFloatActionSheetHandler = action -> {
             switch (action.id) {
                 case 1:
@@ -1122,14 +1160,22 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     showNodeRuntimeConfigDialog(cfg);
                     break;
                 case 3:
+                    showConfigUiDesignerDialog(cfg);
+                    break;
+                case 4:
                     OperationItem fakeItem = new OperationItem(cfg.operationName, cfg.operationId, "", 0);
                     showNodeFloatBtnConfig(fakeItem);
                     break;
-                case 4:
+                case 5:
                     navigateToNodeInPanel(cfg);
                     break;
-                case 5:
-                    nodeFloatBtnManager.removeConfig(cfg.operationId);
+                case 6:
+                    if (shouldRetainNodeConfigMetadata(cfg)) {
+                        cfg.buttonEnabled = false;
+                        nodeFloatBtnManager.saveConfig(cfg);
+                    } else {
+                        nodeFloatBtnManager.removeConfig(cfg.operationId);
+                    }
                     removeNodeFloatBtn(cfg.operationId);
                     refreshFloatBtnBadges();
                     Toast.makeText(this, "已移除悬浮按钮", Toast.LENGTH_SHORT).show();
@@ -1185,6 +1231,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             return;
         }
         cfg.ensureDefaults();
+        ConfigUiSchema schema = resolveNodeConfigUiSchema(cfg);
+        if (schema != null) {
+            showVisualNodeRuntimeConfigDialog(cfg, schema, null);
+            return;
+        }
+        showLegacyNodeRuntimeConfigDialog(cfg);
+    }
+
+    private void showLegacyNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg) {
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_node_runtime_config, null);
         WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(320, true);
         wm.addView(dialogView, dialogLp);
@@ -1226,6 +1281,720 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             safeRemoveView(dialogView);
             Toast.makeText(this, "运行配置已保存", Toast.LENGTH_SHORT).show();
         });
+    }
+
+    private void showVisualNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg,
+                                                   ConfigUiSchema schema,
+                                                   @Nullable String titleOverride) {
+        if (cfg == null || schema == null) {
+            return;
+        }
+        cfg.ensureDefaults();
+        schema.ensureDefaults();
+        Map<String, String> baseValues = ConfigUiValueCodec.parse(cfg.runtimeVariablesText);
+        ConfigUiFormRenderer.FormSession session =
+                ConfigUiFormRenderer.create(this, schema, baseValues);
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_config_ui_runtime, null);
+        WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(380, true);
+        dialogLp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE;
+        wm.addView(dialogView, dialogLp);
+
+        TextView titleView = dialogView.findViewById(R.id.tv_config_ui_runtime_title);
+        FrameLayout contentContainer = dialogView.findViewById(R.id.layout_config_ui_runtime_content);
+        if (titleView != null) {
+            titleView.setText(TextUtils.isEmpty(titleOverride)
+                    ? ("运行配置: " + abbreviate(cfg.operationName, 14))
+                    : titleOverride);
+        }
+        if (contentContainer != null) {
+            contentContainer.addView(session.getRootView(), new FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+        }
+
+        dialogView.findViewById(R.id.btn_config_ui_runtime_cancel)
+                .setOnClickListener(v -> safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_config_ui_runtime_text_mode)
+                .setOnClickListener(v -> {
+                    safeRemoveView(dialogView);
+                    showLegacyNodeRuntimeConfigDialog(cfg);
+                });
+        dialogView.findViewById(R.id.btn_config_ui_runtime_save)
+                .setOnClickListener(v -> {
+                    Map<String, String> merged = ConfigUiValueCodec.merge(
+                            baseValues,
+                            session.collectValues(),
+                            schema.collectFieldKeys());
+                    NodeFloatButtonConfig updated = nodeFloatBtnManager.getConfig(cfg.operationId);
+                    if (updated == null) {
+                        updated = cfg;
+                    }
+                    updated.ensureDefaults();
+                    updated.runtimeVariablesText = ConfigUiValueCodec.encode(merged);
+                    nodeFloatBtnManager.saveConfig(updated);
+                    safeRemoveView(dialogView);
+                    Toast.makeText(this, "可视化配置已保存", Toast.LENGTH_SHORT).show();
+                });
+    }
+
+    @Nullable
+    private ConfigUiSchema resolveNodeConfigUiSchema(@Nullable NodeFloatButtonConfig cfg) {
+        if (cfg == null || configUiStore == null) {
+            return null;
+        }
+        cfg.ensureDefaults();
+        if (TextUtils.isEmpty(cfg.configUiSchemaId)) {
+            return null;
+        }
+        return configUiStore.getSchema(cfg.configUiSchemaId);
+    }
+
+    private boolean shouldRetainNodeConfigMetadata(@Nullable NodeFloatButtonConfig cfg) {
+        if (cfg == null) {
+            return false;
+        }
+        cfg.ensureDefaults();
+        return !TextUtils.isEmpty(cfg.configUiSchemaId)
+                || !TextUtils.isEmpty(cfg.runtimeVariablesText);
+    }
+
+    private NodeFloatButtonConfig getOrCreateNodeConfig(OperationItem item, boolean enableButton) {
+        NodeFloatButtonConfig existing = nodeFloatBtnManager == null || item == null
+                ? null
+                : nodeFloatBtnManager.getConfig(item.id);
+        if (existing != null) {
+            existing.ensureDefaults();
+            if (enableButton) {
+                existing.buttonEnabled = true;
+            }
+            if (TextUtils.isEmpty(existing.projectName) && currentProjectDir != null) {
+                existing.projectName = currentProjectDir.getName();
+            }
+            if (TextUtils.isEmpty(existing.taskName) && currentTaskDir != null) {
+                existing.taskName = currentTaskDir.getName();
+            }
+            if (TextUtils.isEmpty(existing.operationName)) {
+                existing.operationName = item.name;
+            }
+            return existing;
+        }
+        String projectName = currentProjectDir != null ? currentProjectDir.getName() : "";
+        String taskName = currentTaskDir != null ? currentTaskDir.getName() : "";
+        int defaultX = ballLp != null ? ballLp.x + dp(60) : 160;
+        int defaultY = ballLp != null ? ballLp.y : 400;
+        NodeFloatButtonConfig created = new NodeFloatButtonConfig(
+                item.id,
+                item.name,
+                projectName,
+                taskName,
+                NODE_BTN_COLORS[0],
+                defaultX,
+                defaultY);
+        created.ensureDefaults();
+        created.buttonEnabled = enableButton;
+        return created;
+    }
+
+    private static final class ConfigUiPaletteDragPayload {
+        final String componentType;
+
+        ConfigUiPaletteDragPayload(String componentType) {
+            this.componentType = componentType;
+        }
+    }
+
+    private void showConfigUiDesignerDialog(OperationItem item) {
+        if (item == null) {
+            return;
+        }
+        showConfigUiDesignerDialog(getOrCreateNodeConfig(item, false));
+    }
+
+    private void showConfigUiDesignerDialog(NodeFloatButtonConfig cfg) {
+        if (cfg == null || nodeFloatBtnManager == null || configUiStore == null) {
+            return;
+        }
+        cfg.ensureDefaults();
+        String schemaId = ensureNodeConfigUiSchemaId(cfg);
+        ConfigUiSchema baseSchema = resolveNodeConfigUiSchema(cfg);
+        if (baseSchema == null) {
+            baseSchema = ConfigUiSchema.createDefault(schemaId, cfg.operationName + " 配置");
+        }
+        ConfigUiSchema workingSchema = cloneConfigUiSchema(baseSchema);
+        workingSchema.schemaId = schemaId;
+        workingSchema.ensureDefaults();
+
+        android.view.ContextThemeWrapper ctx =
+                new android.view.ContextThemeWrapper(this, R.style.Theme_AtomMaster);
+        View dialogView = LayoutInflater.from(ctx).inflate(R.layout.dialog_config_ui_designer, null);
+        EditText nameInput = dialogView.findViewById(R.id.et_config_ui_name);
+        AutoCompleteTextView pageSelector = dialogView.findViewById(R.id.actv_config_ui_page);
+        TextView addPageBtn = dialogView.findViewById(R.id.btn_config_ui_add_page);
+        TextView renamePageBtn = dialogView.findViewById(R.id.btn_config_ui_rename_page);
+        TextView deletePageBtn = dialogView.findViewById(R.id.btn_config_ui_delete_page);
+        TextView pageScaleBtn = dialogView.findViewById(R.id.btn_config_ui_page_scale);
+        ConfigUiCanvasEditorView canvasView = dialogView.findViewById(R.id.view_config_ui_canvas);
+        final int[] currentPageIndex = {0};
+
+        nameInput.setText(TextUtils.isEmpty(workingSchema.name) ? cfg.operationName + " 配置" : workingSchema.name);
+        if (canvasView != null) {
+            canvasView.setListener(new ConfigUiCanvasEditorView.Listener() {
+                @Override
+                public void onEditComponent(ConfigUiComponent component) {
+                    showConfigUiComponentEditDialog(component, () -> canvasView.setPage(
+                            getSafeConfigUiPage(workingSchema, currentPageIndex[0])));
+                }
+
+                @Override
+                public void onDeleteComponent(ConfigUiComponent component) {
+                }
+
+                @Override
+                public void onCanvasChanged() {
+                }
+            });
+        }
+        Runnable refreshPageUi = () -> {
+            workingSchema.ensureDefaults();
+            if (currentPageIndex[0] < 0) {
+                currentPageIndex[0] = 0;
+            }
+            if (currentPageIndex[0] >= workingSchema.pages.size()) {
+                currentPageIndex[0] = Math.max(0, workingSchema.pages.size() - 1);
+            }
+            pageSelector.setTag(currentPageIndex[0]);
+            List<String> pageTitles = new ArrayList<>();
+            for (int i = 0; i < workingSchema.pages.size(); i++) {
+                ConfigUiPage page = workingSchema.pages.get(i);
+                pageTitles.add((i + 1) + ". " + (page == null || TextUtils.isEmpty(page.title) ? "页面" : page.title));
+            }
+            ArrayAdapter<String> pageAdapter = new ArrayAdapter<>(
+                    this, android.R.layout.simple_list_item_1, pageTitles);
+            pageSelector.setAdapter(pageAdapter);
+            if (!pageTitles.isEmpty()) {
+                pageSelector.setText(pageTitles.get(currentPageIndex[0]), false);
+            }
+            ConfigUiPage page = getSafeConfigUiPage(workingSchema, currentPageIndex[0]);
+            if (canvasView != null) {
+                canvasView.setPage(page);
+            }
+            if (pageScaleBtn != null) {
+                int scalePercent = page == null ? 100 : page.scalePercent;
+                pageScaleBtn.setText("缩放 " + scalePercent + "%");
+            }
+            deletePageBtn.setAlpha(workingSchema.pages.size() > 1 ? 1f : 0.45f);
+        };
+        refreshPageUi.run();
+
+        pageSelector.setOnClickListener(v -> pageSelector.showDropDown());
+        pageSelector.setOnItemClickListener((parent, view, position, id) -> {
+            currentPageIndex[0] = position;
+            refreshPageUi.run();
+        });
+        addPageBtn.setOnClickListener(v -> showSimpleOverlayTextInputDialog(
+                "新增页面",
+                "页面名称",
+                "页面 " + (workingSchema.pages.size() + 1),
+                value -> {
+                    workingSchema.pages.add(ConfigUiPage.createDefault(
+                            TextUtils.isEmpty(value) ? ("页面 " + (workingSchema.pages.size() + 1)) : value));
+                    currentPageIndex[0] = workingSchema.pages.size() - 1;
+                    refreshPageUi.run();
+                }));
+        renamePageBtn.setOnClickListener(v -> {
+            ConfigUiPage page = getSafeConfigUiPage(workingSchema, currentPageIndex[0]);
+            if (page == null) {
+                return;
+            }
+            showSimpleOverlayTextInputDialog(
+                    "页面改名",
+                    "新的页面名称",
+                    page.title,
+                    value -> {
+                        page.title = TextUtils.isEmpty(value) ? page.title : value.trim();
+                        refreshPageUi.run();
+                    });
+        });
+        deletePageBtn.setOnClickListener(v -> {
+            if (workingSchema.pages.size() <= 1) {
+                Toast.makeText(this, "至少保留一个页面", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            workingSchema.pages.remove(currentPageIndex[0]);
+            currentPageIndex[0] = Math.max(0, currentPageIndex[0] - 1);
+            refreshPageUi.run();
+        });
+        if (pageScaleBtn != null) {
+            pageScaleBtn.setOnClickListener(v -> {
+                ConfigUiPage page = getSafeConfigUiPage(workingSchema, currentPageIndex[0]);
+                if (page == null) {
+                    return;
+                }
+                showSimpleOverlayTextInputDialog(
+                        "页面整体缩放",
+                        "输入百分比，建议 50-150",
+                        String.valueOf(page.scalePercent),
+                        value -> {
+                            int scale = parseIntDefault(value, page.scalePercent);
+                            page.scalePercent = Math.max(40, Math.min(200, scale));
+                            refreshPageUi.run();
+                        });
+            });
+        }
+
+        bindConfigUiPaletteSource(dialogView.findViewById(R.id.btn_add_text_component),
+                workingSchema, currentPageIndex, canvasView, ConfigUiComponent.TYPE_TEXT);
+        bindConfigUiPaletteSource(dialogView.findViewById(R.id.btn_add_number_component),
+                workingSchema, currentPageIndex, canvasView, ConfigUiComponent.TYPE_NUMBER);
+        bindConfigUiPaletteSource(dialogView.findViewById(R.id.btn_add_switch_component),
+                workingSchema, currentPageIndex, canvasView, ConfigUiComponent.TYPE_SWITCH);
+        bindConfigUiPaletteSource(dialogView.findViewById(R.id.btn_add_select_component),
+                workingSchema, currentPageIndex, canvasView, ConfigUiComponent.TYPE_SELECT);
+        bindConfigUiPaletteSource(dialogView.findViewById(R.id.btn_add_array_component),
+                workingSchema, currentPageIndex, canvasView, ConfigUiComponent.TYPE_ARRAY);
+        bindConfigUiPaletteSource(dialogView.findViewById(R.id.btn_add_title_component),
+                workingSchema, currentPageIndex, canvasView, ConfigUiComponent.TYPE_TITLE);
+
+        if (canvasView != null) {
+            bindConfigUiDropTarget(canvasView, workingSchema, currentPageIndex, canvasView);
+        }
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
+                .setView(dialogView)
+                .setCancelable(true)
+                .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+
+        dialogView.findViewById(R.id.btn_preview_config_ui).setOnClickListener(v -> {
+            workingSchema.name = readTrimmedText(nameInput, cfg.operationName + " 配置");
+            String error = validateConfigUiSchema(workingSchema);
+            if (!TextUtils.isEmpty(error)) {
+                Toast.makeText(this, error, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            showVisualNodeRuntimeConfigDialog(cfg, cloneConfigUiSchema(workingSchema), "ConfigUI 预览");
+        });
+        dialogView.findViewById(R.id.btn_config_ui_cancel).setOnClickListener(v -> dialog.dismiss());
+        dialogView.findViewById(R.id.btn_config_ui_save).setOnClickListener(v -> {
+            workingSchema.name = readTrimmedText(nameInput, cfg.operationName + " 配置");
+            String error = validateConfigUiSchema(workingSchema);
+            if (!TextUtils.isEmpty(error)) {
+                Toast.makeText(this, error, Toast.LENGTH_SHORT).show();
+                return;
+            }
+            NodeFloatButtonConfig updated = nodeFloatBtnManager.getConfig(cfg.operationId);
+            if (updated == null) {
+                updated = cfg;
+            }
+            updated.ensureDefaults();
+            updated.configUiSchemaId = schemaId;
+            nodeFloatBtnManager.saveConfig(updated);
+            configUiStore.saveSchema(cloneConfigUiSchema(workingSchema));
+            dialog.dismiss();
+            Toast.makeText(this, "ConfigUI 已绑定到节点", Toast.LENGTH_SHORT).show();
+        });
+
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setLayout(Math.min(dp(390), (int) (getResources().getDisplayMetrics().widthPixels * 0.96f)),
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+        }
+    }
+
+    private void bindConfigUiPaletteSource(View source,
+                                           ConfigUiSchema schema,
+                                           int[] currentPageIndex,
+                                           @Nullable ConfigUiCanvasEditorView canvasView,
+                                           String componentType) {
+        if (source == null) {
+            return;
+        }
+        source.setOnClickListener(v -> {
+            ConfigUiPage page = getSafeConfigUiPage(schema, currentPageIndex[0]);
+            if (page == null || canvasView == null) {
+                return;
+            }
+            canvasView.setPage(page);
+            canvasView.addComponent(componentType, dp(48), dp(48));
+        });
+        source.setOnLongClickListener(v -> {
+            ClipData clipData = ClipData.newPlainText(CONFIG_UI_DRAG_LABEL, componentType);
+            ConfigUiPaletteDragPayload payload = new ConfigUiPaletteDragPayload(componentType);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N) {
+                v.startDragAndDrop(clipData, new View.DragShadowBuilder(v), payload, 0);
+            } else {
+                v.startDrag(clipData, new View.DragShadowBuilder(v), payload, 0);
+            }
+            return true;
+        });
+    }
+
+    private void bindConfigUiDropTarget(View dropZone,
+                                        ConfigUiSchema schema,
+                                        int[] currentPageIndex,
+                                        @Nullable ConfigUiCanvasEditorView canvasView) {
+        if (dropZone == null) {
+            return;
+        }
+        dropZone.setOnDragListener((v, event) -> {
+            String componentType = extractConfigUiDragComponentType(event);
+            if (TextUtils.isEmpty(componentType)) {
+                return false;
+            }
+            switch (event.getAction()) {
+                case android.view.DragEvent.ACTION_DRAG_STARTED:
+                    if (canvasView != null) {
+                        canvasView.setDropActive(true);
+                    }
+                    return true;
+                case android.view.DragEvent.ACTION_DRAG_ENTERED:
+                case android.view.DragEvent.ACTION_DRAG_LOCATION:
+                    if (canvasView != null) {
+                        canvasView.setDropActive(true);
+                    }
+                    return true;
+                case android.view.DragEvent.ACTION_DRAG_EXITED:
+                    if (canvasView != null) {
+                        canvasView.setDropActive(false);
+                    }
+                    return true;
+                case android.view.DragEvent.ACTION_DROP:
+                    ConfigUiPage page = getSafeConfigUiPage(schema, currentPageIndex[0]);
+                    if (canvasView != null && page != null) {
+                        canvasView.setPage(page);
+                        canvasView.addComponent(componentType, event.getX(), event.getY());
+                        canvasView.setDropActive(false);
+                    }
+                    return true;
+                case android.view.DragEvent.ACTION_DRAG_ENDED:
+                    if (canvasView != null) {
+                        canvasView.setDropActive(false);
+                    }
+                    return true;
+                default:
+                    return false;
+            }
+        });
+    }
+
+    @Nullable
+    private String extractConfigUiDragComponentType(android.view.DragEvent event) {
+        if (event == null) {
+            return null;
+        }
+        Object localState = event.getLocalState();
+        if (localState instanceof ConfigUiPaletteDragPayload) {
+            return ((ConfigUiPaletteDragPayload) localState).componentType;
+        }
+        ClipData clipData = event.getClipData();
+        if (clipData != null && clipData.getItemCount() > 0 && clipData.getItemAt(0) != null) {
+            CharSequence text = clipData.getItemAt(0).getText();
+            return text == null ? null : text.toString();
+        }
+        return null;
+    }
+
+    @Nullable
+    private ConfigUiPage getSafeConfigUiPage(ConfigUiSchema schema, int index) {
+        if (schema == null) {
+            return null;
+        }
+        schema.ensureDefaults();
+        if (index < 0 || index >= schema.pages.size()) {
+            return null;
+        }
+        ConfigUiPage page = schema.pages.get(index);
+        if (page != null) {
+            page.ensureDefaults();
+        }
+        return page;
+    }
+
+    private int countConfigUiComponents(@Nullable ConfigUiPage page) {
+        if (page == null || page.components == null) {
+            return 0;
+        }
+        return page.components.size();
+    }
+
+    private void showConfigUiComponentEditDialog(ConfigUiComponent component, Runnable onSaved) {
+        if (component == null) {
+            return;
+        }
+        component.ensureDefaults();
+        android.view.ContextThemeWrapper ctx =
+                new android.view.ContextThemeWrapper(this, R.style.Theme_AtomMaster);
+        View view = LayoutInflater.from(ctx).inflate(R.layout.dialog_config_ui_component_edit, null);
+        TextView typeView = view.findViewById(R.id.tv_component_type);
+        EditText labelInput = view.findViewById(R.id.et_component_label);
+        EditText keyInput = view.findViewById(R.id.et_component_key);
+        EditText placeholderInput = view.findViewById(R.id.et_component_placeholder);
+        EditText defaultInput = view.findViewById(R.id.et_component_default);
+        EditText helperInput = view.findViewById(R.id.et_component_helper);
+        EditText widthInput = view.findViewById(R.id.et_component_width);
+        EditText heightInput = view.findViewById(R.id.et_component_height);
+        EditText scaleInput = view.findViewById(R.id.et_component_scale);
+        TextView switchThemeLabel = view.findViewById(R.id.tv_switch_theme_label);
+        EditText switchOnColorInput = view.findViewById(R.id.et_switch_on_color);
+        EditText switchOffColorInput = view.findViewById(R.id.et_switch_off_color);
+        EditText switchThumbColorInput = view.findViewById(R.id.et_switch_thumb_color);
+        View sizeLayout = view.findViewById(R.id.layout_component_size);
+        TextView optionsLabel = view.findViewById(R.id.tv_component_options_label);
+        EditText optionsInput = view.findViewById(R.id.et_component_options);
+
+        typeView.setText("组件类型：" + component.getDisplayTypeName());
+        labelInput.setText(component.label);
+        keyInput.setText(component.fieldKey);
+        placeholderInput.setText(component.placeholder);
+        defaultInput.setText(component.defaultValue);
+        helperInput.setText(component.helperText);
+        optionsInput.setText(joinConfigUiOptions(component.options));
+        widthInput.setText(String.valueOf(component.widthDp));
+        heightInput.setText(String.valueOf(component.heightDp));
+        scaleInput.setText(String.valueOf(component.scalePercent));
+        switchOnColorInput.setText(component.switchOnColor);
+        switchOffColorInput.setText(component.switchOffColor);
+        switchThumbColorInput.setText(component.switchThumbColor);
+
+        boolean isTitle = ConfigUiComponent.TYPE_TITLE.equals(component.type);
+        boolean isSelect = ConfigUiComponent.TYPE_SELECT.equals(component.type);
+        boolean isArray = ConfigUiComponent.TYPE_ARRAY.equals(component.type);
+        boolean isSwitch = ConfigUiComponent.TYPE_SWITCH.equals(component.type);
+        keyInput.setVisibility(isTitle ? View.GONE : View.VISIBLE);
+        placeholderInput.setVisibility(isTitle ? View.GONE : View.VISIBLE);
+        defaultInput.setVisibility(isTitle ? View.GONE : View.VISIBLE);
+        sizeLayout.setVisibility(View.VISIBLE);
+        switchThemeLabel.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
+        switchOnColorInput.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
+        switchOffColorInput.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
+        switchThumbColorInput.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
+        optionsLabel.setVisibility(isSelect ? View.VISIBLE : View.GONE);
+        optionsInput.setVisibility(isSelect ? View.VISIBLE : View.GONE);
+        if (isArray) {
+            placeholderInput.setHint("每行一个元素，或粘贴 JSON 数组");
+            defaultInput.setHint("默认值，例如 [\"A\",\"B\",1]");
+            helperInput.setHint("辅助说明，例如：脚本里可直接用 vars.myArray[0]");
+        } else if (isSwitch) {
+            defaultInput.setHint("默认值，例如 true 或 false");
+        }
+
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
+                .setTitle("编辑组件")
+                .setView(view)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("保存", null)
+                .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        dialog.setOnShowListener(d -> dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String label = readTrimmedText(labelInput, component.getDisplayTypeName());
+                    String key = readTrimmedText(keyInput, "");
+                    if (!isTitle && TextUtils.isEmpty(key)) {
+                        Toast.makeText(this, "请输入字段 Key", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    List<ConfigUiOption> options = isSelect
+                            ? parseConfigUiOptions(optionsInput.getText() == null ? "" : optionsInput.getText().toString())
+                            : new ArrayList<>();
+                    if (isSelect && options.isEmpty()) {
+                        Toast.makeText(this, "下拉组件至少需要一个选项", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    component.label = label;
+                    component.fieldKey = isTitle ? "" : key;
+                    component.placeholder = isTitle ? "" : readTrimmedText(placeholderInput, "");
+                    component.defaultValue = isTitle ? "" : readTrimmedText(defaultInput, "");
+                    component.helperText = readTrimmedText(helperInput, "");
+                    component.widthDp = Math.max(80, parseIntDefault(readTrimmedText(widthInput,
+                            String.valueOf(ConfigUiComponent.defaultWidthForType(component.type))),
+                            ConfigUiComponent.defaultWidthForType(component.type)));
+                    component.heightDp = Math.max(48, parseIntDefault(readTrimmedText(heightInput,
+                            String.valueOf(ConfigUiComponent.defaultHeightForType(component.type))),
+                            ConfigUiComponent.defaultHeightForType(component.type)));
+                    component.scalePercent = Math.max(40, Math.min(200, parseIntDefault(
+                            readTrimmedText(scaleInput, String.valueOf(component.scalePercent)),
+                            component.scalePercent)));
+                    component.switchOnColor = isSwitch
+                            ? normalizeConfigUiColorInput(readTrimmedText(switchOnColorInput, component.switchOnColor), "#16A34A")
+                            : "";
+                    component.switchOffColor = isSwitch
+                            ? normalizeConfigUiColorInput(readTrimmedText(switchOffColorInput, component.switchOffColor), "#64748B")
+                            : "";
+                    component.switchThumbColor = isSwitch
+                            ? normalizeConfigUiColorInput(readTrimmedText(switchThumbColorInput, component.switchThumbColor), "#FDE68A")
+                            : "";
+                    component.options = options;
+                    component.ensureDefaults();
+                    dialog.dismiss();
+                    if (onSaved != null) {
+                        onSaved.run();
+                    }
+                }));
+        dialog.show();
+    }
+
+    private String normalizeConfigUiColorInput(String raw, String fallback) {
+        String value = TextUtils.isEmpty(raw) ? fallback : raw.trim();
+        if (TextUtils.isEmpty(value)) {
+            return fallback;
+        }
+        if (!value.startsWith("#")) {
+            value = "#" + value;
+        }
+        try {
+            Color.parseColor(value);
+            return value.toUpperCase(Locale.ROOT);
+        } catch (Exception ignored) {
+            return fallback;
+        }
+    }
+
+    private void showSimpleOverlayTextInputDialog(String title,
+                                                  String hint,
+                                                  String initialValue,
+                                                  java.util.function.Consumer<String> onSubmit) {
+        android.view.ContextThemeWrapper ctx =
+                new android.view.ContextThemeWrapper(this, R.style.Theme_AtomMaster);
+        EditText input = new EditText(ctx);
+        input.setHint(hint);
+        input.setText(initialValue);
+        if (input.getText() != null) {
+            input.setSelection(input.getText().length());
+        }
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
+                .setTitle(title)
+                .setView(input)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("确定", null)
+                .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        dialog.setOnShowListener(d -> dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    String value = input.getText() == null ? "" : input.getText().toString().trim();
+                    if (onSubmit != null) {
+                        onSubmit.accept(value);
+                    }
+                    dialog.dismiss();
+                }));
+        dialog.show();
+    }
+
+    private String ensureNodeConfigUiSchemaId(NodeFloatButtonConfig cfg) {
+        cfg.ensureDefaults();
+        if (TextUtils.isEmpty(cfg.configUiSchemaId)) {
+            cfg.configUiSchemaId = cfg.operationId + "_config_ui";
+        }
+        return cfg.configUiSchemaId;
+    }
+
+    private String validateConfigUiSchema(ConfigUiSchema schema) {
+        if (schema == null) {
+            return "配置 UI 无效";
+        }
+        schema.ensureDefaults();
+        Set<String> usedKeys = new HashSet<>();
+        for (ConfigUiPage page : schema.pages) {
+            if (page == null || page.components == null) {
+                continue;
+            }
+            for (ConfigUiComponent component : page.components) {
+                if (component == null) {
+                    continue;
+                }
+                component.ensureDefaults();
+                if (!component.bindsValue()) {
+                    continue;
+                }
+                String key = component.fieldKey == null ? "" : component.fieldKey.trim();
+                if (key.isEmpty()) {
+                    return "存在未填写字段 Key 的组件";
+                }
+                if (!usedKeys.add(key)) {
+                    return "字段 Key 重复：" + key;
+                }
+            }
+        }
+        return null;
+    }
+
+    private ConfigUiSchema cloneConfigUiSchema(ConfigUiSchema schema) {
+        Gson gson = new Gson();
+        ConfigUiSchema cloned = gson.fromJson(gson.toJson(schema), ConfigUiSchema.class);
+        if (cloned != null) {
+            cloned.ensureDefaults();
+        }
+        return cloned == null ? ConfigUiSchema.createDefault(UUIDGenerator.prefixedUUID("cfgui"), "节点配置") : cloned;
+    }
+
+    private List<ConfigUiOption> parseConfigUiOptions(String raw) {
+        List<ConfigUiOption> result = new ArrayList<>();
+        if (TextUtils.isEmpty(raw)) {
+            return result;
+        }
+        String[] lines = raw.split("\\r?\\n");
+        for (String line : lines) {
+            String trimmed = line == null ? "" : line.trim();
+            if (trimmed.isEmpty()) {
+                continue;
+            }
+            int eq = trimmed.indexOf('=');
+            if (eq > 0) {
+                String label = trimmed.substring(0, eq).trim();
+                String value = trimmed.substring(eq + 1).trim();
+                if (!label.isEmpty() && !value.isEmpty()) {
+                    result.add(new ConfigUiOption(label, value));
+                }
+            } else {
+                result.add(new ConfigUiOption(trimmed, trimmed));
+            }
+        }
+        return result;
+    }
+
+    private String joinConfigUiOptions(List<ConfigUiOption> options) {
+        if (options == null || options.isEmpty()) {
+            return "";
+        }
+        StringBuilder builder = new StringBuilder();
+        for (ConfigUiOption option : options) {
+            if (option == null) {
+                continue;
+            }
+            String label = option.label == null ? "" : option.label.trim();
+            String value = option.value == null ? "" : option.value.trim();
+            if (label.isEmpty() && value.isEmpty()) {
+                continue;
+            }
+            if (builder.length() > 0) {
+                builder.append('\n');
+            }
+            if (TextUtils.equals(label, value) || value.isEmpty()) {
+                builder.append(label);
+            } else {
+                builder.append(label).append('=').append(value);
+            }
+        }
+        return builder.toString();
+    }
+
+    private String readTrimmedText(@Nullable TextView view, String fallback) {
+        if (view == null || view.getText() == null) {
+            return fallback;
+        }
+        String value = view.getText().toString().trim();
+        return value.isEmpty() ? fallback : value;
     }
 
     private List<String> collectInvalidRuntimeVariableLines(@Nullable String raw) {
@@ -1309,6 +2078,18 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if ("false".equalsIgnoreCase(trimmed)) {
             return false;
         }
+        if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+            try {
+                return jsonArrayToJavaList(new JSONArray(trimmed));
+            } catch (Exception ignored) {
+            }
+        }
+        if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+            try {
+                return jsonObjectToJavaMap(new JSONObject(trimmed));
+            } catch (Exception ignored) {
+            }
+        }
         try {
             if (trimmed.contains(".")) {
                 return Double.parseDouble(trimmed);
@@ -1321,6 +2102,43 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         } catch (NumberFormatException ignored) {
             return trimmed;
         }
+    }
+
+    private List<Object> jsonArrayToJavaList(JSONArray array) {
+        List<Object> list = new ArrayList<>();
+        if (array == null) {
+            return list;
+        }
+        for (int i = 0; i < array.length(); i++) {
+            list.add(jsonValueToJava(array.opt(i)));
+        }
+        return list;
+    }
+
+    private Map<String, Object> jsonObjectToJavaMap(JSONObject object) {
+        Map<String, Object> map = new HashMap<>();
+        if (object == null) {
+            return map;
+        }
+        Iterator<String> keys = object.keys();
+        while (keys.hasNext()) {
+            String key = keys.next();
+            map.put(key, jsonValueToJava(object.opt(key)));
+        }
+        return map;
+    }
+
+    private Object jsonValueToJava(Object value) {
+        if (value == null || value == JSONObject.NULL) {
+            return null;
+        }
+        if (value instanceof JSONArray) {
+            return jsonArrayToJavaList((JSONArray) value);
+        }
+        if (value instanceof JSONObject) {
+            return jsonObjectToJavaMap((JSONObject) value);
+        }
+        return value;
     }
 
     /**
@@ -1338,7 +2156,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         Map<String, NodeFloatButtonConfig> configs = nodeFloatBtnManager.getAllConfigs();
         Map<String, Integer> result = new HashMap<>(configs.size());
         for (Map.Entry<String, NodeFloatButtonConfig> e : configs.entrySet()) {
-            if (e.getValue() != null) result.put(e.getKey(), e.getValue().color);
+            if (e.getValue() != null && Boolean.TRUE.equals(e.getValue().buttonEnabled)) {
+                result.put(e.getKey(), e.getValue().color);
+            }
         }
         return result;
     }
@@ -3912,6 +4732,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     }
 
                     @Override
+                    public void onConfigUi(OperationItem item) {
+                        showConfigUiDesignerDialog(item);
+                    }
+
+                    @Override
                     public void onFloatButton(OperationItem item) {
                         showNodeFloatBtnConfig(item);
                     }
@@ -5989,6 +6814,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             void onMoveUp(OperationItem item);
             void onMoveDown(OperationItem item);
             boolean canPaste();
+            void onConfigUi(OperationItem item);
             void onFloatButton(OperationItem item);
         }
 
@@ -6234,7 +7060,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             actionItems.add(new ActionItem(5, "上移", "把当前节点往前挪一位", position > 0));
             actionItems.add(new ActionItem(6, "下移", "把当前节点往后挪一位", position < operations.size() - 1));
             actionItems.add(new ActionItem(7, "删除", "删除当前节点", true));
-            actionItems.add(new ActionItem(8, "悬浮按钮", "为这个节点创建/编辑专属悬浮按钮", true));
+            actionItems.add(new ActionItem(8, "ConfigUI 设计", "为这个节点设计可视化配置界面", true));
+            actionItems.add(new ActionItem(9, "悬浮按钮", "为这个节点创建/编辑专属悬浮按钮", true));
 
             View popupView = LayoutInflater.from(anchor.getContext()).inflate(R.layout.dialog_node_action_sheet, null);
             TextView tvTitle = popupView.findViewById(R.id.tv_action_title);
@@ -6279,6 +7106,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         actionListener.onDelete(item);
                         break;
                     case 8:
+                        actionListener.onConfigUi(item);
+                        break;
+                    case 9:
                         actionListener.onFloatButton(item);
                         break;
                     default:
@@ -9408,6 +10238,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         @Override
                         public boolean canPaste() {
                             return hasOperationClipboard();
+                        }
+
+                        @Override
+                        public void onConfigUi(OperationItem item) {
+                            showConfigUiDesignerDialog(item);
                         }
 
                         @Override

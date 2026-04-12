@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:fillViewport="true">
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="4dp">
+
+        <TextView
+            android:id="@+id/tv_component_type"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="组件类型"
+            android:textColor="#526273"
+            android:textSize="12sp" />
+
+        <EditText
+            android:id="@+id/et_component_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:hint="显示名称"
+            android:inputType="text|textNoSuggestions"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/et_component_key"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="字段 Key，例如 server_id"
+            android:inputType="text|textNoSuggestions"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/et_component_placeholder"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="占位提示"
+            android:inputType="text|textNoSuggestions"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/et_component_default"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="默认值，例如 true / 1 / fast"
+            android:inputType="text|textNoSuggestions"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/et_component_helper"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="辅助说明"
+            android:inputType="textMultiLine|textNoSuggestions"
+            android:minLines="2"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:id="@+id/layout_component_size"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/et_component_width"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="宽度 dp"
+                android:inputType="number"
+                android:textColor="#243244"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/et_component_height"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:hint="高度 dp"
+                android:inputType="number"
+                android:textColor="#243244"
+                android:textSize="13sp" />
+        </LinearLayout>
+
+        <EditText
+            android:id="@+id/et_component_scale"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="组件缩放百分比，例如 100"
+            android:inputType="number"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/tv_switch_theme_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="开关主题颜色（支持 #RRGGBB / #AARRGGBB）"
+            android:textColor="#526273"
+            android:textSize="12sp" />
+
+        <EditText
+            android:id="@+id/et_switch_on_color"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:hint="开启轨道颜色，例如 #16A34A"
+            android:inputType="text|textNoSuggestions"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/et_switch_off_color"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:hint="关闭轨道颜色，例如 #64748B"
+            android:inputType="text|textNoSuggestions"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/et_switch_thumb_color"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:hint="滑块颜色，例如 #FDE68A"
+            android:inputType="text|textNoSuggestions"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/tv_component_options_label"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="下拉选项（每行 label=value）"
+            android:textColor="#526273"
+            android:textSize="12sp" />
+
+        <EditText
+            android:id="@+id/et_component_options"
+            android:layout_width="match_parent"
+            android:layout_height="110dp"
+            android:gravity="top|start"
+            android:hint="快速=fast&#10;稳定=stable"
+            android:inputType="textMultiLine|textNoSuggestions"
+            android:minLines="4"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+</ScrollView>

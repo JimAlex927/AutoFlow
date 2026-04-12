@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginBottom="8dp"
+    android:background="@drawable/project_panel_row_bg"
+    android:gravity="center_vertical"
+    android:minHeight="64dp"
+    android:orientation="horizontal"
+    android:padding="10dp">
+
+    <ImageView
+        android:id="@+id/iv_component_drag"
+        android:layout_width="24dp"
+        android:layout_height="24dp"
+        android:contentDescription="drag"
+        android:src="@drawable/handler_sorter" />
+
+    <LinearLayout
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="10dp"
+        android:layout_weight="1"
+        android:orientation="vertical">
+
+        <TextView
+            android:id="@+id/tv_component_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:textColor="#243244"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_component_meta"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="2dp"
+            android:textColor="#7B8794"
+            android:textSize="11sp" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/btn_component_edit"
+        android:layout_width="44dp"
+        android:layout_height="32dp"
+        android:layout_marginStart="6dp"
+        android:background="@drawable/item_operation_compact_bg"
+        android:gravity="center"
+        android:text="编辑"
+        android:textColor="#2F4F7C"
+        android:textSize="11sp" />
+
+    <TextView
+        android:id="@+id/btn_component_delete"
+        android:layout_width="36dp"
+        android:layout_height="32dp"
+        android:layout_marginStart="6dp"
+        android:background="@drawable/item_operation_compact_bg"
+        android:gravity="center"
+        android:text="删"
+        android:textColor="#F44336"
+        android:textSize="11sp" />
+
+</LinearLayout>

@@ -1,0 +1,76 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/project_panel_shell_bg"
+    android:orientation="vertical"
+    android:padding="16dp">
+
+    <TextView
+        android:id="@+id/tv_config_ui_runtime_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center"
+        android:text="运行配置"
+        android:textColor="#243244"
+        android:textSize="15sp"
+        android:textStyle="bold" />
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_marginTop="12dp"
+        android:layout_weight="1"
+        android:fillViewport="true"
+        android:scrollbars="vertical">
+
+        <FrameLayout
+            android:id="@+id/layout_config_ui_runtime_content"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content" />
+    </ScrollView>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="14dp"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/btn_config_ui_runtime_text_mode"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/item_operation_compact_bg"
+            android:gravity="center"
+            android:text="文本模式"
+            android:textColor="#526273"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/btn_config_ui_runtime_cancel"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/item_operation_compact_bg"
+            android:gravity="center"
+            android:text="取消"
+            android:textColor="#6A7682"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/btn_config_ui_runtime_save"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:background="@drawable/item_operation_compact_bg"
+            android:gravity="center"
+            android:text="保存"
+            android:textColor="#2F4F7C"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+</LinearLayout>
