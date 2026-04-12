@@ -4501,6 +4501,120 @@ public class OperationDialogFactory {
         });
     }
 
+    // ==================== Back Key Operation ====================
+
+    public void showAddBackKeyDialog() {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_back_key, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(340, true);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 340, 350, null);
+
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
+
+        edtName.setText("返回按键");
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                operationPickerLauncher.showOperationPickerDialog("选择下一节点", null, edtNextOperation::setText);
+            }
+        });
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
+            String name = edtName.getText().toString().trim();
+            String nextOp = edtNextOperation.getText().toString().trim();
+
+            if (TextUtils.isEmpty(name)) {
+                edtName.setError("请填写操作名称");
+                return;
+            }
+
+            try {
+                JSONObject operationObject = new JSONObject();
+                if (idGenerator != null) operationObject.put("id", idGenerator.generateId());
+                operationObject.put("name", name);
+                operationObject.put("type", 17);
+                operationObject.put("responseType", 1);
+
+                JSONObject inputMap = new JSONObject();
+                if (!TextUtils.isEmpty(nextOp)) {
+                    inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+                }
+                operationObject.put("inputMap", inputMap);
+
+                JSONArray operations = crudHelper.readOperationsArray();
+                operations.put(operationObject);
+                crudHelper.writeOperationsArray(operations, "已添加返回按键节点", () -> {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (addListener != null) addListener.onOperationAdded();
+                });
+            } catch (Exception e) {
+                host.showToast("构建返回按键操作失败: " + e.getMessage());
+            }
+        });
+    }
+
+    public void showEditBackKeyDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_back_key, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(340, true);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 340, 350, null);
+
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
+        TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        btnConfirm.setText("保存");
+
+        edtName.setText(operationObject.optString("name", ""));
+        JSONObject inputMap0 = operationObject.optJSONObject("inputMap");
+        edtNextOperation.setText(inputMap0 != null ? inputMap0.optString(MetaOperation.NEXT_OPERATION_ID, "") : "");
+        if (nextOpBinder != null) nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                operationPickerLauncher.showOperationPickerDialog("选择下一节点", operationId, edtNextOperation::setText);
+            }
+        });
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        btnConfirm.setOnClickListener(v -> {
+            String name = edtName.getText().toString().trim();
+            String nextOp = edtNextOperation.getText().toString().trim();
+
+            if (TextUtils.isEmpty(name)) {
+                edtName.setError("请填写操作名称");
+                return;
+            }
+
+            try {
+                JSONObject updated = new JSONObject();
+                updated.put("id", operationId);
+                updated.put("name", name);
+                updated.put("type", 17);
+                updated.put("responseType", 1);
+
+                JSONObject inputMap = new JSONObject();
+                if (!TextUtils.isEmpty(nextOp)) {
+                    inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+                }
+                updated.put("inputMap", inputMap);
+
+                if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, updated.toString(2))) {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (updateListener != null) updateListener.onOperationUpdated();
+                }
+            } catch (Exception e) {
+                host.showToast("保存失败: " + e.getMessage());
+            }
+        });
+    }
+
     private org.json.JSONArray collectSwitchCases(LinearLayout container) throws org.json.JSONException {
         org.json.JSONArray arr = new org.json.JSONArray();
         for (int i = 0; i < container.getChildCount(); i++) {
