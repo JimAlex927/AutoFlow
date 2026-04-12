@@ -247,13 +247,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private OperationPanelAdapter.ActionSheetAdapter taskActionSheetAdapter;
     @Nullable
     private java.util.function.Consumer<OperationPanelAdapter.ActionItem> taskActionSheetHandler;
-    private PopupWindow nodeFloatActionPopupWindow;
-    private TextView nodeFloatActionPopupTitleView;
-    private RecyclerView nodeFloatActionPopupListView;
-    private final List<OperationPanelAdapter.ActionItem> nodeFloatActionSheetItems = new ArrayList<>();
-    private OperationPanelAdapter.ActionSheetAdapter nodeFloatActionSheetAdapter;
-    @Nullable
-    private java.util.function.Consumer<OperationPanelAdapter.ActionItem> nodeFloatActionSheetHandler;
     private ItemTouchHelper operationDragHelper;
     private boolean projectPanelContentDirty = true;
     private long projectListCacheVersion = Long.MIN_VALUE;
@@ -344,16 +337,505 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     return NODE_BTN_COLORS[0];
                 }
             });
-    private final Map<String, NodeFloatBtnEntry> nodeFloatBtnViews = new HashMap<>();
+    private final NodeFloatButtonUiHelper nodeFloatButtonUiHelper =
+            new NodeFloatButtonUiHelper(new NodeFloatButtonUiHelper.Host() {
+                @Override
+                public FloatWindowService getService() {
+                    return FloatWindowService.this;
+                }
 
-    private static class NodeFloatBtnEntry {
-        View rootView;
-        WindowManager.LayoutParams lp;
-        NodeFloatBtnEntry(View rootView, WindowManager.LayoutParams lp) {
-            this.rootView = rootView;
-            this.lp = lp;
-        }
-    }
+                @Override
+                public Context getContext() {
+                    return FloatWindowService.this;
+                }
+
+                @Override
+                public WindowManager getWindowManager() {
+                    return wm;
+                }
+
+                @Override
+                public Handler getUiHandler() {
+                    return uiHandler;
+                }
+
+                @Override
+                public int dp(int value) {
+                    return FloatWindowService.this.dp(value);
+                }
+
+                @Override
+                public String abbreviate(String value, int maxChars) {
+                    return FloatWindowService.this.abbreviate(value, maxChars);
+                }
+
+                @Override
+                public void safeRemoveView(View view) {
+                    FloatWindowService.this.safeRemoveView(view);
+                }
+
+                @Override
+                public int[] getScreenSizePx() {
+                    return FloatWindowService.this.getScreenSizePx();
+                }
+
+                @Override
+                public WindowManager.LayoutParams getBallLayoutParams() {
+                    return ballLp;
+                }
+
+                @Override
+                public File getCurrentProjectDir() {
+                    return currentProjectDir;
+                }
+
+                @Override
+                public File getCurrentTaskDir() {
+                    return currentTaskDir;
+                }
+
+                @Override
+                public NodeFloatButtonManager getNodeFloatButtonManager() {
+                    return nodeFloatBtnManager;
+                }
+
+                @Override
+                public boolean shouldRetainNodeConfigMetadata(@Nullable NodeFloatButtonConfig cfg) {
+                    return configUiHelper.shouldRetainNodeConfigMetadata(cfg);
+                }
+
+                @Override
+                public void showRuntimeConfig(NodeFloatButtonConfig cfg) {
+                    configUiHelper.showNodeRuntimeConfigDialog(cfg);
+                }
+
+                @Override
+                public void showConfigUiDesigner(NodeFloatButtonConfig cfg) {
+                    configUiHelper.showConfigUiDesignerDialog(cfg);
+                }
+
+                @Override
+                public void runNodeFloatButton(NodeFloatButtonConfig cfg) {
+                    FloatWindowService.this.runFromNodeFloatBtn(cfg);
+                }
+
+                @Override
+                public void navigateToNodeInPanel(NodeFloatButtonConfig cfg) {
+                    FloatWindowService.this.navigateToNodeInPanel(cfg);
+                }
+
+                @Override
+                public boolean isScriptRunning() {
+                    return ScriptRunner.isCurrentScriptRunning();
+                }
+
+                @Override
+                public void onFloatButtonsChanged(Map<String, Integer> colorMap) {
+                    if (currentOperationAdapter != null) {
+                        currentOperationAdapter.setFloatBtnColors(colorMap);
+                    }
+                }
+            });
+    private final ProjectPanelUiHelper projectPanelUiHelper =
+            new ProjectPanelUiHelper(new ProjectPanelUiHelper.Host() {
+                @Override
+                public FloatWindowService getService() {
+                    return FloatWindowService.this;
+                }
+
+                @Override
+                public Context getContext() {
+                    return FloatWindowService.this;
+                }
+
+                @Override
+                public WindowManager getWindowManager() {
+                    return wm;
+                }
+
+                @Override
+                public Handler getUiHandler() {
+                    return uiHandler;
+                }
+
+                @Override
+                public int dp(int value) {
+                    return FloatWindowService.this.dp(value);
+                }
+
+                @Override
+                public int[] getScreenSizePx() {
+                    return FloatWindowService.this.getScreenSizePx();
+                }
+
+                @Override
+                public void initDialogFactory() {
+                    FloatWindowService.this.initDialogFactory();
+                }
+
+                @Override
+                public void clampPanelToScreen(@Nullable WindowManager.LayoutParams lp) {
+                    FloatWindowService.this.clampPanelToScreen(lp);
+                }
+
+                @Override
+                public void adaptProjectPanelSizeToCurrentScreen(@Nullable WindowManager.LayoutParams lp) {
+                    FloatWindowService.this.adaptProjectPanelSizeToCurrentScreen(lp);
+                }
+
+                @Override
+                public int getSharedPanelX() {
+                    return FloatWindowService.this.getSharedPanelX();
+                }
+
+                @Override
+                public int getSharedPanelY() {
+                    return FloatWindowService.this.getSharedPanelY();
+                }
+
+                @Override
+                public void rememberSharedPanelPosition(@Nullable WindowManager.LayoutParams lp) {
+                    FloatWindowService.this.rememberSharedPanelPosition(lp);
+                }
+
+                @Override
+                public boolean shouldRefreshProjectPanelContent() {
+                    RecyclerView rv = getProjectPanelRecyclerView();
+                    return projectPanelContentDirty || rv == null || rv.getAdapter() == null;
+                }
+
+                @Override
+                public void refreshCurrentLevelList() {
+                    FloatWindowService.this.refreshCurrentLevelList();
+                }
+
+                @Override
+                public void hideRunningPanel() {
+                    FloatWindowService.this.hideRunningPanel();
+                }
+
+                @Override
+                public int getProjectPanelLevel() {
+                    switch (currentLevel) {
+                        case PROJECT:
+                            return ProjectPanelUiHelper.LEVEL_PROJECT;
+                        case TASK:
+                            return ProjectPanelUiHelper.LEVEL_TASK;
+                        case OPERATION:
+                        default:
+                            return ProjectPanelUiHelper.LEVEL_OPERATION;
+                    }
+                }
+
+                @Override
+                public File getCurrentProjectDir() {
+                    return currentProjectDir;
+                }
+
+                @Override
+                public File getCurrentTaskDir() {
+                    return currentTaskDir;
+                }
+
+                @Override
+                public void loadOperations(File taskDir) {
+                    FloatWindowService.this.loadOperations(taskDir);
+                }
+
+                @Override
+                public String getCurrentRunningOperationId() {
+                    return currentRunningOperationId;
+                }
+
+                @Override
+                public boolean isScriptActiveForUi() {
+                    return FloatWindowService.this.isScriptActiveForUi();
+                }
+
+                @Override
+                public boolean isPaused() {
+                    return isPaused;
+                }
+
+                @Override
+                public boolean isOperationBatchMode() {
+                    return operationBatchMode;
+                }
+
+                @Override
+                public int getBatchSelectedOperationCount() {
+                    return batchSelectedOperationIds.size();
+                }
+
+                @Override
+                public String getRuntimeStatusText() {
+                    return runtimeStatusText;
+                }
+
+                @Override
+                public int getRuntimeStatusColor() {
+                    return runtimeStatusColor;
+                }
+
+                @Override
+                public int getCurrentOperationIndex() {
+                    return currentOperationIndex;
+                }
+
+                @Override
+                public int getTotalOperationCount() {
+                    return totalOperationCount;
+                }
+
+                @Override
+                public String getCurrentRunningOperationName() {
+                    return currentRunningOperationName;
+                }
+
+                @Override
+                public String getCurrentRunningProject() {
+                    return currentRunningProject;
+                }
+
+                @Override
+                public String getCurrentRunningTask() {
+                    return currentRunningTask;
+                }
+
+                @Override
+                public boolean selectOperationInProjectPanel(String operationId) {
+                    if (currentOperationAdapter == null || TextUtils.isEmpty(operationId)) {
+                        return false;
+                    }
+                    currentOperationAdapter.selectById(operationId);
+                    return true;
+                }
+
+                @Override
+                public int findOperationPositionInProjectPanel(String operationId) {
+                    if (currentOperationAdapter == null || TextUtils.isEmpty(operationId)) {
+                        return -1;
+                    }
+                    return currentOperationAdapter.findPositionById(operationId);
+                }
+
+                @Override
+                public void showToast(String message) {
+                    Toast.makeText(FloatWindowService.this, message, Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void onProjectPanelBackClick() {
+                    FloatWindowService.this.navigateBack();
+                }
+
+                @Override
+                public void onProjectPanelAddClick() {
+                    FloatWindowService.this.showAddDialog();
+                }
+
+                @Override
+                public boolean onProjectPanelAddLongClick() {
+                    if (currentLevel == NavigationLevel.PROJECT) {
+                        importProjectInteractive();
+                        return true;
+                    }
+                    return false;
+                }
+
+                @Override
+                public void onProjectPanelRefreshClick() {
+                    if (currentLevel == NavigationLevel.OPERATION && currentTaskDir != null) {
+                        showFlowGraphDialog();
+                    } else {
+                        Toast.makeText(FloatWindowService.this, "请在 Operation 列表中打开流程图", Toast.LENGTH_SHORT).show();
+                    }
+                }
+
+                @Override
+                public boolean onProjectPanelRefreshLongClick() {
+                    if (currentLevel == NavigationLevel.PROJECT) {
+                        invalidateProjectListCache();
+                        loadProjects(true);
+                        Toast.makeText(FloatWindowService.this, "已刷新项目列表", Toast.LENGTH_SHORT).show();
+                        return true;
+                    }
+                    if (currentLevel == NavigationLevel.TASK && currentProjectDir != null) {
+                        invalidateTaskListCache(currentProjectDir);
+                        loadTasks(currentProjectDir, true);
+                        Toast.makeText(FloatWindowService.this, "已刷新 Task 列表", Toast.LENGTH_SHORT).show();
+                        return true;
+                    }
+                    if (currentLevel == NavigationLevel.OPERATION && currentTaskDir != null) {
+                        invalidateOperationListCache(currentTaskDir);
+                        reloadCurrentProject();
+                        FloatWindowService.this.loadOperations(currentTaskDir, true);
+                        Toast.makeText(FloatWindowService.this, "已刷新列表", Toast.LENGTH_SHORT).show();
+                    }
+                    return true;
+                }
+
+                @Override
+                public void onProjectPanelSearchQueryChanged(String query) {
+                    currentSearchQuery = query == null ? "" : query;
+                }
+
+                @Override
+                public void cancelPendingProjectPanelSearchRefresh() {
+                    uiHandler.removeCallbacks(searchRefreshRunnable);
+                }
+
+                @Override
+                public void setupProjectPanelBusinessActions(View panelView) {
+                    FloatWindowService.this.setupProjectPanelBusinessActions(panelView);
+                }
+
+                @Override
+                public View getProjectPanelView() {
+                    return projectPanelView;
+                }
+
+                @Override
+                public void setProjectPanelView(@Nullable View view) {
+                    projectPanelView = view;
+                }
+
+                @Override
+                public WindowManager.LayoutParams getProjectPanelLayoutParams() {
+                    return projectPanelLp;
+                }
+
+                @Override
+                public void setProjectPanelLayoutParams(@Nullable WindowManager.LayoutParams lp) {
+                    projectPanelLp = lp;
+                }
+
+                @Override
+                public View getProjectPanelDockView() {
+                    return projectPanelDockView;
+                }
+
+                @Override
+                public void setProjectPanelDockView(@Nullable View view) {
+                    projectPanelDockView = view;
+                }
+
+                @Override
+                public WindowManager.LayoutParams getProjectPanelDockLayoutParams() {
+                    return projectPanelDockLp;
+                }
+
+                @Override
+                public void setProjectPanelDockLayoutParams(@Nullable WindowManager.LayoutParams lp) {
+                    projectPanelDockLp = lp;
+                }
+
+                @Override
+                public boolean isProjectPanelDockOnLeft() {
+                    return projectPanelDockOnLeft;
+                }
+
+                @Override
+                public void setProjectPanelDockOnLeft(boolean onLeft) {
+                    projectPanelDockOnLeft = onLeft;
+                }
+
+                @Override
+                public RecyclerView getProjectPanelRecyclerView() {
+                    return projectPanelRecyclerView;
+                }
+
+                @Override
+                public void setProjectPanelRecyclerView(@Nullable RecyclerView recyclerView) {
+                    projectPanelRecyclerView = recyclerView;
+                }
+            });
+    private final FlowGraphPanelHelper flowGraphPanelHelper =
+            new FlowGraphPanelHelper(new FlowGraphPanelHelper.Host() {
+                @Override
+                public Context getContext() {
+                    return FloatWindowService.this;
+                }
+
+                @Override
+                public WindowManager getWindowManager() {
+                    return wm;
+                }
+
+                @Override
+                public Handler getUiHandler() {
+                    return uiHandler;
+                }
+
+                @Override
+                public int dp(int value) {
+                    return FloatWindowService.this.dp(value);
+                }
+
+                @Override
+                public void adaptPanelSizeToScreen(WindowManager.LayoutParams lp, int desiredWidthDp, int desiredHeightDp) {
+                    FloatWindowService.this.adaptPanelSizeToScreen(lp, desiredWidthDp, desiredHeightDp);
+                }
+
+                @Override
+                public int getSharedPanelX() {
+                    return FloatWindowService.this.getSharedPanelX();
+                }
+
+                @Override
+                public int getSharedPanelY() {
+                    return FloatWindowService.this.getSharedPanelY();
+                }
+
+                @Override
+                public void rememberSharedPanelPosition(@Nullable WindowManager.LayoutParams lp) {
+                    FloatWindowService.this.rememberSharedPanelPosition(lp);
+                }
+
+                @Override
+                public void safeRemoveView(View view) {
+                    FloatWindowService.this.safeRemoveView(view);
+                }
+
+                @Override
+                public File getCurrentTaskDir() {
+                    return currentTaskDir;
+                }
+
+                @Override
+                public JSONArray readOperationsArray() throws Exception {
+                    return FloatWindowService.this.readOperationsArray();
+                }
+
+                @Override
+                public boolean writeOperationsArray(JSONArray jsonArray, String successText) {
+                    return FloatWindowService.this.writeOperationsArray(jsonArray, successText);
+                }
+
+                @Override
+                public String getOperationTypeName(int type) {
+                    return FloatWindowService.this.getOperationTypeName(type);
+                }
+
+                @Override
+                public void showToast(String message) {
+                    Toast.makeText(FloatWindowService.this, message, Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void editOperationFromFlow(String name, String id, String type, int order) {
+                    showEditOperationDialog(new OperationItem(name, id, type, order), currentOperationAdapter);
+                }
+
+                @Override
+                public void pickOperationId(String title, @Nullable String excludeId, java.util.function.Consumer<String> listener) {
+                    FloatWindowService.this.showOperationPickerDialog(title, excludeId, pickedId -> {
+                        if (listener != null) {
+                            listener.accept(pickedId);
+                        }
+                    });
+                }
+            });
 
     private static final String METHOD_TM_CCOEFF = "TM_CCOEFF (4)";
     private static final String METHOD_TM_CCOEFF_NORMED = "TM_CCOEFF_NORMED (5)";
@@ -393,7 +875,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         // 初始化拆分出的管理器
         stepDelayOverlayManager = new StepAndDelayOverlayManager(this);
         appLaunchTriggerManager = new AppLaunchTriggerManager(this);
-        restoreNodeFloatButtons();
+        nodeFloatButtonUiHelper.restoreNodeFloatButtons();
         
         startMyForeground();
         showBall();
@@ -500,7 +982,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     @Override
     public void onConfigurationChanged(Configuration newConfig) {
         super.onConfigurationChanged(newConfig);
-        uiHandler.post(this::refreshNodeFloatButtonsForCurrentScreen);
+        uiHandler.post(projectPanelUiHelper::onConfigurationChanged);
+        uiHandler.post(() -> nodeFloatButtonUiHelper.refreshNodeFloatButtonsForCurrentScreen());
     }
 
     @Override
@@ -516,20 +999,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             taskActionPopupWindow.dismiss();
             taskActionPopupWindow = null;
         }
-        if (nodeFloatActionPopupWindow != null) {
-            nodeFloatActionPopupWindow.dismiss();
-            nodeFloatActionPopupWindow = null;
-        }
-        
-        removeAllNodeFloatButtons();
+        nodeFloatButtonUiHelper.onDestroy();
         removeBall();
-        detachProjectPanel();
-        detachProjectPanelDock();
-        projectPanelView = null;
-        projectPanelLp = null;
-        projectPanelDockView = null;
-        projectPanelDockLp = null;
-        projectPanelRecyclerView = null;
+        projectPanelUiHelper.onDestroy();
+        flowGraphPanelHelper.onDestroy();
         projectPanelAdapter = null;
         taskPanelAdapter = null;
         operationPanelAdapter = null;
@@ -721,516 +1194,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     };
 
     /**
-     * 显示节点悬浮按钮配置弹窗。
-     * 支持：按钮文字、按钮颜色、文字颜色、大小、透明度、执行隐藏、位置选点、删除。
-     */
-    @SuppressLint("ClickableViewAccessibility")
-    private void showNodeFloatBtnConfig(OperationItem item) {
-        NodeFloatButtonConfig existing = nodeFloatBtnManager.getConfig(item.id);
-        if (existing != null) {
-            existing.ensureDefaults();
-        }
-
-        // 可变配置状态
-        final int[]   selColor     = {existing != null ? existing.color                    : NODE_BTN_COLORS[0]};
-        final int[]   selTextColor = {existing != null ? existing.textColor                : 0xFFFFFFFF};
-        final int[]   selSize      = {existing != null ? existing.sizeDp                   : 48};
-        final int[]   selAlpha     = {existing != null ? (int)(existing.alpha * 100 + 0.5f) : 100};
-
-        String projectName = currentProjectDir != null ? currentProjectDir.getName() : "";
-        String taskName    = currentTaskDir    != null ? currentTaskDir.getName()    : "";
-
-        View dv = LayoutInflater.from(this).inflate(R.layout.dialog_node_float_btn_config, null);
-
-        int winType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : WindowManager.LayoutParams.TYPE_PHONE;
-
-        WindowManager.LayoutParams dlp = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                winType,
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
-                        | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH,
-                PixelFormat.TRANSLUCENT
-        );
-        dlp.gravity = Gravity.CENTER;
-        dlp.softInputMode = WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN;
-        wm.addView(dv, dlp);
-
-        // ── 预览 ─────────────────────────────────────────────────────────
-        FrameLayout preview      = dv.findViewById(R.id.cfg_preview);
-        TextView    previewLabel = dv.findViewById(R.id.cfg_preview_label);
-
-        // ── 按钮文字 ─────────────────────────────────────────────────────
-        EditText etLabel = dv.findViewById(R.id.cfg_et_label);
-        if (existing != null && existing.labelText != null) etLabel.setText(existing.labelText);
-
-        // ── 预览更新闭包 ─────────────────────────────────────────────────
-        Runnable refreshPreview = () -> {
-            GradientDrawable bg = new GradientDrawable();
-            bg.setShape(GradientDrawable.OVAL);
-            bg.setColor(selColor[0]);
-            preview.setBackground(bg);
-            preview.setAlpha(selAlpha[0] / 100f);
-            String t = etLabel.getText().toString().trim();
-            previewLabel.setText(t.isEmpty() ? abbreviate(item.name, 6) : abbreviate(t, 6));
-            previewLabel.setTextColor(selTextColor[0]);
-        };
-        refreshPreview.run();
-
-        etLabel.addTextChangedListener(new TextWatcher() {
-            @Override public void beforeTextChanged(CharSequence s, int st, int c, int a) {}
-            @Override public void onTextChanged(CharSequence s, int st, int b, int c) { refreshPreview.run(); }
-            @Override public void afterTextChanged(Editable s) {}
-        });
-
-        // ── 按钮颜色色板 ─────────────────────────────────────────────────
-        LinearLayout swatchRow = dv.findViewById(R.id.cfg_color_swatches);
-        float density = getResources().getDisplayMetrics().density;
-        int swSz  = (int)(28 * density);
-        int swMgn = (int)(5 * density);
-        for (int color : NODE_BTN_COLORS) {
-            FrameLayout sw = new FrameLayout(this);
-            GradientDrawable swBg = new GradientDrawable();
-            swBg.setShape(GradientDrawable.OVAL);
-            swBg.setColor(color);
-            sw.setBackground(swBg);
-            LinearLayout.LayoutParams swLp = new LinearLayout.LayoutParams(swSz, swSz);
-            swLp.setMargins(swMgn, swMgn, swMgn, swMgn);
-            sw.setLayoutParams(swLp);
-            sw.setOnClickListener(v -> { selColor[0] = color; refreshPreview.run(); });
-            swatchRow.addView(sw);
-        }
-
-        // ── 文字颜色色板 ─────────────────────────────────────────────────
-        int[] textColors = {0xFFFFFFFF, 0xFF222222, 0xFFFFEB3B, 0xFFCCCCCC};
-        LinearLayout tcRow = dv.findViewById(R.id.cfg_text_color_row);
-        for (int tc : textColors) {
-            FrameLayout sw = new FrameLayout(this);
-            GradientDrawable swBg = new GradientDrawable();
-            swBg.setShape(GradientDrawable.OVAL);
-            swBg.setColor(tc);
-            // 浅色加描边，方便辨认
-            if ((tc & 0x00FFFFFF) >= 0x00BBBBBB) swBg.setStroke((int)(1.5f * density), 0x44000000);
-            sw.setBackground(swBg);
-            LinearLayout.LayoutParams swLp = new LinearLayout.LayoutParams(swSz, swSz);
-            swLp.setMargins(swMgn, swMgn, swMgn, swMgn);
-            sw.setLayoutParams(swLp);
-            sw.setOnClickListener(v -> { selTextColor[0] = tc; refreshPreview.run(); });
-            tcRow.addView(sw);
-        }
-
-        // ── 大小步进 ─────────────────────────────────────────────────────
-        TextView tvSizeVal = dv.findViewById(R.id.cfg_size_val);
-        Runnable refreshSize = () -> tvSizeVal.setText(selSize[0] + "dp");
-        refreshSize.run();
-        dv.findViewById(R.id.cfg_size_minus).setOnClickListener(v -> {
-            if (selSize[0] > 32) { selSize[0] -= 4; refreshSize.run(); }
-        });
-        dv.findViewById(R.id.cfg_size_plus).setOnClickListener(v -> {
-            if (selSize[0] < 88) { selSize[0] += 4; refreshSize.run(); }
-        });
-
-        // ── 透明度步进 ───────────────────────────────────────────────────
-        TextView tvAlphaVal = dv.findViewById(R.id.cfg_alpha_val);
-        Runnable refreshAlpha = () -> tvAlphaVal.setText(selAlpha[0] + "%");
-        refreshAlpha.run();
-        dv.findViewById(R.id.cfg_alpha_minus).setOnClickListener(v -> {
-            if (selAlpha[0] > 20) { selAlpha[0] -= 10; refreshAlpha.run(); refreshPreview.run(); }
-        });
-        dv.findViewById(R.id.cfg_alpha_plus).setOnClickListener(v -> {
-            if (selAlpha[0] < 100) { selAlpha[0] += 10; refreshAlpha.run(); refreshPreview.run(); }
-        });
-
-        // ── 执行时隐藏 ───────────────────────────────────────────────────
-        CheckBox chkHide = dv.findViewById(R.id.cfg_chk_hide);
-        if (existing != null) chkHide.setChecked(existing.hideWhileRunning);
-
-        // ── 位置 ─────────────────────────────────────────────────────────
-        EditText etX = dv.findViewById(R.id.cfg_et_x);
-        EditText etY = dv.findViewById(R.id.cfg_et_y);
-        int defaultX = ballLp != null ? ballLp.x + dp(60) : 160;
-        int defaultY = ballLp != null ? ballLp.y           : 400;
-        etX.setText(String.valueOf(existing != null ? existing.posX : defaultX));
-        etY.setText(String.valueOf(existing != null ? existing.posY : defaultY));
-        dv.findViewById(R.id.cfg_btn_pick).setOnClickListener(v ->
-                showPositionPickOverlay(dv, etX, etY, selSize));
-
-        // ── 删除按钮（仅已有配置时显示） ─────────────────────────────────
-        View btnDelete = dv.findViewById(R.id.cfg_btn_delete);
-        if (existing != null) {
-            btnDelete.setVisibility(View.VISIBLE);
-            btnDelete.setOnClickListener(v -> {
-                safeRemoveView(dv);
-                if (shouldRetainNodeConfigMetadata(existing)) {
-                    existing.buttonEnabled = false;
-                    nodeFloatBtnManager.saveConfig(existing);
-                } else {
-                    nodeFloatBtnManager.removeConfig(item.id);
-                }
-                removeNodeFloatBtn(item.id);
-                refreshFloatBtnBadges();
-                Toast.makeText(this, "已删除悬浮按钮", Toast.LENGTH_SHORT).show();
-            });
-        }
-
-        // ── 取消 ─────────────────────────────────────────────────────────
-        dv.findViewById(R.id.cfg_btn_cancel).setOnClickListener(v -> safeRemoveView(dv));
-
-        // ── 确定 ─────────────────────────────────────────────────────────
-        dv.findViewById(R.id.cfg_btn_confirm).setOnClickListener(v -> {
-            safeRemoveView(dv);
-            int posX = parseIntDefault(etX.getText().toString(), defaultX);
-            int posY = parseIntDefault(etY.getText().toString(), defaultY);
-            String labelTxt = etLabel.getText().toString().trim();
-            NodeFloatButtonConfig cfg = existing != null
-                    ? existing
-                    : new NodeFloatButtonConfig(
-                    item.id, item.name, projectName, taskName, selColor[0], posX, posY);
-            cfg.ensureDefaults();
-            cfg.operationId = item.id;
-            cfg.operationName = item.name;
-            cfg.projectName = projectName;
-            cfg.taskName = taskName;
-            cfg.color = selColor[0];
-            cfg.posX = posX;
-            cfg.posY = posY;
-            cfg.labelText        = labelTxt.isEmpty() ? null : labelTxt;
-            cfg.textColor        = selTextColor[0];
-            cfg.sizeDp           = selSize[0];
-            cfg.alpha            = selAlpha[0] / 100f;
-            cfg.hideWhileRunning = chkHide.isChecked();
-            cfg.buttonEnabled    = true;
-
-            nodeFloatBtnManager.saveConfig(cfg);
-            removeNodeFloatBtn(item.id);
-            addNodeFloatBtn(cfg);
-            refreshFloatBtnBadges();
-            Toast.makeText(this,
-                    existing != null ? "悬浮按钮已更新" : "悬浮按钮已创建",
-                    Toast.LENGTH_SHORT).show();
-        });
-
-        // 点击弹窗外关闭
-        dv.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_OUTSIDE) { safeRemoveView(dv); return true; }
-            return false;
-        });
-    }
-
-    /**
-     * 全屏点选位置覆盖层：用户点击屏幕任意位置即设为悬浮按钮坐标。
-     * 点击取消区域则仅关闭覆盖层，不改坐标。
-     */
-    @SuppressLint("ClickableViewAccessibility")
-    private void showPositionPickOverlay(View dialogView, EditText etX, EditText etY, int[] sizeRef) {
-        dialogView.setVisibility(View.INVISIBLE);
-
-        FrameLayout overlay = new FrameLayout(this);
-        overlay.setBackgroundColor(0x66000000);
-
-        // 提示文字
-        TextView hint = new TextView(this);
-        hint.setText("点击屏幕设置悬浮按钮的位置");
-        hint.setTextColor(0xFFFFFFFF);
-        hint.setTextSize(15f);
-        hint.setGravity(Gravity.CENTER);
-        hint.setBackgroundColor(0xCC1A2332);
-        hint.setPadding(dp(24), dp(12), dp(24), dp(12));
-        FrameLayout.LayoutParams hintLp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
-        hintLp.gravity = Gravity.TOP | Gravity.CENTER_HORIZONTAL;
-        hintLp.topMargin = dp(80);
-        overlay.addView(hint, hintLp);
-
-        // 取消按钮
-        TextView cancelTv = new TextView(this);
-        cancelTv.setText("取  消");
-        cancelTv.setTextColor(0xFFFFFFFF);
-        cancelTv.setTextSize(14f);
-        cancelTv.setGravity(Gravity.CENTER);
-        cancelTv.setBackgroundColor(0xCC1A2332);
-        cancelTv.setPadding(dp(32), dp(12), dp(32), dp(12));
-        FrameLayout.LayoutParams cancelLp = new FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.WRAP_CONTENT);
-        cancelLp.gravity = Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL;
-        cancelLp.bottomMargin = dp(80);
-        overlay.addView(cancelTv, cancelLp);
-
-        int winType = Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
-                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : WindowManager.LayoutParams.TYPE_PHONE;
-        WindowManager.LayoutParams olp = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
-                winType,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-        );
-        olp.gravity = Gravity.TOP | Gravity.START;
-        wm.addView(overlay, olp);
-
-        overlay.setOnTouchListener((v, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) {
-                float tx = e.getRawX(), ty = e.getRawY();
-                // 判断是否点在"取消"区域
-                boolean hitCancel = false;
-                if (cancelTv.getWidth() > 0) {
-                    int[] loc = new int[2];
-                    cancelTv.getLocationOnScreen(loc);
-                    hitCancel = tx >= loc[0] && tx <= loc[0] + cancelTv.getWidth()
-                            && ty >= loc[1] && ty <= loc[1] + cancelTv.getHeight();
-                }
-                safeRemoveView(overlay);
-                dialogView.setVisibility(View.VISIBLE);
-                if (!hitCancel) {
-                    float d = getResources().getDisplayMetrics().density;
-                    int half = (int)(sizeRef[0] * d / 2);
-                    etX.setText(String.valueOf(Math.max(0, (int) tx - half)));
-                    etY.setText(String.valueOf(Math.max(0, (int) ty - half)));
-                }
-            }
-            return true;
-        });
-    }
-
-    /** 安全解析整数，失败返回默认值。 */
-    private static int parseIntDefault(String s, int def) {
-        if (s == null || s.trim().isEmpty()) return def;
-        try { return Integer.parseInt(s.trim()); } catch (NumberFormatException e) { return def; }
-    }
-
-    private boolean isNodeFloatBtnVisibleForCurrentScreen(NodeFloatButtonConfig cfg) {
-        if (cfg == null) {
-            return false;
-        }
-        cfg.ensureDefaults();
-        if (!Boolean.TRUE.equals(cfg.buttonEnabled)) {
-            return false;
-        }
-        int[] screen = getScreenSizePx();
-        int sizePx = dp(cfg.sizeDp);
-        return cfg.posX >= 0
-                && cfg.posY >= 0
-                && cfg.posX + sizePx <= screen[0]
-                && cfg.posY + sizePx <= screen[1];
-    }
-
-    private void refreshNodeFloatButtonsForCurrentScreen() {
-        Map<String, NodeFloatButtonConfig> configs = nodeFloatBtnManager == null
-                ? Collections.emptyMap()
-                : new HashMap<>(nodeFloatBtnManager.getAllConfigs());
-        removeAllNodeFloatButtons();
-        for (NodeFloatButtonConfig cfg : configs.values()) {
-            if (cfg != null && Boolean.TRUE.equals(cfg.buttonEnabled)) {
-                addNodeFloatBtn(cfg);
-            }
-        }
-        refreshFloatBtnBadges();
-    }
-
-    /**
-     * 把一个节点悬浮按钮添加到 WindowManager，应用所有配置字段。
-     */
-    @SuppressLint("ClickableViewAccessibility")
-    private void addNodeFloatBtn(NodeFloatButtonConfig cfg) {
-        if (nodeFloatBtnViews.containsKey(cfg.operationId)) return;
-        cfg.ensureDefaults(); // 防止旧存档缺字段
-        if (!isNodeFloatBtnVisibleForCurrentScreen(cfg)) {
-            return;
-        }
-
-        View root = LayoutInflater.from(this).inflate(R.layout.window_node_float_btn, null);
-        FrameLayout container = root.findViewById(R.id.node_btn_container);
-        TextView label = root.findViewById(R.id.node_btn_label);
-
-        // 文字
-        String displayLabel = (cfg.labelText != null && !cfg.labelText.isEmpty())
-                ? cfg.labelText : abbreviate(cfg.operationName, 8);
-        label.setText(displayLabel);
-        label.setTextColor(cfg.textColor);
-
-        // 大小：覆盖 XML 中的 48dp 固定尺寸
-        int sizePx = dp(cfg.sizeDp);
-        ViewGroup.LayoutParams cLp = container.getLayoutParams();
-        cLp.width  = sizePx;
-        cLp.height = sizePx;
-        container.setLayoutParams(cLp);
-
-        // 圆形背景色
-        GradientDrawable bg = new GradientDrawable();
-        bg.setShape(GradientDrawable.OVAL);
-        bg.setColor(cfg.color);
-        container.setBackground(bg);
-
-        // 透明度作用于整个悬浮件根视图
-        root.setAlpha(cfg.alpha);
-
-        int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : WindowManager.LayoutParams.TYPE_PHONE;
-
-        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-        );
-        lp.gravity = Gravity.TOP | Gravity.START;
-        lp.x = cfg.posX;
-        lp.y = cfg.posY;
-
-        // 拖拽（含长按检测）
-        // 注意：setOnTouchListener 返回 true 会拦截所有事件，系统 setOnLongClickListener 失效，
-        // 因此长按逻辑统一由 DragTouchListener 内部计时完成。
-        container.setOnTouchListener(new DragTouchListener(lp, wm, root, this, true) {
-            @Override
-            protected void onDragEnd(int finalX, int finalY) {
-                NodeFloatButtonConfig updated = nodeFloatBtnManager.getConfig(cfg.operationId);
-                if (updated != null) {
-                    updated.posX = finalX;
-                    updated.posY = finalY;
-                    nodeFloatBtnManager.saveConfig(updated);
-                }
-            }
-
-            @Override
-            protected void onLongPress() {
-                showNodeFloatBtnMenu(container, cfg);
-            }
-        });
-
-        // 单击 → 运行节点
-        container.setOnClickListener(v -> runFromNodeFloatBtn(cfg));
-
-        wm.addView(root, lp);
-        nodeFloatBtnViews.put(cfg.operationId, new NodeFloatBtnEntry(root, lp));
-    }
-
-    /** 移除指定 operationId 的节点悬浮按钮（不删配置）。 */
-    private void removeNodeFloatBtn(String operationId) {
-        NodeFloatBtnEntry entry = nodeFloatBtnViews.remove(operationId);
-        if (entry != null) {
-            safeRemoveView(entry.rootView);
-        }
-    }
-
-    /** 移除所有节点悬浮按钮（服务销毁时调用）。 */
-    private void removeAllNodeFloatButtons() {
-        for (NodeFloatBtnEntry entry : nodeFloatBtnViews.values()) {
-            safeRemoveView(entry.rootView);
-        }
-        nodeFloatBtnViews.clear();
-    }
-
-    /** 服务启动时恢复所有已保存的节点悬浮按钮。 */
-    private void restoreNodeFloatButtons() {
-        if (nodeFloatBtnManager == null) return;
-        for (NodeFloatButtonConfig cfg : nodeFloatBtnManager.getAllConfigs().values()) {
-            if (cfg != null && Boolean.TRUE.equals(cfg.buttonEnabled)) {
-                addNodeFloatBtn(cfg);
-            }
-        }
-    }
-
-    private void ensureNodeFloatActionPopup() {
-        if (nodeFloatActionPopupWindow != null) {
-            return;
-        }
-        View popupView = LayoutInflater.from(this).inflate(R.layout.dialog_node_action_sheet, null);
-        nodeFloatActionPopupTitleView = popupView.findViewById(R.id.tv_action_title);
-        nodeFloatActionPopupListView = popupView.findViewById(R.id.rv_action_list);
-        if (nodeFloatActionPopupListView != null) {
-            nodeFloatActionPopupListView.setLayoutManager(new LinearLayoutManager(this));
-            nodeFloatActionSheetAdapter = new OperationPanelAdapter.ActionSheetAdapter(
-                    nodeFloatActionSheetItems,
-                    action -> {
-                        if (action == null || !action.enabled) {
-                            return;
-                        }
-                        if (nodeFloatActionPopupWindow != null) {
-                            nodeFloatActionPopupWindow.dismiss();
-                        }
-                        if (nodeFloatActionSheetHandler != null) {
-                            nodeFloatActionSheetHandler.accept(action);
-                        }
-                    });
-            nodeFloatActionPopupListView.setAdapter(nodeFloatActionSheetAdapter);
-        }
-        nodeFloatActionPopupWindow = new PopupWindow(
-                popupView,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                true);
-        nodeFloatActionPopupWindow.setOutsideTouchable(true);
-        nodeFloatActionPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        nodeFloatActionPopupWindow.setElevation(10f);
-    }
-
-    /**
-     * 长按悬浮按钮弹出可扩展菜单。
-     * 菜单项可随需求继续追加 ActionItem(id, title, desc, enabled)。
-     */
-    private void showNodeFloatBtnMenu(View anchor, NodeFloatButtonConfig cfg) {
-        ensureNodeFloatActionPopup();
-        if (nodeFloatActionPopupWindow == null
-                || nodeFloatActionPopupTitleView == null
-                || nodeFloatActionSheetAdapter == null) {
-            return;
-        }
-        nodeFloatActionPopupTitleView.setText(cfg.operationName);
-        nodeFloatActionSheetItems.clear();
-        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(1, "运行节点", "立即运行这个节点", true));
-        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(2, "配置修改", "弹出运行时配置，可切换成可视化表单", true));
-        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(3, "ConfigUI 设计", "拖动排序组件，设计这个节点的可视化配置界面", true));
-        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(4, "按钮设置", "修改文字、颜色、大小和位置", true));
-        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(5, "定位节点", "打开面板并高亮这个节点", true));
-        nodeFloatActionSheetItems.add(new OperationPanelAdapter.ActionItem(6, "移除悬浮按钮", "删除这个悬浮按钮（不影响节点）", true));
-        nodeFloatActionSheetHandler = action -> {
-            switch (action.id) {
-                case 1:
-                    runFromNodeFloatBtn(cfg);
-                    break;
-                case 2:
-                    showNodeRuntimeConfigDialog(cfg);
-                    break;
-                case 3:
-                    showConfigUiDesignerDialog(cfg);
-                    break;
-                case 4:
-                    OperationItem fakeItem = new OperationItem(cfg.operationName, cfg.operationId, "", 0);
-                    showNodeFloatBtnConfig(fakeItem);
-                    break;
-                case 5:
-                    navigateToNodeInPanel(cfg);
-                    break;
-                case 6:
-                    if (shouldRetainNodeConfigMetadata(cfg)) {
-                        cfg.buttonEnabled = false;
-                        nodeFloatBtnManager.saveConfig(cfg);
-                    } else {
-                        nodeFloatBtnManager.removeConfig(cfg.operationId);
-                    }
-                    removeNodeFloatBtn(cfg.operationId);
-                    refreshFloatBtnBadges();
-                    Toast.makeText(this, "已移除悬浮按钮", Toast.LENGTH_SHORT).show();
-                    break;
-                default:
-                    break;
-            }
-        };
-        nodeFloatActionSheetAdapter.notifyDataSetChanged();
-        if (nodeFloatActionPopupWindow.isShowing()) {
-            nodeFloatActionPopupWindow.dismiss();
-        }
-        nodeFloatActionPopupWindow.showAsDropDown(anchor, -dp(180), dp(4), Gravity.END);
-    }
-
-    /**
      * 打开/显示项目面板，导航到 cfg 对应的节点列表，并高亮选中该节点。
      */
     private void navigateToNodeInPanel(NodeFloatButtonConfig cfg) {
@@ -1277,6 +1240,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         configUiHelper.showNodeRuntimeConfigDialog(cfg);
     }
 
+    private void showNodeFloatBtnConfig(OperationItem item) {
+        nodeFloatButtonUiHelper.showNodeFloatBtnConfig(item);
+    }
+
     private void showConfigUiDesignerDialog(OperationItem item) {
         configUiHelper.showConfigUiDesignerDialog(item);
     }
@@ -1295,20 +1262,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
      */
     private void refreshFloatBtnBadges() {
         if (currentOperationAdapter == null) return;
-        currentOperationAdapter.setFloatBtnColors(buildFloatBtnColorMap());
+        currentOperationAdapter.setFloatBtnColors(nodeFloatButtonUiHelper.getFloatBtnColorMap());
     }
 
     /** 从 NodeFloatButtonManager 构建 operationId → 按钮颜色 的映射。 */
     private Map<String, Integer> buildFloatBtnColorMap() {
-        if (nodeFloatBtnManager == null) return Collections.emptyMap();
-        Map<String, NodeFloatButtonConfig> configs = nodeFloatBtnManager.getAllConfigs();
-        Map<String, Integer> result = new HashMap<>(configs.size());
-        for (Map.Entry<String, NodeFloatButtonConfig> e : configs.entrySet()) {
-            if (e.getValue() != null && Boolean.TRUE.equals(e.getValue().buttonEnabled)) {
-                result.put(e.getKey(), e.getValue().color);
-            }
-        }
-        return result;
+        return nodeFloatButtonUiHelper.getFloatBtnColorMap();
     }
 
     /**
@@ -1327,32 +1286,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             return;
         }
         if (cfg.hideWhileRunning) {
-            NodeFloatBtnEntry entry = nodeFloatBtnViews.get(cfg.operationId);
-            if (entry != null) {
-                entry.rootView.setVisibility(View.INVISIBLE);
-                scheduleRestoreNodeBtnVisibility(cfg.operationId, entry.rootView);
-            }
+            nodeFloatButtonUiHelper.hideButtonUntilScriptStops(cfg.operationId);
         }
         startOperationWithMode(
                 data.startOperation, data.ctx,
                 data.projectName, data.selectedTaskName,
                 data.selectedTaskOperations, false);
-    }
-
-    /** 每 500 ms 轮询一次，脚本结束后恢复悬浮按钮可见性。 */
-    private void scheduleRestoreNodeBtnVisibility(String operationId, View btnView) {
-        uiHandler.postDelayed(new Runnable() {
-            @Override
-            public void run() {
-                if (ScriptRunner.isCurrentScriptRunning()) {
-                    uiHandler.postDelayed(this, 500);
-                } else {
-                    if (nodeFloatBtnViews.containsKey(operationId)) {
-                        btnView.setVisibility(View.VISIBLE);
-                    }
-                }
-            }
-        }, 500);
     }
 
     /**
@@ -1525,62 +1464,22 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void toggleProjectPanel() {
-        if (!isProjectPanelVisible()) showProjectPanel();
-        else removeProjectPanel();
+        projectPanelUiHelper.toggleProjectPanel();
     }
 
     private void showProjectPanel() {
-        prepareProjectPanel();
-        adaptProjectPanelSizeToCurrentScreen(projectPanelLp);
-        hideProjectPanelDock();
-        projectPanelView.animate().cancel();
-        projectPanelView.setAlpha(1f);
-        projectPanelView.setTranslationX(0f);
-        projectPanelView.setTranslationY(0f);
-        attachProjectPanelIfNeeded();
-        clampPanelToScreen(projectPanelLp);
-        if (isProjectPanelAttached()) {
-            wm.updateViewLayout(projectPanelView, projectPanelLp);
-        }
-        projectPanelView.setVisibility(View.VISIBLE);
-        if (projectPanelContentDirty || getProjectPanelRecyclerView() == null || getProjectPanelRecyclerView().getAdapter() == null) {
-            refreshCurrentLevelList();
-        } else {
-            updateUIForLevel();
-        }
-        syncProjectPanelRuntimeUi();
+        projectPanelUiHelper.showProjectPanel();
     }
 
     private void showRuntimeAwareProjectPanel() {
-        hideRunningPanel();
         if (currentTaskDir != null) {
             currentLevel = NavigationLevel.OPERATION;
-            clearProjectPanelSearch();
         }
-        showProjectPanel();
-        if (currentLevel == NavigationLevel.OPERATION && currentTaskDir != null) {
-            loadOperations(currentTaskDir);
-        }
-        updateUIForLevel();
-        syncProjectPanelRuntimeUi();
-        if (!TextUtils.isEmpty(currentRunningOperationId)) {
-            focusCurrentRunningOperation();
-        }
+        projectPanelUiHelper.showRuntimeAwareProjectPanel();
     }
 
     private void removeProjectPanel() {
-        if (projectPanelView != null && isProjectPanelAttached()) {
-            projectPanelView.animate().cancel();
-            rememberSharedPanelPosition(projectPanelLp);
-            uiHandler.removeCallbacks(searchRefreshRunnable);
-            projectPanelView.setVisibility(View.GONE);
-            detachProjectPanel();
-        }
-        if (isScriptActiveForUi()) {
-            showProjectPanelDock();
-        } else {
-            hideProjectPanelDock();
-        }
+        projectPanelUiHelper.removeProjectPanel();
     }
 
     private boolean isScriptActiveForUi() {
@@ -1588,390 +1487,34 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void prepareProjectPanel() {
-        if (projectPanelView != null && projectPanelLp != null) {
-            return;
-        }
-
-        projectPanelView = LayoutInflater.from(this).inflate(R.layout.window_project_panel, null);
-
-        int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : WindowManager.LayoutParams.TYPE_PHONE;
-
-        projectPanelLp = new WindowManager.LayoutParams(
-                dp(PROJECT_PANEL_DEFAULT_W_DP), dp(PROJECT_PANEL_DEFAULT_H_DP),
-                type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-                        | WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED,
-                PixelFormat.TRANSLUCENT
-        );
-        projectPanelLp.gravity = Gravity.TOP | Gravity.START;
-        projectPanelLp.x = getSharedPanelX();
-        projectPanelLp.y = getSharedPanelY();
-        adaptProjectPanelSizeToCurrentScreen(projectPanelLp);
-
-        initDialogFactory();
-        setupProjectPanel();
-    }
-
-    private boolean isProjectPanelDockAttached() {
-        return projectPanelDockView != null && projectPanelDockView.getParent() != null;
-    }
-
-    private void prepareProjectPanelDock() {
-        if (projectPanelDockView != null && projectPanelDockLp != null) {
-            return;
-        }
-
-        projectPanelDockView = LayoutInflater.from(this).inflate(R.layout.overlay_project_panel_dock, null);
-
-        int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : WindowManager.LayoutParams.TYPE_PHONE;
-
-        projectPanelDockLp = new WindowManager.LayoutParams(
-                dp(PROJECT_PANEL_DOCK_W_DP), dp(PROJECT_PANEL_DOCK_H_DP),
-                type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
-                PixelFormat.TRANSLUCENT
-        );
-        projectPanelDockLp.gravity = Gravity.TOP | Gravity.START;
-
-        View dockTouch = projectPanelDockView.findViewById(R.id.project_panel_dock_touch);
-        dockTouch.setOnTouchListener(new View.OnTouchListener() {
-            private final int slopPx = ViewConfiguration.get(FloatWindowService.this).getScaledTouchSlop();
-            private float downRawX;
-            private float downRawY;
-            private boolean moved;
-
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                switch (event.getActionMasked()) {
-                    case MotionEvent.ACTION_DOWN:
-                        downRawX = event.getRawX();
-                        downRawY = event.getRawY();
-                        moved = false;
-                        return true;
-
-                    case MotionEvent.ACTION_MOVE:
-                        float dx = event.getRawX() - downRawX;
-                        float dy = event.getRawY() - downRawY;
-                        if (!moved && (Math.abs(dx) > slopPx || Math.abs(dy) > slopPx)) {
-                            moved = true;
-                        }
-                        if (moved && shouldRevealProjectPanelFromDock(dx, dy)) {
-                            revealProjectPanelFromDock();
-                            return true;
-                        }
-                        return true;
-
-                    case MotionEvent.ACTION_UP:
-                    case MotionEvent.ACTION_CANCEL:
-                        return true;
-
-                    default:
-                        return false;
-                }
-            }
-        });
-    }
-
-    private boolean shouldRevealProjectPanelFromDock(float dx, float dy) {
-        if (Math.abs(dx) < Math.abs(dy)) {
-            return false;
-        }
-        int triggerPx = dp(PROJECT_PANEL_DOCK_TRIGGER_DP);
-        return projectPanelDockOnLeft ? dx >= triggerPx : dx <= -triggerPx;
-    }
-
-    private int getRememberedProjectPanelWidthPx() {
-        if (projectPanelLp != null && projectPanelLp.width > 0) {
-            return projectPanelLp.width;
-        }
-        return dp(PROJECT_PANEL_DEFAULT_W_DP);
-    }
-
-    private int getRememberedProjectPanelHeightPx() {
-        if (projectPanelLp != null && projectPanelLp.height > 0) {
-            return projectPanelLp.height;
-        }
-        return dp(PROJECT_PANEL_DEFAULT_H_DP);
-    }
-
-    private void updateProjectPanelDockLayout() {
-        if (projectPanelDockView == null || projectPanelDockLp == null) {
-            return;
-        }
-        int[] screen = getScreenSizePx();
-        int dockWidth = dp(PROJECT_PANEL_DOCK_W_DP);
-        int dockHeight = dp(PROJECT_PANEL_DOCK_H_DP);
-        int margin = dp(PROJECT_PANEL_DOCK_MARGIN_DP);
-        int panelWidth = getRememberedProjectPanelWidthPx();
-        int panelHeight = getRememberedProjectPanelHeightPx();
-        int panelCenterX = getSharedPanelX() + (panelWidth / 2);
-
-        projectPanelDockOnLeft = panelCenterX <= (screen[0] / 2);
-        projectPanelDockLp.width = dockWidth;
-        projectPanelDockLp.height = dockHeight;
-        projectPanelDockLp.x = projectPanelDockOnLeft ? 0 : Math.max(0, screen[0] - dockWidth);
-
-        int desiredY = getSharedPanelY() + Math.max(0, (panelHeight - dockHeight) / 2);
-        int maxY = Math.max(margin, screen[1] - dockHeight - margin);
-        projectPanelDockLp.y = Math.max(margin, Math.min(desiredY, maxY));
-
-        View line = projectPanelDockView.findViewById(R.id.project_panel_dock_line);
-        if (line != null) {
-            FrameLayout.LayoutParams lineLp = (FrameLayout.LayoutParams) line.getLayoutParams();
-            lineLp.gravity = (projectPanelDockOnLeft ? Gravity.START : Gravity.END) | Gravity.CENTER_VERTICAL;
-            line.setLayoutParams(lineLp);
-        }
-    }
-
-    private void attachProjectPanelDockIfNeeded() {
-        if (projectPanelDockView == null || isProjectPanelDockAttached()) {
-            return;
-        }
-        wm.addView(projectPanelDockView, projectPanelDockLp);
-    }
-
-    private void detachProjectPanelDock() {
-        if (projectPanelDockView == null || !isProjectPanelDockAttached()) {
-            return;
-        }
-        try {
-            wm.removeView(projectPanelDockView);
-        } catch (Exception e) {
-            Log.w(TAG, "detach project dock failed", e);
-        }
-    }
-
-    private void showProjectPanelDock() {
-        if (!isScriptActiveForUi()) {
-            hideProjectPanelDock();
-            return;
-        }
-        adaptProjectPanelSizeToCurrentScreen(projectPanelLp);
-        prepareProjectPanelDock();
-        updateProjectPanelDockLayout();
-        attachProjectPanelDockIfNeeded();
-        if (projectPanelDockView != null) {
-            projectPanelDockView.animate().cancel();
-            projectPanelDockView.setAlpha(1f);
-            if (isProjectPanelDockAttached()) {
-                wm.updateViewLayout(projectPanelDockView, projectPanelDockLp);
-            }
-        }
-    }
-
-    private void hideProjectPanelDock() {
-        if (projectPanelDockView != null) {
-            projectPanelDockView.animate().cancel();
-        }
-        detachProjectPanelDock();
-    }
-
-    private void revealProjectPanelFromDock() {
-        if (!isScriptActiveForUi()) {
-            hideProjectPanelDock();
-            return;
-        }
-        prepareProjectPanel();
-        if (projectPanelLp != null) {
-            adaptProjectPanelSizeToCurrentScreen(projectPanelLp);
-            int[] screen = getScreenSizePx();
-            int margin = dp(8);
-            projectPanelLp.x = projectPanelDockOnLeft
-                    ? margin
-                    : Math.max(margin, screen[0] - projectPanelLp.width - margin);
-            if (projectPanelDockLp != null) {
-                projectPanelLp.y = projectPanelDockLp.y - Math.max(0, (projectPanelLp.height - projectPanelDockLp.height) / 2);
-            }
-            clampPanelToScreen(projectPanelLp);
-            rememberSharedPanelPosition(projectPanelLp);
-        }
-        hideProjectPanelDock();
-        showRuntimeAwareProjectPanel();
-        if (projectPanelView != null) {
-            float startOffset = projectPanelDockOnLeft ? -dp(28) : dp(28);
-            projectPanelView.setAlpha(0f);
-            projectPanelView.setTranslationX(startOffset);
-            projectPanelView.animate()
-                    .alpha(1f)
-                    .translationX(0f)
-                    .setDuration(180)
-                    .start();
-        }
+        projectPanelUiHelper.prepareProjectPanel();
     }
 
     private boolean isProjectPanelAttached() {
         return projectPanelView != null && projectPanelView.getParent() != null;
     }
 
-    private boolean isProjectPanelVisible() {
-        return projectPanelView != null
-                && isProjectPanelAttached()
-                && projectPanelView.getVisibility() == View.VISIBLE;
+    private void showProjectPanelDock() {
+        projectPanelUiHelper.showProjectPanelDock();
     }
 
-    private void attachProjectPanelIfNeeded() {
-        if (projectPanelView == null || isProjectPanelAttached()) {
-            return;
-        }
-        wm.addView(projectPanelView, projectPanelLp);
+    private void hideProjectPanelDock() {
+        projectPanelUiHelper.hideProjectPanelDock();
     }
 
-    private void detachProjectPanel() {
-        if (projectPanelView == null || !isProjectPanelAttached()) {
-            return;
-        }
-        try {
-            wm.removeView(projectPanelView);
-        } catch (Exception e) {
-            Log.w(TAG, "detach project panel failed", e);
-        }
-    }
-
-    private void setupProjectPanel() {
-        projectPanelView.findViewById(R.id.btn_close).setOnClickListener(v -> removeProjectPanel());
-        projectPanelView.findViewById(R.id.btn_back).setOnClickListener(v -> navigateBack());
-        projectPanelView.findViewById(R.id.btn_add).setOnClickListener(v -> showAddDialog());
-        projectPanelView.findViewById(R.id.btn_add).setOnLongClickListener(v -> {
-            if (currentLevel == NavigationLevel.PROJECT) {
-                importProjectInteractive();
-                return true;
-            }
-            return false;
-        });
-        projectPanelView.findViewById(R.id.btn_search).setOnClickListener(v -> toggleSearch());
-
-        EditText edtSearch = projectPanelView.findViewById(R.id.edt_search);
-        ImageView btnClearSearch = projectPanelView.findViewById(R.id.btn_clear_search);
-        btnClearSearch.setOnClickListener(v -> edtSearch.setText(""));
-        edtSearch.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
-                currentSearchQuery = s == null ? "" : s.toString();
-                uiHandler.removeCallbacks(searchRefreshRunnable);
-                uiHandler.postDelayed(searchRefreshRunnable, 120L);
-            }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-            }
-        });
-
-        projectPanelRecyclerView = projectPanelView.findViewById(R.id.rv_content);
-        if (projectPanelRecyclerView != null) {
-            projectPanelRecyclerView.setItemAnimator(null);
-            projectPanelRecyclerView.setItemViewCacheSize(12);
-        }
+    private void setupProjectPanelBusinessActions(View panelView) {
         ensureProjectPanelAdapters();
         projectPanelContentDirty = true;
-        
-        // 刷新按钮 - 重新加载当前 task 的 operations
-        View btnRefresh = projectPanelView.findViewById(R.id.btn_refresh);
-        if (btnRefresh != null) {
-            btnRefresh.setOnClickListener(v -> {
-                if (currentLevel == NavigationLevel.OPERATION && currentTaskDir != null) {
-                    showFlowGraphDialog();
-                } else {
-                    Toast.makeText(this, "请在 Operation 列表中打开流程图", Toast.LENGTH_SHORT).show();
-                }
-            });
-            btnRefresh.setOnLongClickListener(v -> {
-                if (currentLevel == NavigationLevel.PROJECT) {
-                    invalidateProjectListCache();
-                    loadProjects(true);
-                    Toast.makeText(this, "已刷新项目列表", Toast.LENGTH_SHORT).show();
-                    return true;
-                }
-                if (currentLevel == NavigationLevel.TASK && currentProjectDir != null) {
-                    invalidateTaskListCache(currentProjectDir);
-                    loadTasks(currentProjectDir, true);
-                    Toast.makeText(this, "已刷新 Task 列表", Toast.LENGTH_SHORT).show();
-                    return true;
-                }
-                if (currentLevel == NavigationLevel.OPERATION && currentTaskDir != null) {
-                    invalidateOperationListCache(currentTaskDir);
-                    reloadCurrentProject();
-                    loadOperations(currentTaskDir, true);
-                    Toast.makeText(this, "已刷新列表", Toast.LENGTH_SHORT).show();
-                }
-                return true;
-            });
-        }
-
-        DragTouchListener panelDragTouchListener =
-                new DragTouchListener(projectPanelLp, wm, projectPanelView, this, true);
-        View dragHeader = projectPanelView.findViewById(R.id.drag_header);
-        dragHeader.setOnTouchListener(panelDragTouchListener);
-        View dragHandle = projectPanelView.findViewById(R.id.drag_handle);
-        if (dragHandle != null) {
-            dragHandle.setOnTouchListener(panelDragTouchListener);
-        }
-        View breadcrumbLayout = projectPanelView.findViewById(R.id.breadcrumb_layout);
-        if (breadcrumbLayout != null) {
-            breadcrumbLayout.setOnTouchListener(panelDragTouchListener);
-        }
-        View runtimeStatusBar = projectPanelView.findViewById(R.id.runtime_status_bar);
-        if (runtimeStatusBar != null) {
-            runtimeStatusBar.setOnTouchListener(panelDragTouchListener);
-        }
-        View searchLayout = projectPanelView.findViewById(R.id.ly_search);
-        if (searchLayout != null) {
-            searchLayout.setOnTouchListener(panelDragTouchListener);
-        }
-        View footerDragZone = projectPanelView.findViewById(R.id.footer_drag_zone);
-        if (footerDragZone != null) {
-            footerDragZone.setOnTouchListener(panelDragTouchListener);
-        }
-        int[] footerButtonIds = new int[]{
-                R.id.btn_run,
-                R.id.btn_edit,
-                R.id.btn_move_up,
-                R.id.btn_move_down,
-                R.id.btn_batch
-        };
-        for (int footerButtonId : footerButtonIds) {
-            View footerButton = projectPanelView.findViewById(footerButtonId);
-            if (footerButton != null) {
-                footerButton.setOnTouchListener(panelDragTouchListener);
-            }
-        }
-        View emptyView = projectPanelView.findViewById(R.id.empty_view);
-        if (emptyView != null) {
-            emptyView.setOnTouchListener(panelDragTouchListener);
-        }
-        View resizeHandle = projectPanelView.findViewById(R.id.resize_handle);
-        if (resizeHandle != null) {
-            resizeHandle.setOnTouchListener(new PanelResizeTouchListener(
-                    projectPanelLp,
-                    wm,
-                    projectPanelView,
-                    this,
-                    PROJECT_PANEL_MIN_W_DP,
-                    PROJECT_PANEL_MIN_H_DP,
-                    PROJECT_PANEL_MAX_H_RATIO_LANDSCAPE
-            ));
-        }
 
 //       todo  这里加载projects
         loadProjects();
 
 //        todo 绑定运行按钮
-        TextView btnRun = projectPanelView.findViewById(R.id.btn_run);
-        TextView btnEdit = projectPanelView.findViewById(R.id.btn_edit);
-        TextView btnMoveUp = projectPanelView.findViewById(R.id.btn_move_up);
-        TextView btnMoveDown = projectPanelView.findViewById(R.id.btn_move_down);
-        TextView btnBatch = projectPanelView.findViewById(R.id.btn_batch);
+        TextView btnRun = panelView.findViewById(R.id.btn_run);
+        TextView btnEdit = panelView.findViewById(R.id.btn_edit);
+        TextView btnMoveUp = panelView.findViewById(R.id.btn_move_up);
+        TextView btnMoveDown = panelView.findViewById(R.id.btn_move_down);
+        TextView btnBatch = panelView.findViewById(R.id.btn_batch);
         btnBatch.setOnClickListener(v -> {
             if (currentLevel == NavigationLevel.OPERATION && isScriptActiveForUi()) {
                 removeProjectPanel();
@@ -2123,7 +1666,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             }
 
-            RecyclerView rv = projectPanelView.findViewById(R.id.rv_content);
+            RecyclerView rv = panelView.findViewById(R.id.rv_content);
             OperationPanelAdapter adapter = (OperationPanelAdapter) rv.getAdapter();
             if (adapter == null) return;
 
@@ -2516,155 +2059,23 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void updateUIForLevel() {
-        TextView tvTitle = projectPanelView.findViewById(R.id.tv_title);
-        ImageView btnBack = projectPanelView.findViewById(R.id.btn_back);
-        LinearLayout breadcrumbLayout = projectPanelView.findViewById(R.id.breadcrumb_layout);
-        TextView tvBreadcrumb = projectPanelView.findViewById(R.id.tv_breadcrumb);
-        TextView tvBreadcrumbLegacy = projectPanelView.findViewById(R.id.tv_breadcrumb_legacy);
-
-        switch (currentLevel) {
-            case PROJECT:
-                tvTitle.setText("Projects");
-                btnBack.setVisibility(View.GONE);
-                breadcrumbLayout.setVisibility(View.GONE);
-                if (tvBreadcrumb != null) {
-                    tvBreadcrumb.setVisibility(View.GONE);
-                    tvBreadcrumb.setText("");
-                }
-                if (tvBreadcrumbLegacy != null) {
-                    tvBreadcrumbLegacy.setText("");
-                }
-                break;
-            case TASK:
-                tvTitle.setText(currentProjectDir != null ? currentProjectDir.getName() : "Tasks");
-                btnBack.setVisibility(View.VISIBLE);
-                breadcrumbLayout.setVisibility(View.VISIBLE);
-                if (tvBreadcrumb != null) {
-                    tvBreadcrumb.setVisibility(View.VISIBLE);
-                    tvBreadcrumb.setText("Project");
-                }
-                if (tvBreadcrumbLegacy != null) {
-                    tvBreadcrumbLegacy.setText(currentProjectDir != null ? currentProjectDir.getName() : "");
-                }
-                break;
-            case OPERATION:
-                tvTitle.setText(currentTaskDir != null ? currentTaskDir.getName() : "Operations");
-                btnBack.setVisibility(View.VISIBLE);
-                breadcrumbLayout.setVisibility(View.VISIBLE);
-                String path = (currentProjectDir != null ? currentProjectDir.getName() : "") + " > " +
-                        (currentTaskDir != null ? currentTaskDir.getName() : "");
-                if (tvBreadcrumb != null) {
-                    tvBreadcrumb.setVisibility(View.VISIBLE);
-                    tvBreadcrumb.setText("Operation");
-                }
-                if (tvBreadcrumbLegacy != null) {
-                    tvBreadcrumbLegacy.setText(path);
-                }
-                break;
-        }
-        refreshProjectPanelFooterState();
-        syncProjectPanelRuntimeUi();
+        projectPanelUiHelper.updateUIForLevel();
     }
 
     private void refreshProjectPanelFooterState() {
-        if (projectPanelView == null) {
-            return;
-        }
-        TextView btnRun = projectPanelView.findViewById(R.id.btn_run);
-        TextView btnEdit = projectPanelView.findViewById(R.id.btn_edit);
-        TextView btnMoveUp = projectPanelView.findViewById(R.id.btn_move_up);
-        TextView btnMoveDown = projectPanelView.findViewById(R.id.btn_move_down);
-        TextView btnBatch = projectPanelView.findViewById(R.id.btn_batch);
-        if (btnRun == null || btnEdit == null || btnMoveUp == null || btnMoveDown == null || btnBatch == null) {
-            return;
-        }
-
-        boolean runtimeMode = currentLevel == NavigationLevel.OPERATION && isScriptActiveForUi();
-        if (runtimeMode) {
-            btnRun.setText(isPaused ? "继续" : "暂停");
-            btnEdit.setText("停止");
-            btnBatch.setText("收起");
-            btnMoveUp.setVisibility(View.GONE);
-            btnMoveDown.setVisibility(View.GONE);
-            btnBatch.setVisibility(View.VISIBLE);
-            return;
-        }
-
-        btnMoveUp.setVisibility(View.VISIBLE);
-        btnMoveDown.setVisibility(View.VISIBLE);
-        btnBatch.setVisibility(View.VISIBLE);
-        if (operationBatchMode) {
-            btnRun.setText("删除选中(" + batchSelectedOperationIds.size() + ")");
-            btnEdit.setText("退出批量");
-            btnBatch.setText("批量中");
-        } else {
-            btnRun.setText("▶ 运行");
-            btnEdit.setText("✎ 编辑");
-            btnMoveUp.setText("上移");
-            btnMoveDown.setText("下移");
-            btnBatch.setText("批量");
-        }
+        projectPanelUiHelper.refreshProjectPanelFooterState();
     }
 
     private void syncProjectPanelRuntimeUi() {
-        if (projectPanelView == null) {
-            return;
-        }
-        View runtimeBar = projectPanelView.findViewById(R.id.runtime_status_bar);
-        TextView tvStatus = projectPanelView.findViewById(R.id.tv_runtime_status);
-        TextView tvProgress = projectPanelView.findViewById(R.id.tv_runtime_progress);
-        TextView tvDetail = projectPanelView.findViewById(R.id.tv_runtime_detail);
-        View dot = projectPanelView.findViewById(R.id.runtime_status_dot);
-        if (runtimeBar == null || tvStatus == null || tvProgress == null || tvDetail == null || dot == null) {
-            return;
-        }
-
-        boolean visible = currentLevel == NavigationLevel.OPERATION && isScriptActiveForUi();
-        runtimeBar.setVisibility(visible ? View.VISIBLE : View.GONE);
-        if (!visible) {
-            refreshProjectPanelFooterState();
-            return;
-        }
-
-        tvStatus.setText(runtimeStatusText);
-        tvStatus.setTextColor(runtimeStatusColor);
-        dot.setBackgroundColor(runtimeStatusColor);
-        tvProgress.setText(String.format(Locale.getDefault(), "%d/%d",
-                Math.max(0, currentOperationIndex),
-                Math.max(0, totalOperationCount)));
-
-        String detail = !TextUtils.isEmpty(currentRunningOperationName)
-                ? "当前节点: " + currentRunningOperationName
-                : "当前任务: " + (TextUtils.isEmpty(currentRunningTask) ? "-" : currentRunningTask);
-        if (!TextUtils.isEmpty(currentRunningProject)) {
-            detail = currentRunningProject + " / " + detail;
-        }
-        tvDetail.setText(detail);
-        refreshProjectPanelFooterState();
+        projectPanelUiHelper.syncProjectPanelRuntimeUi();
     }
 
     private void focusCurrentRunningOperation() {
-        if (currentOperationAdapter == null || TextUtils.isEmpty(currentRunningOperationId)) {
-            Toast.makeText(this, "当前没有可定位的运行节点", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        currentOperationAdapter.selectById(currentRunningOperationId);
-        RecyclerView rv = getProjectPanelRecyclerView();
-        int position = currentOperationAdapter.findPositionById(currentRunningOperationId);
-        if (rv != null && position >= 0) {
-            rv.scrollToPosition(position);
-        }
+        projectPanelUiHelper.focusCurrentRunningOperation();
     }
 
     private void toggleSearch() {
-        LinearLayout lySearch = projectPanelView.findViewById(R.id.ly_search);
-        if (lySearch.getVisibility() == View.VISIBLE) {
-            lySearch.setVisibility(View.GONE);
-        } else {
-            lySearch.setVisibility(View.VISIBLE);
-            EditText edtSearch = projectPanelView.findViewById(R.id.edt_search);
-            edtSearch.requestFocus();
-        }
+        projectPanelUiHelper.toggleSearch();
     }
 
     // ==================== Dialog Factory 初始化 ====================
@@ -4166,15 +3577,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void clearProjectPanelSearch() {
-        currentSearchQuery = "";
-        if (projectPanelView == null) {
-            return;
-        }
-        EditText edtSearch = projectPanelView.findViewById(R.id.edt_search);
-        if (edtSearch != null && edtSearch.length() > 0) {
-            uiHandler.removeCallbacks(searchRefreshRunnable);
-            edtSearch.setText("");
-        }
+        projectPanelUiHelper.clearProjectPanelSearch();
     }
 
     private void invalidateProjectListCache() {
@@ -4771,18 +4174,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         return (int) (dp * getResources().getDisplayMetrics().density + 0.5f);
     }
 
-    // ==================== Phase 4A: Flow Graph double-tap wiring ====================
-
-    /** Called from showFlowGraphDialog to wire double-tap → edit directly */
-    private void wireFlowGraphDoubleTap(FlowGraphView graphView) {
-        graphView.setOnNodeDoubleTapListener(node -> {
-            if (node == null) return;
-            showEditOperationDialog(
-                    new OperationItem(node.name, node.id, node.type, node.order - 1),
-                    currentOperationAdapter);
-        });
-    }
-
     // ==================== Phase 4B: Execution Step Overlay ====================
     // 实现已迁移至 StepAndDelayOverlayManager，此处保留薄封装供内部调用。
 
@@ -5208,1153 +4599,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         projectPanelContentDirty = true;
     }
 
-    private static class DragTouchListener implements View.OnTouchListener {
-        private static final long FRAME_INTERVAL_MS = 16L;
-        private final WindowManager.LayoutParams lp;
-        private final WindowManager wm;
-        private final View targetView;
-        private final FloatWindowService service;
-        private final boolean keepInScreen;
-
-        private float downRawX, downRawY;
-        private int startX, startY;
-
-        private boolean moved = false;
-        private boolean longPressFired = false;
-        private final int slopPx;
-        private long lastUpdateMs;
-        private int pendingX;
-        private int pendingY;
-
-        private final android.os.Handler longPressHandler =
-                new android.os.Handler(android.os.Looper.getMainLooper());
-        private Runnable longPressRunnable;
-        private final long longPressTimeoutMs =
-                android.view.ViewConfiguration.getLongPressTimeout();
-
-        DragTouchListener(WindowManager.LayoutParams lp, WindowManager wm, View targetView, FloatWindowService service) {
-            this(lp, wm, targetView, service, false);
-        }
-
-        DragTouchListener(WindowManager.LayoutParams lp, WindowManager wm, View targetView, FloatWindowService service,
-                          boolean keepInScreen) {
-            this.lp = lp;
-            this.wm = wm;
-            this.targetView = targetView;
-            this.service = service;
-            this.keepInScreen = keepInScreen;
-            this.slopPx = android.view.ViewConfiguration.get(service).getScaledTouchSlop();
-        }
-
-        @Override
-        public boolean onTouch(View v, MotionEvent e) {
-            switch (e.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    moved = false;
-                    longPressFired = false;
-                    downRawX = e.getRawX();
-                    downRawY = e.getRawY();
-                    startX = lp.x;
-                    startY = lp.y;
-                    pendingX = lp.x;
-                    pendingY = lp.y;
-                    lastUpdateMs = 0L;
-                    setDraggingVisualState(true);
-                    longPressRunnable = () -> {
-                        if (!moved) {
-                            longPressFired = true;
-                            v.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS);
-                            onLongPress();
-                        }
-                    };
-                    longPressHandler.postDelayed(longPressRunnable, longPressTimeoutMs);
-                    return true;
-
-                case MotionEvent.ACTION_MOVE: {
-                    float dx = e.getRawX() - downRawX;
-                    float dy = e.getRawY() - downRawY;
-
-                    if (!moved && (Math.abs(dx) > slopPx || Math.abs(dy) > slopPx)) {
-                        moved = true;
-                        cancelLongPress();
-                    }
-
-                    if (moved) {
-                        int nextX = startX + (int) dx;
-                        int nextY = startY + (int) dy;
-                        if (keepInScreen) {
-                            int[] screen = service.getScreenSizePx();
-                            int margin = service.dp(6);
-                            int viewW = Math.max(targetView.getWidth(), 1);
-                            int viewH = Math.max(targetView.getHeight(), 1);
-                            int maxX = Math.max(margin, screen[0] - viewW - margin);
-                            int maxY = Math.max(margin, screen[1] - viewH - margin);
-                            nextX = Math.max(margin, Math.min(nextX, maxX));
-                            nextY = Math.max(margin, Math.min(nextY, maxY));
-                        }
-                        pendingX = nextX;
-                        pendingY = nextY;
-                        long now = android.os.SystemClock.uptimeMillis();
-                        if (lastUpdateMs == 0L || now - lastUpdateMs >= FRAME_INTERVAL_MS) {
-                            applyPendingPosition();
-                            lastUpdateMs = now;
-                        }
-                    }
-                    return true;
-                }
-
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    cancelLongPress();
-                    if (moved) {
-                        applyPendingPosition();
-                        onDragEnd(lp.x, lp.y);
-                    }
-                    setDraggingVisualState(false);
-                    if (!moved && !longPressFired) {
-                        v.performClick();
-                    }
-                    return true;
-            }
-            return false;
-        }
-
-        private void cancelLongPress() {
-            if (longPressRunnable != null) {
-                longPressHandler.removeCallbacks(longPressRunnable);
-                longPressRunnable = null;
-            }
-        }
-
-        /** 拖拽结束回调，子类可覆盖以持久化位置。 */
-        protected void onDragEnd(int finalX, int finalY) {}
-
-        /** 长按回调，子类可覆盖以响应长按手势。 */
-        protected void onLongPress() {}
-
-        private void applyPendingPosition() {
-            if (lp.x == pendingX && lp.y == pendingY) {
-                return;
-            }
-            lp.x = pendingX;
-            lp.y = pendingY;
-            wm.updateViewLayout(targetView, lp);
-        }
-
-        private void setDraggingVisualState(boolean dragging) {
-            targetView.setLayerType(dragging ? View.LAYER_TYPE_HARDWARE : View.LAYER_TYPE_NONE, null);
-            View header = targetView.findViewById(R.id.drag_header);
-            if (header != null) {
-                header.setAlpha(dragging ? 0.94f : 1f);
-            }
-            RecyclerView rv = targetView.findViewById(R.id.rv_content);
-            if (rv != null) {
-                rv.suppressLayout(dragging);
-            }
-        }
-    }
-
-    private static class PanelResizeTouchListener implements View.OnTouchListener {
-        private static final long FRAME_INTERVAL_MS = 16L;
-        private final WindowManager.LayoutParams lp;
-        private final WindowManager wm;
-        private final View targetView;
-        private final FloatWindowService service;
-        private final int minWidthDp;
-        private final int minHeightDp;
-        private final float landscapeMaxHeightRatio;
-
-        private float downRawX;
-        private float downRawY;
-        private int startW;
-        private int startH;
-        private int pendingW;
-        private int pendingH;
-        private long lastUpdateMs;
-
-        PanelResizeTouchListener(WindowManager.LayoutParams lp, WindowManager wm, View targetView,
-                                 FloatWindowService service, int minWidthDp, int minHeightDp) {
-            this(lp, wm, targetView, service, minWidthDp, minHeightDp, 1f);
-        }
-
-        PanelResizeTouchListener(WindowManager.LayoutParams lp, WindowManager wm, View targetView,
-                                 FloatWindowService service, int minWidthDp, int minHeightDp,
-                                 float landscapeMaxHeightRatio) {
-            this.lp = lp;
-            this.wm = wm;
-            this.targetView = targetView;
-            this.service = service;
-            this.minWidthDp = minWidthDp;
-            this.minHeightDp = minHeightDp;
-            this.landscapeMaxHeightRatio = landscapeMaxHeightRatio;
-        }
-
-        @Override
-        public boolean onTouch(View v, MotionEvent e) {
-            switch (e.getActionMasked()) {
-                case MotionEvent.ACTION_DOWN:
-                    downRawX = e.getRawX();
-                    downRawY = e.getRawY();
-                    startW = lp.width;
-                    startH = lp.height;
-                    pendingW = lp.width;
-                    pendingH = lp.height;
-                    lastUpdateMs = 0L;
-                    setResizingVisualState(true);
-                    return true;
-
-                case MotionEvent.ACTION_MOVE: {
-                    int[] screen = service.getScreenSizePx();
-                    int minW = service.dp(minWidthDp);
-                    int minH = service.dp(minHeightDp);
-                    int newW = startW + (int) (e.getRawX() - downRawX);
-                    int newH = startH + (int) (e.getRawY() - downRawY);
-                    int maxH = screen[1] - service.dp(24);
-                    if (landscapeMaxHeightRatio > 0f && screen[0] > screen[1]) {
-                        maxH = Math.min(maxH, Math.max(minH, (int) (screen[1] * landscapeMaxHeightRatio)));
-                    }
-                    pendingW = Math.max(minW, Math.min(newW, screen[0]));
-                    pendingH = Math.max(minH, Math.min(newH, maxH));
-                    long now = android.os.SystemClock.uptimeMillis();
-                    if (lastUpdateMs == 0L || now - lastUpdateMs >= FRAME_INTERVAL_MS) {
-                        applyPendingSize();
-                        lastUpdateMs = now;
-                    }
-                    return true;
-                }
-
-                case MotionEvent.ACTION_UP:
-                case MotionEvent.ACTION_CANCEL:
-                    applyPendingSize();
-                    setResizingVisualState(false);
-                    return true;
-            }
-            return false;
-        }
-
-        private void applyPendingSize() {
-            if (lp.width == pendingW && lp.height == pendingH) {
-                return;
-            }
-            lp.width = pendingW;
-            lp.height = pendingH;
-            service.clampPanelToScreen(lp);
-            wm.updateViewLayout(targetView, lp);
-        }
-
-        private void setResizingVisualState(boolean resizing) {
-            targetView.setLayerType(resizing ? View.LAYER_TYPE_HARDWARE : View.LAYER_TYPE_NONE, null);
-            View handle = targetView.findViewById(R.id.resize_handle);
-            if (handle != null) {
-                handle.setAlpha(resizing ? 0.8f : 1f);
-            }
-            RecyclerView rv = targetView.findViewById(R.id.rv_content);
-            if (rv != null) {
-                rv.suppressLayout(resizing);
-            }
-        }
-    }
-
-    private static class ResizeTouchListener implements View.OnTouchListener {
-        private final boolean isTopLeft;
-        private final FloatWindowService service;
-
-        private float downRawX, downRawY;
-        private int startW, startH;
-        private int startX, startY;
-
-        ResizeTouchListener(boolean isTopLeft) {
-            this.isTopLeft = isTopLeft;
-            this.service = null;
-        }
-
-        @Override
-        public boolean onTouch(View v, MotionEvent e) {
-            return false;
-        }
-    }
-
     // OperationItem 已提取至独立文件 com.auto.master.floatwin.OperationItem
-
-    private static class OperationClipboardEntry {
-        final JSONObject operationJson;
-        final String name;
-        final String sourceTaskPath;
-        final long createdAt;
-
-        OperationClipboardEntry(JSONObject operationJson, String name, String sourceTaskPath, long createdAt) {
-            this.operationJson = operationJson;
-            this.name = name;
-            this.sourceTaskPath = sourceTaskPath;
-            this.createdAt = createdAt;
-        }
-    }
-
-    private static class ProjectListItem {
-        final File dir;
-        final int taskCount;
-        final long lastModified;
-
-        ProjectListItem(File dir, int taskCount, long lastModified) {
-            this.dir = dir;
-            this.taskCount = taskCount;
-            this.lastModified = lastModified;
-        }
-    }
-
-    static class ProjectPanelAdapter extends RecyclerView.Adapter<ProjectPanelAdapter.ViewHolder> {
-        interface OnItemClickListener {
-            void onItemClick(ProjectListItem item);
-        }
-
-        interface OnItemActionListener {
-            void onMenuClick(ProjectListItem item, View anchor);
-        }
-
-        private final List<ProjectListItem> projects;
-        private final OnItemClickListener listener;
-        private final OnItemActionListener actionListener;
-
-        ProjectPanelAdapter(
-                List<ProjectListItem> projects,
-                OnItemClickListener listener,
-                OnItemActionListener actionListener) {
-            this.projects = new ArrayList<>(projects);
-            this.listener = listener;
-            this.actionListener = actionListener;
-            setHasStableIds(true);
-        }
-
-        void submitProjects(List<ProjectListItem> items) {
-            List<ProjectListItem> newItems = items == null ? Collections.emptyList() : new ArrayList<>(items);
-            DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
-                @Override
-                public int getOldListSize() {
-                    return projects.size();
-                }
-
-                @Override
-                public int getNewListSize() {
-                    return newItems.size();
-                }
-
-                @Override
-                public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-                    return TextUtils.equals(
-                            projects.get(oldItemPosition).dir.getAbsolutePath(),
-                            newItems.get(newItemPosition).dir.getAbsolutePath());
-                }
-
-                @Override
-                public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-                    ProjectListItem oldItem = projects.get(oldItemPosition);
-                    ProjectListItem newItem = newItems.get(newItemPosition);
-                    return oldItem.taskCount == newItem.taskCount
-                            && oldItem.lastModified == newItem.lastModified
-                            && TextUtils.equals(oldItem.dir.getName(), newItem.dir.getName());
-                }
-            });
-            projects.clear();
-            projects.addAll(newItems);
-            diffResult.dispatchUpdatesTo(this);
-        }
-
-        @NonNull
-        @Override
-        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_project_folder_panel, parent, false);
-            return new ViewHolder(v, listener, actionListener);
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            ProjectListItem project = projects.get(position);
-            holder.bind(project);
-        }
-
-        @Override
-        public int getItemCount() {
-            return projects.size();
-        }
-
-        @Override
-        public long getItemId(int position) {
-            return projects.get(position).dir.getAbsolutePath().hashCode();
-        }
-
-        @Override
-        public int getItemViewType(int position) {
-            return PROJECT_PANEL_VIEW_TYPE_PROJECT;
-        }
-
-        static class ViewHolder extends RecyclerView.ViewHolder {
-            TextView name;
-            TextView info;
-            ImageView moreOptions;
-            private ProjectListItem currentProject;
-
-            ViewHolder(View itemView, OnItemClickListener listener, OnItemActionListener actionListener) {
-                super(itemView);
-                name = itemView.findViewById(R.id.folder_name);
-                info = itemView.findViewById(R.id.folder_info);
-                moreOptions = itemView.findViewById(R.id.more_options);
-
-                itemView.setOnClickListener(v -> {
-                    if (currentProject != null && listener != null) {
-                        listener.onItemClick(currentProject);
-                    }
-                });
-
-                moreOptions.setOnClickListener(v -> {
-                    if (currentProject != null && actionListener != null) {
-                        actionListener.onMenuClick(currentProject, v);
-                    }
-                });
-            }
-
-            void bind(ProjectListItem project) {
-                currentProject = project;
-                name.setText(project.dir.getName());
-                info.setVisibility(View.VISIBLE);
-                info.setText(project.taskCount + " tasks");
-                moreOptions.setVisibility(View.VISIBLE);
-            }
-        }
-    }
-
-    static class TaskPanelAdapter extends RecyclerView.Adapter<TaskPanelAdapter.ViewHolder> {
-        interface OnItemClickListener {
-            void onItemClick(File file);
-        }
-
-        interface OnItemActionListener {
-            void onMenuClick(File file, View anchor);
-        }
-
-        private final List<File> items;
-        private final OnItemClickListener listener;
-        private final OnItemActionListener actionListener;
-
-        TaskPanelAdapter(
-                List<File> items,
-                OnItemClickListener listener,
-                OnItemActionListener actionListener) {
-            this.items = new ArrayList<>(items);
-            this.listener = listener;
-            this.actionListener = actionListener;
-            setHasStableIds(true);
-        }
-
-        void submitItems(List<File> newItems) {
-            List<File> targetItems = newItems == null ? Collections.emptyList() : new ArrayList<>(newItems);
-            DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
-                @Override
-                public int getOldListSize() {
-                    return items.size();
-                }
-
-                @Override
-                public int getNewListSize() {
-                    return targetItems.size();
-                }
-
-                @Override
-                public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-                    return TextUtils.equals(
-                            items.get(oldItemPosition).getAbsolutePath(),
-                            targetItems.get(newItemPosition).getAbsolutePath());
-                }
-
-                @Override
-                public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-                    File oldItem = items.get(oldItemPosition);
-                    File newItem = targetItems.get(newItemPosition);
-                    return oldItem.isDirectory() == newItem.isDirectory()
-                            && oldItem.lastModified() == newItem.lastModified()
-                            && oldItem.length() == newItem.length()
-                            && TextUtils.equals(oldItem.getName(), newItem.getName());
-                }
-            });
-            items.clear();
-            items.addAll(targetItems);
-            diffResult.dispatchUpdatesTo(this);
-        }
-
-        @NonNull
-        @Override
-        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_project_folder_panel, parent, false);
-            return new ViewHolder(v, listener, actionListener);
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            File file = items.get(position);
-            holder.bind(file);
-        }
-
-        @Override
-        public int getItemCount() {
-            return items.size();
-        }
-
-        @Override
-        public long getItemId(int position) {
-            return items.get(position).getAbsolutePath().hashCode();
-        }
-
-        @Override
-        public int getItemViewType(int position) {
-            return PROJECT_PANEL_VIEW_TYPE_TASK;
-        }
-
-        static class ViewHolder extends RecyclerView.ViewHolder {
-            ImageView icon;
-            TextView name;
-            TextView info;
-            ImageView editIcon;
-            ImageView moreOptions;
-            private File currentFile;
-
-            ViewHolder(View itemView, OnItemClickListener listener, OnItemActionListener actionListener) {
-                super(itemView);
-                icon = itemView.findViewById(R.id.folder_icon);
-                name = itemView.findViewById(R.id.folder_name);
-                info = itemView.findViewById(R.id.folder_info);
-                editIcon = itemView.findViewById(R.id.edit_icon);
-                moreOptions = itemView.findViewById(R.id.more_options);
-
-                itemView.setOnClickListener(v -> {
-                    if (currentFile != null && listener != null) {
-                        listener.onItemClick(currentFile);
-                    }
-                });
-
-                moreOptions.setOnClickListener(v -> {
-                    if (currentFile != null && currentFile.isDirectory() && actionListener != null) {
-                        actionListener.onMenuClick(currentFile, v);
-                    }
-                });
-            }
-
-            void bind(File file) {
-                currentFile = file;
-                name.setText(file.getName());
-                info.setVisibility(View.GONE);
-
-                if (file.isDirectory()) {
-                    icon.setImageResource(R.drawable.ic_folder_colored);
-                    editIcon.setVisibility(View.GONE);
-                    moreOptions.setVisibility(View.VISIBLE);
-                } else {
-                    icon.setImageResource(R.drawable.ic_file);
-                    editIcon.setVisibility(View.VISIBLE);
-                    moreOptions.setVisibility(View.GONE);
-                }
-            }
-        }
-    }
-
-    static class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.ViewHolder> {
-        interface OnItemClickListener {
-            void onItemClick(OperationItem item);
-        }
-
-        interface OnActionListener {
-            void onEdit(OperationItem item);
-            void onCopy(OperationItem item);
-            void onPasteAfter(OperationItem item);
-            void onInsertBefore(OperationItem item);
-            void onDelete(OperationItem item);
-            void onMoveUp(OperationItem item);
-            void onMoveDown(OperationItem item);
-            boolean canPaste();
-            void onConfigUi(OperationItem item);
-            void onFloatButton(OperationItem item);
-        }
-
-        private static class ActionItem {
-            final int id;
-            final String title;
-            final String desc;
-            final boolean enabled;
-
-            ActionItem(int id, String title, String desc, boolean enabled) {
-                this.id = id;
-                this.title = title;
-                this.desc = desc;
-                this.enabled = enabled;
-            }
-        }
-
-        interface OnBatchSelectionListener {
-            void onBatchSelectionChanged(Set<String> selectedIds);
-        }
-
-        private final List<OperationItem> operations;
-        private final OnItemClickListener listener;
-        private final OnActionListener actionListener;
-        private final OnBatchSelectionListener batchSelectionListener;
-        private boolean batchMode = false;
-        private final Set<String> batchSelectedIds = new HashSet<>();
-
-        private AtomicInteger selectedPosition = new AtomicInteger(-1);  // -1 表示未选中
-        private String runningOperationId = null;           // 当前正在后台执行的（红色高亮）
-        private int prevPos = -1;
-        /** operationId → 悬浮按钮颜色，用于显示跟随按钮颜色的小标识点。 */
-        private Map<String, Integer> floatBtnColorMap = Collections.emptyMap();
-
-        /**
-         * 这里后台运行的时候 需要拿到 adapter 然后 改变 runningPosition 为对应的 index 改成 id
-         *
-         */
-
-        OperationPanelAdapter(List<OperationItem> operations,
-                             OnItemClickListener listener,
-                             OnActionListener actionListener,
-                             OnBatchSelectionListener batchSelectionListener) {
-            this.operations = new ArrayList<>(operations);
-            this.listener = listener;
-            this.actionListener = actionListener;
-            this.batchSelectionListener = batchSelectionListener;
-            setHasStableIds(true);
-        }
-
-        /**
-         * 静默写入 id→颜色 映射，不触发任何 notify。
-         * 必须在 submitOperations() 之前调用，让 DiffUtil 绑定时数据就绪。
-         */
-        void initFloatBtnColors(Map<String, Integer> colorMap) {
-            floatBtnColorMap = (colorMap == null)
-                    ? Collections.<String, Integer>emptyMap()
-                    : new HashMap<>(colorMap);
-        }
-
-        /**
-         * 增量更新 id→颜色 映射，只 notify 发生变化的条目。
-         * 在增删/修改悬浮按钮配置后调用，供外部实时刷新标识点颜色。
-         */
-        void setFloatBtnColors(Map<String, Integer> colorMap) {
-            Map<String, Integer> next = (colorMap == null)
-                    ? Collections.<String, Integer>emptyMap()
-                    : new HashMap<>(colorMap);
-            if (next.equals(floatBtnColorMap)) return; // 完全一致则跳过
-            // 计算变化范围：旧 + 新的 key 并集
-            Set<String> changed = new HashSet<>(floatBtnColorMap.keySet());
-            changed.addAll(next.keySet());
-            floatBtnColorMap = next;
-            for (int i = 0; i < operations.size(); i++) {
-                OperationItem op = operations.get(i);
-                if (op != null && changed.contains(op.id)) {
-                    notifyItemChanged(i);
-                }
-            }
-        }
-
-        void submitOperations(List<OperationItem> newItems) {
-            String selectedId = null;
-            OperationItem selected = getSelectedItem();
-            if (selected != null) {
-                selectedId = selected.id;
-            }
-            List<OperationItem> targetItems = newItems == null ? Collections.emptyList() : new ArrayList<>(newItems);
-            DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
-                @Override
-                public int getOldListSize() {
-                    return operations.size();
-                }
-
-                @Override
-                public int getNewListSize() {
-                    return targetItems.size();
-                }
-
-                @Override
-                public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-                    OperationItem oldItem = operations.get(oldItemPosition);
-                    OperationItem newItem = targetItems.get(newItemPosition);
-                    return TextUtils.equals(oldItem.id, newItem.id)
-                            && oldItem.index == newItem.index;
-                }
-
-                @Override
-                public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-                    OperationItem oldItem = operations.get(oldItemPosition);
-                    OperationItem newItem = targetItems.get(newItemPosition);
-                    return oldItem.index == newItem.index
-                            && TextUtils.equals(oldItem.id, newItem.id)
-                            && TextUtils.equals(oldItem.name, newItem.name)
-                            && TextUtils.equals(oldItem.type, newItem.type);
-                }
-            });
-            operations.clear();
-            operations.addAll(targetItems);
-            if (!TextUtils.isEmpty(selectedId)) {
-                selectedPosition.set(findPositionByKey(selectedId));
-            } else if (selectedPosition.get() >= operations.size()) {
-                selectedPosition.set(-1);
-            }
-            Set<String> validIds = new HashSet<>();
-            for (OperationItem item : operations) {
-                if (item != null && !TextUtils.isEmpty(item.id)) {
-                    validIds.add(item.id);
-                }
-            }
-            batchSelectedIds.retainAll(validIds);
-            prevPos = findPositionByKey(runningOperationId);
-            notifyBatchChanged();
-            diffResult.dispatchUpdatesTo(this);
-        }
-
-        @NonNull
-        @Override
-        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View v = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_operation_compact, parent, false);
-            return new ViewHolder(v);
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull ViewHolder holder, @SuppressLint("RecyclerView") int position) {
-            OperationItem item = operations.get(position);
-            holder.opIndex.setText(String.format(Locale.getDefault(), "%02d", position + 1));
-            holder.name.setText(item.name);
-            holder.typeText.setText(getOperationTypeDisplayName(item.type));
-            holder.opId.setText(item.id);
-
-            boolean isRunning = runningOperationId != null && runningOperationId.equals(item.id);
-            boolean isSelected = (position == selectedPosition.get());
-            boolean isBatchChecked = batchSelectedIds.contains(item.id);
-
-            // 设置选中状态背景
-            holder.itemView.setSelected(isSelected);
-            
-            // 选中指示条
-            if (holder.selectionIndicator != null) {
-                holder.selectionIndicator.setVisibility(isSelected ? View.VISIBLE : View.INVISIBLE);
-            }
-            
-            // 运行状态高亮
-            if (isRunning) {
-                holder.itemView.setBackgroundColor(0x66EF9A9A);
-                if (holder.selectionIndicator != null) {
-                    holder.selectionIndicator.setBackgroundColor(0xFFF44336); // 红色指示条
-                }
-            } else if (isSelected) {
-                holder.itemView.setBackgroundColor(0xFFE8F0FE);  // 浅蓝色背景
-                if (holder.selectionIndicator != null) {
-                    holder.selectionIndicator.setBackgroundColor(0xFF3c6de4); // 蓝色指示条
-                }
-            } else {
-                holder.itemView.setBackgroundColor(Color.TRANSPARENT);
-                if (holder.selectionIndicator != null) {
-                    holder.selectionIndicator.setBackgroundColor(0xFF3c6de4);
-                }
-            }
-
-            holder.batchCheckBox.setVisibility(batchMode ? View.VISIBLE : View.GONE);
-            holder.batchCheckBox.setChecked(isBatchChecked);
-            holder.moreOptions.setVisibility(batchMode ? View.GONE : View.VISIBLE);
-            holder.selectionIndicator.setVisibility(batchMode ? (isBatchChecked ? View.VISIBLE : View.INVISIBLE)
-                    : (isSelected ? View.VISIBLE : View.INVISIBLE));
-
-            // 悬浮按钮标识点：颜色跟随对应悬浮按钮颜色
-            if (holder.floatBtnDot != null) {
-                Integer btnColor = floatBtnColorMap.get(item.id);
-                if (btnColor != null) {
-                    holder.floatBtnDot.setVisibility(View.VISIBLE);
-                    if (holder.floatBtnDotBg != null) {
-                        holder.floatBtnDotBg.setColor(btnColor);
-                    }
-                } else {
-                    holder.floatBtnDot.setVisibility(View.GONE);
-                }
-            }
-
-            holder.itemView.setOnClickListener(v -> {
-                if (batchMode) {
-                    toggleBatchSelection(item.id, position);
-                } else {
-                    int previous = selectedPosition.get();
-                    selectedPosition.set(position);
-                    notifyItemChanged(previous);
-                    notifyItemChanged(position);
-                    if (listener != null) {
-                        listener.onItemClick(item);
-                    }
-                }
-            });
-
-            View.OnClickListener menuClick = v -> showMenu(v, item, position);
-            holder.moreOptions.setOnClickListener(menuClick);
-            holder.batchCheckBox.setOnClickListener(v -> toggleBatchSelection(item.id, position));
-        }
-
-        @Override
-        public long getItemId(int position) {
-            OperationItem item = operations.get(position);
-            String stableKey = !TextUtils.isEmpty(item.id)
-                    ? item.id
-                    : String.valueOf(item.name) + "#" + position;
-            return stableKey.hashCode();
-        }
-
-        @Override
-        public int getItemViewType(int position) {
-            return PROJECT_PANEL_VIEW_TYPE_OPERATION;
-        }
-
-        private void showMenu(View anchor, OperationItem item, int position) {
-            if (actionListener == null) {
-                return;
-            }
-            List<ActionItem> actionItems = new ArrayList<>();
-            actionItems.add(new ActionItem(1, "编辑节点", "打开这个节点的编辑页", true));
-            actionItems.add(new ActionItem(2, "复制到节点库", "先收进节点库，后面可反复粘贴", true));
-            actionItems.add(new ActionItem(3, "从节点库粘贴到后面", "从节点库挑一个节点插到当前节点后面", actionListener.canPaste()));
-            actionItems.add(new ActionItem(4, "从节点库插入到前面", "从节点库挑一个节点插到当前节点前面", actionListener.canPaste()));
-            actionItems.add(new ActionItem(5, "上移", "把当前节点往前挪一位", position > 0));
-            actionItems.add(new ActionItem(6, "下移", "把当前节点往后挪一位", position < operations.size() - 1));
-            actionItems.add(new ActionItem(7, "删除", "删除当前节点", true));
-            actionItems.add(new ActionItem(8, "ConfigUI 设计", "为这个节点设计可视化配置界面", true));
-            actionItems.add(new ActionItem(9, "悬浮按钮", "为这个节点创建/编辑专属悬浮按钮", true));
-
-            View popupView = LayoutInflater.from(anchor.getContext()).inflate(R.layout.dialog_node_action_sheet, null);
-            TextView tvTitle = popupView.findViewById(R.id.tv_action_title);
-            RecyclerView rvActions = popupView.findViewById(R.id.rv_action_list);
-            if (tvTitle != null) {
-                tvTitle.setText(TextUtils.isEmpty(item.name) ? "节点操作" : item.name);
-            }
-            rvActions.setLayoutManager(new LinearLayoutManager(anchor.getContext()));
-            PopupWindow popupWindow = new PopupWindow(
-                    popupView,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    ViewGroup.LayoutParams.WRAP_CONTENT,
-                    true);
-            popupWindow.setOutsideTouchable(true);
-            popupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-            popupWindow.setElevation(10f);
-            rvActions.setAdapter(new ActionSheetAdapter(actionItems, action -> {
-                if (!action.enabled) {
-                    return;
-                }
-                popupWindow.dismiss();
-                switch (action.id) {
-                    case 1:
-                        actionListener.onEdit(item);
-                        break;
-                    case 2:
-                        actionListener.onCopy(item);
-                        break;
-                    case 3:
-                        actionListener.onPasteAfter(item);
-                        break;
-                    case 4:
-                        actionListener.onInsertBefore(item);
-                        break;
-                    case 5:
-                        actionListener.onMoveUp(item);
-                        break;
-                    case 6:
-                        actionListener.onMoveDown(item);
-                        break;
-                    case 7:
-                        actionListener.onDelete(item);
-                        break;
-                    case 8:
-                        actionListener.onConfigUi(item);
-                        break;
-                    case 9:
-                        actionListener.onFloatButton(item);
-                        break;
-                    default:
-                        break;
-                }
-            }));
-            popupWindow.showAsDropDown(anchor, -dp(anchor.getContext(), 180), dp(anchor.getContext(), 4), Gravity.END);
-        }
-
-        // 对外提供方法，让外部（比如服务、线程）动态设置"正在运行的项"
-        public void setRunningPosition(String operationId) {
-            if (TextUtils.equals(this.runningOperationId, operationId)) {
-                return;
-            }
-            String prev = this.runningOperationId;
-            this.runningOperationId = operationId;
-
-//            int prevPos = findPositionByKey(prev);
-            int newPos = findPositionByKey(operationId);
-
-            if (prevPos >= 0) notifyItemChanged(prevPos);
-            if (newPos >= 0)  notifyItemChanged(newPos);
-            prevPos = newPos;
-        }
-        private int findPositionByKey(String key) {
-            if (key == null) return -1;
-            for (int i = 0; i < operations.size(); i++) {
-                if (key.equals(operations.get(i).id)) {
-                    return i;
-                }
-            }
-            return -1;
-        }
-
-        public void clearRunningPosition() {
-            int old = prevPos;
-            runningOperationId = null;
-            prevPos = -1;
-            if (old >= 0) {
-                notifyItemChanged(old);
-            }
-        }
-
-        public int findPositionById(String operationId) {
-            return findPositionByKey(operationId);
-        }
-
-        public List<String> getOperationIdsSnapshot() {
-            List<String> ids = new ArrayList<>();
-            for (OperationItem operation : operations) {
-                if (operation != null && !TextUtils.isEmpty(operation.id)) {
-                    ids.add(operation.id);
-                }
-            }
-            return ids;
-        }
-
-        public boolean moveItem(int from, int to) {
-            if (from < 0 || to < 0 || from >= operations.size() || to >= operations.size()) {
-                return false;
-            }
-            if (from == to) {
-                return true;
-            }
-            String selectedId = null;
-            OperationItem selected = getSelectedItem();
-            if (selected != null) {
-                selectedId = selected.id;
-            }
-            Collections.swap(operations, from, to);
-            notifyItemMoved(from, to);
-            if (!TextUtils.isEmpty(selectedId)) {
-                selectedPosition.set(findPositionByKey(selectedId));
-            }
-            return true;
-        }
-
-        // 新增：获取当前选中项
-        public OperationItem getSelectedItem() {
-            if (selectedPosition.get() >= 0 && selectedPosition.get() < operations.size()) {
-                return operations.get(selectedPosition.get());
-            }
-            return null;
-        }
-
-        // 可选：清空选中
-        public void clearSelection() {
-            int prev = selectedPosition.get();
-            if (prev < 0) {
-                return;
-            }
-            selectedPosition.set(-1);
-            if (prev >= 0) notifyItemChanged(prev);
-        }
-
-        public void selectById(String operationId) {
-            if (TextUtils.isEmpty(operationId)) {
-                return;
-            }
-            int target = -1;
-            for (int i = 0; i < operations.size(); i++) {
-                OperationItem item = operations.get(i);
-                if (TextUtils.equals(operationId, item.id)) {
-                    target = i;
-                    break;
-                }
-            }
-            if (target < 0) {
-                return;
-            }
-            int old = selectedPosition.get();
-            if (old == target) {
-                return;
-            }
-            selectedPosition.set(target);
-            if (old >= 0) notifyItemChanged(old);
-            notifyItemChanged(target);
-        }
-
-        public void setBatchMode(boolean enabled) {
-            if (this.batchMode == enabled) {
-                return;
-            }
-            this.batchMode = enabled;
-            if (enabled) {
-                clearSelection();
-            }
-            if (!enabled) {
-                batchSelectedIds.clear();
-                notifyBatchChanged();
-            }
-            notifyAllItemsChanged();
-        }
-
-        public void setBatchSelectedIds(Set<String> ids) {
-            Set<String> nextIds = ids == null ? Collections.emptySet() : new HashSet<>(ids);
-            if (batchSelectedIds.equals(nextIds)) {
-                return;
-            }
-            Set<String> changedIds = new HashSet<>(batchSelectedIds);
-            changedIds.addAll(nextIds);
-            batchSelectedIds.clear();
-            batchSelectedIds.addAll(nextIds);
-            notifyBatchChanged();
-            if (!batchMode) {
-                return;
-            }
-            for (int i = 0; i < operations.size(); i++) {
-                OperationItem item = operations.get(i);
-                if (item != null && changedIds.contains(item.id)) {
-                    notifyItemChanged(i);
-                }
-            }
-        }
-
-        private void toggleBatchSelection(String operationId, int position) {
-            if (!batchMode) {
-                return;
-            }
-            if (batchSelectedIds.contains(operationId)) {
-                batchSelectedIds.remove(operationId);
-            } else {
-                batchSelectedIds.add(operationId);
-            }
-            notifyItemChanged(position);
-            notifyBatchChanged();
-        }
-
-        private void notifyBatchChanged() {
-            if (batchSelectionListener != null) {
-                batchSelectionListener.onBatchSelectionChanged(new HashSet<>(batchSelectedIds));
-            }
-        }
-
-        private void notifyAllItemsChanged() {
-            if (operations.isEmpty()) {
-                return;
-            }
-            notifyItemRangeChanged(0, operations.size());
-        }
-
-        private String getOperationTypeDisplayName(String type) {
-            if (type == null) {
-                return "未知操作";
-            }
-            switch (type.toLowerCase()) {
-                case "click":
-                    return "点击操作";
-                case "sleep":
-                    return "等待操作";
-                case "input":
-                    return "输入操作";
-                case "swipe":
-                    return "滑动操作";
-                default:
-                    return type;
-            }
-        }
-
-        @Override
-        public int getItemCount() {
-            return operations.size();
-        }
-
-        static class ViewHolder extends RecyclerView.ViewHolder {
-            TextView opIndex;
-            TextView name;
-            TextView typeText;
-            TextView opId;
-            View selectionIndicator;
-            /** 悬浮按钮标识点 View */
-            View floatBtnDot;
-            /** 持有 Drawable 引用，bind 时只改颜色，零额外对象分配 */
-            GradientDrawable floatBtnDotBg;
-            ImageView moreOptions;
-            CheckBox batchCheckBox;
-
-            ViewHolder(View itemView) {
-                super(itemView);
-                opIndex = itemView.findViewById(R.id.operation_index);
-                name = itemView.findViewById(R.id.list_item_text);
-                typeText = itemView.findViewById(R.id.operation_type);
-                opId = itemView.findViewById(R.id.operation_id);
-                selectionIndicator = itemView.findViewById(R.id.selection_indicator);
-                moreOptions = itemView.findViewById(R.id.more_options);
-                batchCheckBox = itemView.findViewById(R.id.chk_batch);
-                floatBtnDot = itemView.findViewById(R.id.float_btn_dot);
-                if (floatBtnDot != null) {
-                    // GradientDrawable 整个 ViewHolder 生命周期只 new 一次
-                    floatBtnDotBg = new GradientDrawable();
-                    floatBtnDotBg.setShape(GradientDrawable.OVAL);
-                    floatBtnDot.setBackground(floatBtnDotBg);
-                    // 颜色在 onBindViewHolder 里按 floatBtnColorMap 动态设置
-                }
-            }
-        }
-
-        private static int dp(Context context, int value) {
-            return (int) (value * context.getResources().getDisplayMetrics().density);
-        }
-
-        private static class ActionSheetAdapter extends RecyclerView.Adapter<ActionSheetAdapter.ViewHolder> {
-            interface OnActionClickListener {
-                void onActionClick(ActionItem action);
-            }
-
-            private final List<ActionItem> items;
-            private final OnActionClickListener listener;
-
-            ActionSheetAdapter(List<ActionItem> items, OnActionClickListener listener) {
-                this.items = items;
-                this.listener = listener;
-            }
-
-            @NonNull
-            @Override
-            public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-                View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_node_action, parent, false);
-                return new ViewHolder(view);
-            }
-
-            @Override
-            public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-                ActionItem item = items.get(position);
-                holder.tvName.setText(item.title);
-                holder.tvDesc.setText(item.desc);
-                holder.itemView.setAlpha(item.enabled ? 1f : 0.42f);
-                holder.itemView.setOnClickListener(v -> {
-                    if (listener != null) {
-                        listener.onActionClick(item);
-                    }
-                });
-            }
-
-            @Override
-            public int getItemCount() {
-                return items.size();
-            }
-
-            static class ViewHolder extends RecyclerView.ViewHolder {
-                final TextView tvName;
-                final TextView tvDesc;
-
-                ViewHolder(View itemView) {
-                    super(itemView);
-                    tvName = itemView.findViewById(R.id.tv_action_name);
-                    tvDesc = itemView.findViewById(R.id.tv_action_desc);
-                }
-            }
-        }
-    }
 
     // ==================== ScriptExecutionListener 实现 ====================
 
@@ -6482,17 +4727,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         stepDelayOverlayManager.syncDelayState();
     }
 
-    private FlowGraphView currentFlowGraphView;
-    private Runnable flowGraphRefreshAction;
-    private String flowGraphSelectedNodeId;
-
     private void updateFlowGraphHighlight(String operationId) {
-        if (currentFlowGraphView != null) {
-            new Handler(Looper.getMainLooper()).post(() -> {
-                if (currentFlowGraphView != null)
-                    currentFlowGraphView.setHighlightedNodeId(operationId);
-            });
-        }
+        flowGraphPanelHelper.highlightOperation(operationId);
     }
 
     @Override
@@ -6554,11 +4790,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         hideStepOverlay();
 
         // Phase 4A: 清除 FlowGraph 高亮
-        if (currentFlowGraphView != null) {
-            new Handler(Looper.getMainLooper()).post(() -> {
-                if (currentFlowGraphView != null) currentFlowGraphView.setHighlightedNodeId(null);
-            });
-        }
+        flowGraphPanelHelper.clearHighlight();
 
         // 清除监听器
         ScriptRunner.clearExecutionListener();
@@ -7341,380 +5573,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         return items;
     }
 
-    private List<FlowNodeAdapter.FlowNodeItem> getCurrentTaskFlowNodes() {
-        List<FlowNodeAdapter.FlowNodeItem> nodes = new ArrayList<>();
-        if (currentTaskDir == null) {
-            return nodes;
-        }
-        try {
-            JSONArray operations = readOperationsArray();
-            for (int i = 0; i < operations.length(); i++) {
-                JSONObject op = operations.optJSONObject(i);
-                if (op == null) {
-                    continue;
-                }
-                String id = op.optString("id", "");
-                String name = op.optString("name", "未命名");
-                int typeInt = op.optInt("type", -1);
-                String type = getOperationTypeName(typeInt);
-                JSONObject inputMap = op.optJSONObject("inputMap");
-                String nextId;
-                String fallbackId;
-                if (typeInt == 16) {
-                    // LOOP: body next is main path, exit next is fallback
-                    nextId = inputMap == null ? "" : inputMap.optString(MetaOperation.LOOP_BODY_NEXT, "");
-                    fallbackId = inputMap == null ? "" : inputMap.optString(MetaOperation.LOOP_EXIT_NEXT, "");
-                } else if (typeInt == 10 || typeInt == 15) {
-                    // Condition / Switch branch: default path + first explicit branch for list hint
-                    nextId = inputMap == null ? "" : inputMap.optString(MetaOperation.BRANCH_DEFAULT_NEXT, "");
-                    fallbackId = firstBranchTarget(inputMap);
-                } else {
-                    nextId = inputMap == null ? "" : inputMap.optString(MetaOperation.NEXT_OPERATION_ID, "");
-                    fallbackId = inputMap == null ? "" : inputMap.optString(MetaOperation.FALLBACKOPERATIONID, "");
-                }
-                nodes.add(new FlowNodeAdapter.FlowNodeItem(i + 1, id, name, type, nextId, fallbackId));
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "读取流程图节点失败", e);
-        }
-        return nodes;
-    }
-
-    private List<FlowGraphView.Node> getCurrentTaskGraphNodes() {
-        List<FlowGraphView.Node> nodes = new ArrayList<>();
-        if (currentTaskDir == null) {
-            return nodes;
-        }
-        try {
-            JSONArray operations = readOperationsArray();
-            for (int i = 0; i < operations.length(); i++) {
-                JSONObject op = operations.optJSONObject(i);
-                if (op == null) {
-                    continue;
-                }
-                FlowGraphView.Node node = new FlowGraphView.Node();
-                node.order = i + 1;
-                node.id = op.optString("id", "");
-                node.name = op.optString("name", "未命名");
-                node.typeCode = op.optInt("type", -1);
-                node.type = getOperationTypeName(node.typeCode);
-
-                JSONObject inputMap = op.optJSONObject("inputMap");
-                int typeInt = node.typeCode;
-                if (typeInt == 16) {
-                    node.nextId = inputMap == null ? "" : inputMap.optString(MetaOperation.LOOP_BODY_NEXT, "");
-                    node.fallbackId = inputMap == null ? "" : inputMap.optString(MetaOperation.LOOP_EXIT_NEXT, "");
-                } else if (typeInt == 10 || typeInt == 15) {
-                    node.nextId = inputMap == null ? "" : inputMap.optString(MetaOperation.BRANCH_DEFAULT_NEXT, "");
-                    appendBranchEdges(node, inputMap);
-                } else {
-                    node.nextId = inputMap == null ? "" : inputMap.optString(MetaOperation.NEXT_OPERATION_ID, "");
-                    node.fallbackId = inputMap == null ? "" : inputMap.optString(MetaOperation.FALLBACKOPERATIONID, "");
-                }
-                nodes.add(node);
-            }
-        } catch (Exception e) {
-            Log.w(TAG, "读取流程图节点失败", e);
-        }
-        return nodes;
-    }
-
-    private String firstBranchTarget(JSONObject inputMap) {
-        if (inputMap == null) {
-            return "";
-        }
-        JSONArray rules = inputMap.optJSONArray(MetaOperation.BRANCH_RULES);
-        if (rules == null) {
-            return "";
-        }
-        for (int i = 0; i < rules.length(); i++) {
-            JSONObject rule = rules.optJSONObject(i);
-            if (rule == null) {
-                continue;
-            }
-            String target = rule.optString("nextOperationId", "");
-            if (TextUtils.isEmpty(target)) {
-                target = rule.optString("next", "");
-            }
-            if (TextUtils.isEmpty(target)) {
-                target = rule.optString("target", "");
-            }
-            if (!TextUtils.isEmpty(target)) {
-                return target;
-            }
-        }
-        return "";
-    }
-
-    private void appendBranchEdges(FlowGraphView.Node node, JSONObject inputMap) {
-        if (node == null || inputMap == null) {
-            return;
-        }
-        JSONArray rules = inputMap.optJSONArray(MetaOperation.BRANCH_RULES);
-        if (rules == null) {
-            return;
-        }
-        List<String> targets = new ArrayList<>();
-        for (int i = 0; i < rules.length(); i++) {
-            JSONObject rule = rules.optJSONObject(i);
-            if (rule == null) {
-                continue;
-            }
-            String target = rule.optString("nextOperationId", "");
-            if (TextUtils.isEmpty(target)) {
-                target = rule.optString("next", "");
-            }
-            if (TextUtils.isEmpty(target)) {
-                target = rule.optString("target", "");
-            }
-            if (TextUtils.isEmpty(target)) {
-                continue;
-            }
-            targets.add(target);
-        }
-        for (int i = 0; i < targets.size(); i++) {
-            FlowGraphView.Node.Edge edge = new FlowGraphView.Node.Edge();
-            edge.toId = targets.get(i);
-            edge.kind = "branch";
-            edge.fromFallbackPort = false;
-            edge.sourceSlotIndex = i;
-            edge.sourceSlotCount = targets.size();
-            node.extraEdges.add(edge);
-        }
-    }
-
-    // ==================== Flow Graph Panel (full floating window) ====================
-
-    private View flowGraphPanelView;
-    private WindowManager.LayoutParams flowGraphPanelLp;
-
     private void showFlowGraphDialog() {
-        // Entry point kept for compatibility — delegates to full panel
-        showFlowGraphPanel();
-    }
-
-    private void showFlowGraphPanel() {
-        if (flowGraphPanelView != null) {
-            // Already open — bring to front
-            try { wm.removeView(flowGraphPanelView); } catch (Exception ignored) {}
-            flowGraphPanelView = null;
-        }
-
-        final List<FlowNodeAdapter.FlowNodeItem> nodes = getCurrentTaskFlowNodes();
-
-        flowGraphPanelView = LayoutInflater.from(this).inflate(R.layout.window_flow_graph_panel, null);
-
-        int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : WindowManager.LayoutParams.TYPE_PHONE;
-
-        flowGraphPanelLp = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                android.graphics.PixelFormat.TRANSLUCENT);
-        flowGraphPanelLp.gravity = android.view.Gravity.TOP | android.view.Gravity.START;
-        adaptPanelSizeToScreen(flowGraphPanelLp, 340, 520);
-        flowGraphPanelLp.x = getSharedPanelX();
-        flowGraphPanelLp.y = getSharedPanelY();
-        wm.addView(flowGraphPanelView, flowGraphPanelLp);
-
-        // Drag + resize
-        View dragHeader  = flowGraphPanelView.findViewById(R.id.drag_header);
-        View resizeHandle = flowGraphPanelView.findViewById(R.id.resize_handle);
-        dragHeader.setOnTouchListener(new DragTouchListener(flowGraphPanelLp, wm, flowGraphPanelView, this, true));
-        resizeHandle.setOnTouchListener(new PanelResizeTouchListener(
-                flowGraphPanelLp, wm, flowGraphPanelView, this, (int) dp(300), (int) dp(400)));
-
-        FlowGraphView graphView = flowGraphPanelView.findViewById(R.id.flow_graph_view);
-        graphView.setInteractionReadOnly(true);
-        TextView tvSelected   = flowGraphPanelView.findViewById(R.id.tv_flow_selected);
-        TextView btnEdit      = flowGraphPanelView.findViewById(R.id.btn_flow_edit_node);
-        TextView btnSetNext   = flowGraphPanelView.findViewById(R.id.btn_flow_set_next);
-        TextView btnSetFall   = flowGraphPanelView.findViewById(R.id.btn_flow_set_fallback);
-        TextView btnClearConn = flowGraphPanelView.findViewById(R.id.btn_flow_clear_conn);
-
-        final FlowNodeAdapter.FlowNodeItem[] sel = {null};
-
-        // Render helper
-        final Runnable[] render = new Runnable[1];
-        render[0] = () -> {
-            List<FlowNodeAdapter.FlowNodeItem> latest = getCurrentTaskFlowNodes();
-            nodes.clear();
-            nodes.addAll(latest);
-            graphView.setNodes(getCurrentTaskGraphNodes());
-            if (!TextUtils.isEmpty(flowGraphSelectedNodeId)) {
-                FlowNodeAdapter.FlowNodeItem refreshed = findFlowNodeById(nodes, flowGraphSelectedNodeId);
-                sel[0] = refreshed;
-                graphView.setSelectedNodeId(refreshed == null ? null : refreshed.id);
-                flowGraphSelectedNodeId = refreshed == null ? null : refreshed.id;
-            }
-            updateFlowSelectionUi(sel[0], tvSelected, btnEdit, btnSetNext, btnSetFall);
-        };
-        flowGraphRefreshAction = render[0];
-
-        // Select listener
-        graphView.setOnNodeSelectListener(node -> {
-            sel[0] = node == null ? null : findFlowNodeById(nodes, node.id);
-            flowGraphSelectedNodeId = sel[0] == null ? null : sel[0].id;
-            updateFlowSelectionUi(sel[0], tvSelected, btnEdit, btnSetNext, btnSetFall);
-        });
-
-        graphView.setOnNodeDoubleTapListener(null);
-        graphView.setOnConnectListener(null);
-
-        // Running highlight tracking
-        currentFlowGraphView = graphView;
-        flowGraphPanelView.addOnAttachStateChangeListener(new View.OnAttachStateChangeListener() {
-            @Override public void onViewAttachedToWindow(View v) {}
-            @Override public void onViewDetachedFromWindow(View v) {
-                if (currentFlowGraphView == graphView) currentFlowGraphView = null;
-            }
-        });
-
-        // Header buttons
-        flowGraphPanelView.findViewById(R.id.btn_flow_close).setOnClickListener(v -> closeFlowGraphPanel());
-        flowGraphPanelView.findViewById(R.id.btn_flow_back).setOnClickListener(v -> closeFlowGraphPanel());
-        flowGraphPanelView.findViewById(R.id.btn_flow_center).setOnClickListener(v -> graphView.resetViewTransform());
-        flowGraphPanelView.findViewById(R.id.btn_flow_auto_layout).setOnClickListener(v -> {
-            graphView.autoArrange();
-            Toast.makeText(this, "已自动排列", Toast.LENGTH_SHORT).show();
-        });
-
-        // Bottom bar buttons
-        btnEdit.setOnClickListener(v -> {
-            if (sel[0] == null) {
-                Toast.makeText(this, "请先点击选中一个节点", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            flowGraphSelectedNodeId = sel[0].id;
-            showEditOperationDialog(
-                    new OperationItem(sel[0].name, sel[0].id, sel[0].type, sel[0].order - 1),
-                    currentOperationAdapter);
-        });
-
-        btnSetNext.setOnClickListener(v -> {
-            if (sel[0] == null) { Toast.makeText(this, "请先选中节点", Toast.LENGTH_SHORT).show(); return; }
-            showOperationPickerDialog("选择主线下一节点", null, pickedId -> {
-                if (updateFlowConnection(sel[0].id, MetaOperation.NEXT_OPERATION_ID, pickedId)) {
-                    render[0].run();
-                    Toast.makeText(this, "主线已设置", Toast.LENGTH_SHORT).show();
-                }
-            });
-        });
-
-        btnSetFall.setOnClickListener(v -> {
-            if (sel[0] == null) { Toast.makeText(this, "请先选中节点", Toast.LENGTH_SHORT).show(); return; }
-            showOperationPickerDialog("选择分支节点", null, pickedId -> {
-                if (updateFlowConnection(sel[0].id, MetaOperation.FALLBACKOPERATIONID, pickedId)) {
-                    render[0].run();
-                    Toast.makeText(this, "分支已设置", Toast.LENGTH_SHORT).show();
-                }
-            });
-        });
-
-        btnClearConn.setOnClickListener(v -> {
-            if (sel[0] == null) { Toast.makeText(this, "请先选中节点", Toast.LENGTH_SHORT).show(); return; }
-            boolean clearedNext = updateFlowConnection(sel[0].id, MetaOperation.NEXT_OPERATION_ID, "");
-            boolean clearedFall = updateFlowConnection(sel[0].id, MetaOperation.FALLBACKOPERATIONID, "");
-            if (clearedNext || clearedFall) {
-                render[0].run();
-                Toast.makeText(this, "已清除连线", Toast.LENGTH_SHORT).show();
-            }
-        });
-
-        render[0].run();
-    }
-
-    private void closeFlowGraphPanel() {
-        if (flowGraphPanelView != null) {
-            rememberSharedPanelPosition(flowGraphPanelLp);
-            safeRemoveView(flowGraphPanelView);
-            flowGraphPanelView = null;
-            flowGraphPanelLp   = null;
-            flowGraphRefreshAction = null;
-            flowGraphSelectedNodeId = null;
-        }
+        flowGraphPanelHelper.showFlowGraphDialog();
     }
 
     private void refreshOpenFlowGraphPanel(@Nullable String preferredNodeId) {
-        if (!TextUtils.isEmpty(preferredNodeId)) {
-            flowGraphSelectedNodeId = preferredNodeId;
-        }
-        if (flowGraphPanelView == null || flowGraphRefreshAction == null) {
-            return;
-        }
-        uiHandler.post(flowGraphRefreshAction);
-    }
-
-    private FlowNodeAdapter.FlowNodeItem findFlowNodeById(List<FlowNodeAdapter.FlowNodeItem> nodes, String nodeId) {
-        if (nodes == null || TextUtils.isEmpty(nodeId)) {
-            return null;
-        }
-        for (FlowNodeAdapter.FlowNodeItem item : nodes) {
-            if (TextUtils.equals(nodeId, item.id)) {
-                return item;
-            }
-        }
-        return null;
-    }
-
-    private void updateFlowSelectionUi(FlowNodeAdapter.FlowNodeItem selected,
-                                       TextView tvSelected,
-                                       TextView btnEditNode,
-                                       TextView btnSetNext,
-                                       TextView btnSetFallback) {
-        boolean has = selected != null;
-        if (!has) {
-            tvSelected.setText("未选中节点");
-        } else {
-            tvSelected.setText("已选中: " + selected.order + " | " + selected.name + " | " + selected.id);
-        }
-        btnEditNode.setEnabled(has);
-        btnSetNext.setEnabled(has);
-        btnSetFallback.setEnabled(has);
-        btnEditNode.setAlpha(has ? 1f : 0.45f);
-        btnSetNext.setAlpha(has ? 1f : 0.45f);
-        btnSetFallback.setAlpha(has ? 1f : 0.45f);
-    }
-
-    private boolean updateFlowConnection(String operationId, String key, String targetId) {
-        if (currentTaskDir == null || TextUtils.isEmpty(operationId) || TextUtils.isEmpty(key)) {
-            return false;
-        }
-        try {
-            JSONArray array = readOperationsArray();
-            boolean found = false;
-            for (int i = 0; i < array.length(); i++) {
-                JSONObject op = array.optJSONObject(i);
-                if (op == null) {
-                    continue;
-                }
-                if (!TextUtils.equals(operationId, op.optString("id", ""))) {
-                    continue;
-                }
-                JSONObject inputMap = op.optJSONObject("inputMap");
-                if (inputMap == null) {
-                    inputMap = new JSONObject();
-                }
-                if (TextUtils.isEmpty(targetId)) {
-                    inputMap.remove(key);
-                } else {
-                    inputMap.put(key, targetId);
-                }
-                op.put("inputMap", inputMap);
-                found = true;
-                break;
-            }
-            if (!found) {
-                return false;
-            }
-            return writeOperationsArray(array, "");
-        } catch (Exception e) {
-            Log.w(TAG, "更新流程连线失败", e);
-            return false;
-        }
+        flowGraphPanelHelper.refreshOpenPanel(preferredNodeId);
     }
 
     private boolean saveFlowNodeOrder(List<String> orderedIds) {
@@ -8779,25 +6643,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             public void afterTextChanged(Editable s) {
             }
         });
-    }
-
-    private static class PrecheckResult {
-        List<String> blocking = new ArrayList<>();
-        List<String> warnings = new ArrayList<>();
-        int fixAction = 0;
-
-        boolean hasBlocking() {
-            return !blocking.isEmpty();
-        }
-    }
-
-    private static class RunLaunchData {
-        MetaOperation startOperation;
-        Task selectedTask;
-        String projectName;
-        String selectedTaskName;
-        List<OperationItem> selectedTaskOperations = new ArrayList<>();
-        OperationContext ctx;
     }
 
     @Nullable
@@ -12807,176 +10652,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             tvCurrentOp.setText("当前: -");
         }
         syncProjectPanelRuntimeUi();
-    }
-
-    // ==================== RunningPanelAdapter ====================
-
-    static class RunningPanelAdapter extends RecyclerView.Adapter<RunningPanelAdapter.ViewHolder> {
-        private List<OperationItem> operations;
-        private int runningPosition = -1;
-
-        RunningPanelAdapter(List<OperationItem> operations) {
-            this.operations = operations;
-        }
-
-        public void setOperations(List<OperationItem> operations) {
-            this.operations = operations;
-            notifyDataSetChanged();
-        }
-
-        public void setRunningPosition(int position) {
-            int prev = runningPosition;
-            runningPosition = position;
-            if (prev >= 0) notifyItemChanged(prev);
-            if (position >= 0) notifyItemChanged(position);
-        }
-
-        @NonNull
-        @Override
-        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View v = LayoutInflater.from(parent.getContext())
-                    .inflate(R.layout.item_operation_simple, parent, false);
-            return new ViewHolder(v);
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            OperationItem item = operations.get(position);
-            holder.tvName.setText(item.name);
-            holder.tvType.setText(item.type);
-
-            // 高亮当前运行的 operation
-            if (position == runningPosition) {
-                holder.itemView.setBackgroundColor(0x66EF9A9A);
-                holder.indicator.setVisibility(View.VISIBLE);
-            } else {
-                holder.itemView.setBackgroundColor(Color.TRANSPARENT);
-                holder.indicator.setVisibility(View.GONE);
-            }
-        }
-
-        @Override
-        public int getItemCount() {
-            return operations != null ? operations.size() : 0;
-        }
-
-        static class ViewHolder extends RecyclerView.ViewHolder {
-            TextView tvName;
-            TextView tvType;
-            View indicator;
-
-            ViewHolder(View itemView) {
-                super(itemView);
-                tvName = itemView.findViewById(R.id.tv_op_name);
-                tvType = itemView.findViewById(R.id.tv_op_type);
-                indicator = itemView.findViewById(R.id.running_indicator);
-            }
-        }
-    }
-
-    private static class OperationClipboardLibraryAdapter extends RecyclerView.Adapter<OperationClipboardLibraryAdapter.ViewHolder> {
-        interface OnRemoveListener {
-            void onRemove(@Nullable OperationClipboardEntry entry);
-        }
-
-        private final List<OperationClipboardEntry> items;
-        private final OnRemoveListener removeListener;
-        private Runnable selectionChangedListener;
-        private int selectedPosition;
-
-        OperationClipboardLibraryAdapter(List<OperationClipboardEntry> items, OnRemoveListener removeListener) {
-            this.items = items;
-            this.removeListener = removeListener;
-            this.selectedPosition = items.isEmpty() ? -1 : 0;
-        }
-
-        void setOnSelectionChanged(@Nullable Runnable selectionChangedListener) {
-            this.selectionChangedListener = selectionChangedListener;
-        }
-
-        @Nullable
-        OperationClipboardEntry getSelectedEntry() {
-            if (selectedPosition < 0 || selectedPosition >= items.size()) {
-                return null;
-            }
-            return items.get(selectedPosition);
-        }
-
-        @NonNull
-        @Override
-        public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-            View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_node_clipboard, parent, false);
-            return new ViewHolder(view);
-        }
-
-        @Override
-        public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
-            OperationClipboardEntry entry = items.get(position);
-            holder.tvName.setText(entry.name);
-            String sourceTask = TextUtils.isEmpty(entry.sourceTaskPath) ? "-" : new File(entry.sourceTaskPath).getName();
-            String time = new SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(new Date(entry.createdAt));
-            holder.tvMeta.setText("来源 Task: " + sourceTask + "  |  复制时间: " + time);
-
-            boolean selected = position == selectedPosition;
-            holder.itemView.setBackgroundColor(selected ? 0xFFE8F0FE : Color.TRANSPARENT);
-            holder.selectedIndicator.setVisibility(selected ? View.VISIBLE : View.INVISIBLE);
-
-            holder.itemView.setOnClickListener(v -> {
-                int old = selectedPosition;
-                selectedPosition = holder.getBindingAdapterPosition();
-                if (old >= 0) {
-                    notifyItemChanged(old);
-                }
-                if (selectedPosition >= 0) {
-                    notifyItemChanged(selectedPosition);
-                }
-                if (selectionChangedListener != null) {
-                    selectionChangedListener.run();
-                }
-            });
-
-            holder.btnRemove.setOnClickListener(v -> {
-                int bindingPosition = holder.getBindingAdapterPosition();
-                if (bindingPosition < 0 || bindingPosition >= items.size()) {
-                    return;
-                }
-                OperationClipboardEntry removed = items.get(bindingPosition);
-                if (removeListener != null) {
-                    removeListener.onRemove(removed);
-                }
-                if (items.isEmpty()) {
-                    selectedPosition = -1;
-                } else if (selectedPosition >= items.size()) {
-                    selectedPosition = items.size() - 1;
-                } else if (bindingPosition == selectedPosition) {
-                    selectedPosition = Math.min(bindingPosition, items.size() - 1);
-                }
-                notifyDataSetChanged();
-                if (selectionChangedListener != null) {
-                    selectionChangedListener.run();
-                }
-            });
-        }
-
-        @Override
-        public int getItemCount() {
-            return items.size();
-        }
-
-        static class ViewHolder extends RecyclerView.ViewHolder {
-            final View selectedIndicator;
-            final TextView tvName;
-            final TextView tvMeta;
-            final TextView btnRemove;
-
-            ViewHolder(View itemView) {
-                super(itemView);
-                selectedIndicator = itemView.findViewById(R.id.view_selected);
-                tvName = itemView.findViewById(R.id.tv_clipboard_name);
-                tvMeta = itemView.findViewById(R.id.tv_clipboard_meta);
-                btnRemove = itemView.findViewById(R.id.btn_remove);
-            }
-        }
     }
 
     // ==================== 回调接口 ====================

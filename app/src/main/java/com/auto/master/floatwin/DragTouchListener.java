@@ -8,7 +8,12 @@ import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.WindowManager;
 
-public class DragTouchListener implements View.OnTouchListener {
+import androidx.recyclerview.widget.RecyclerView;
+
+import com.auto.master.R;
+
+class DragTouchListener implements View.OnTouchListener {
+    private static final long FRAME_INTERVAL_MS = 16L;
 
     private final WindowManager.LayoutParams lp;
     private final WindowManager wm;
@@ -20,13 +25,16 @@ public class DragTouchListener implements View.OnTouchListener {
     private float downRawY;
     private int startX;
     private int startY;
-    private boolean moved;
-    private boolean longPressFired;
+    private boolean moved = false;
+    private boolean longPressFired = false;
     private final int slopPx;
+    private long lastUpdateMs;
+    private int pendingX;
+    private int pendingY;
 
     private final Handler longPressHandler = new Handler(Looper.getMainLooper());
     private Runnable longPressRunnable;
-    private final long longPressTimeoutMs;
+    private final long longPressTimeoutMs = ViewConfiguration.getLongPressTimeout();
 
     DragTouchListener(WindowManager.LayoutParams lp, WindowManager wm, View targetView, FloatWindowService service) {
         this(lp, wm, targetView, service, false);
@@ -45,7 +53,6 @@ public class DragTouchListener implements View.OnTouchListener {
         this.service = service;
         this.keepInScreen = keepInScreen;
         this.slopPx = ViewConfiguration.get(service).getScaledTouchSlop();
-        this.longPressTimeoutMs = ViewConfiguration.getLongPressTimeout();
     }
 
     @Override
@@ -58,8 +65,10 @@ public class DragTouchListener implements View.OnTouchListener {
                 downRawY = e.getRawY();
                 startX = lp.x;
                 startY = lp.y;
-                v.animate().scaleX(0.92f).scaleY(0.92f).alpha(0.92f).setDuration(120).start();
-                // 启动长按计时
+                pendingX = lp.x;
+                pendingY = lp.y;
+                lastUpdateMs = 0L;
+                setDraggingVisualState(true);
                 longPressRunnable = () -> {
                     if (!moved) {
                         longPressFired = true;
@@ -70,13 +79,13 @@ public class DragTouchListener implements View.OnTouchListener {
                 longPressHandler.postDelayed(longPressRunnable, longPressTimeoutMs);
                 return true;
 
-            case MotionEvent.ACTION_MOVE:
+            case MotionEvent.ACTION_MOVE: {
                 float dx = e.getRawX() - downRawX;
                 float dy = e.getRawY() - downRawY;
 
                 if (!moved && (Math.abs(dx) > slopPx || Math.abs(dy) > slopPx)) {
                     moved = true;
-                    cancelLongPress(); // 拖动时取消长按
+                    cancelLongPress();
                 }
 
                 if (moved) {
@@ -92,20 +101,26 @@ public class DragTouchListener implements View.OnTouchListener {
                         nextX = Math.max(margin, Math.min(nextX, maxX));
                         nextY = Math.max(margin, Math.min(nextY, maxY));
                     }
-                    lp.x = nextX;
-                    lp.y = nextY;
-                    wm.updateViewLayout(targetView, lp);
+                    pendingX = nextX;
+                    pendingY = nextY;
+                    long now = android.os.SystemClock.uptimeMillis();
+                    if (lastUpdateMs == 0L || now - lastUpdateMs >= FRAME_INTERVAL_MS) {
+                        applyPendingPosition();
+                        lastUpdateMs = now;
+                    }
                 }
                 return true;
+            }
 
             case MotionEvent.ACTION_UP:
             case MotionEvent.ACTION_CANCEL:
                 cancelLongPress();
-                v.animate().scaleX(1f).scaleY(1f).alpha(1f).setDuration(120).start();
                 if (moved) {
+                    applyPendingPosition();
                     onDragEnd(lp.x, lp.y);
-                } else if (!longPressFired) {
-                    // 只有既没拖动、也没触发长按，才算普通点击
+                }
+                setDraggingVisualState(false);
+                if (!moved && !longPressFired) {
                     v.performClick();
                 }
                 return true;
@@ -122,15 +137,30 @@ public class DragTouchListener implements View.OnTouchListener {
         }
     }
 
-    /**
-     * Called when the user finishes a drag gesture.
-     * Override to react to the final position (e.g., persist it).
-     */
-    protected void onDragEnd(int finalX, int finalY) {}
+    protected void onDragEnd(int finalX, int finalY) {
+    }
 
-    /**
-     * Called when a long-press is detected (no drag movement).
-     * Override in anonymous subclass to handle the long-press action.
-     */
-    protected void onLongPress() {}
+    protected void onLongPress() {
+    }
+
+    private void applyPendingPosition() {
+        if (lp.x == pendingX && lp.y == pendingY) {
+            return;
+        }
+        lp.x = pendingX;
+        lp.y = pendingY;
+        wm.updateViewLayout(targetView, lp);
+    }
+
+    private void setDraggingVisualState(boolean dragging) {
+        targetView.setLayerType(dragging ? View.LAYER_TYPE_HARDWARE : View.LAYER_TYPE_NONE, null);
+        View header = targetView.findViewById(R.id.drag_header);
+        if (header != null) {
+            header.setAlpha(dragging ? 0.94f : 1f);
+        }
+        RecyclerView rv = targetView.findViewById(R.id.rv_content);
+        if (rv != null) {
+            rv.suppressLayout(dragging);
+        }
+    }
 }

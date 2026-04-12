@@ -40,9 +40,8 @@ class RunningPanelAdapter extends RecyclerView.Adapter<RunningPanelAdapter.ViewH
     @NonNull
     @Override
     public ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        View v = LayoutInflater.from(parent.getContext())
-                .inflate(R.layout.item_operation_simple, parent, false);
-        return new ViewHolder(v);
+        View view = LayoutInflater.from(parent.getContext()).inflate(R.layout.item_operation_simple, parent, false);
+        return new ViewHolder(view);
     }
 
     @Override
@@ -50,9 +49,8 @@ class RunningPanelAdapter extends RecyclerView.Adapter<RunningPanelAdapter.ViewH
         OperationItem item = operations.get(position);
         holder.tvName.setText(item.name);
         holder.tvType.setText(item.type);
-
         if (position == runningPosition) {
-            holder.itemView.setBackgroundColor(0x44FF0000);
+            holder.itemView.setBackgroundColor(0x66EF9A9A);
             holder.indicator.setVisibility(View.VISIBLE);
         } else {
             holder.itemView.setBackgroundColor(Color.TRANSPARENT);
@@ -66,9 +64,9 @@ class RunningPanelAdapter extends RecyclerView.Adapter<RunningPanelAdapter.ViewH
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
-        TextView tvName;
-        TextView tvType;
-        View indicator;
+        final TextView tvName;
+        final TextView tvType;
+        final View indicator;
 
         ViewHolder(View itemView) {
             super(itemView);
