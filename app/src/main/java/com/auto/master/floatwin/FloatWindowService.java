@@ -123,10 +123,10 @@ import com.auto.master.auto.GestureOverlayView;
 import com.auto.master.auto.SelectionOverlayView;
 import com.auto.master.auto.ScriptExecuteContext;
 import com.auto.master.auto.ScriptRunner;
+import com.auto.master.capture.ScreenCapture;
 import com.auto.master.ocr.OcrEngine;
 import com.auto.master.importer.ProjectImportPickerActivity;
 import com.auto.master.importer.ScriptPackageManager;
-import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.BitmapManager;
 import com.auto.master.utils.CrashLogger;
 import com.auto.master.utils.OpenCVHelper;
@@ -7574,26 +7574,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (autoAccessibilityService == null) {
             return null;
         }
-
-        AdaptivePollingController pollingController = AdaptivePollingController.forTemplateMatch();
-        Mat mat = null;
-        for (int i = 0; i < 6; i++) {
-            mat = pollingController.acquireFrame();
-            if (mat != null && !mat.empty()) {
-                break;
-            }
-            SystemClock.sleep(80);
-        }
-
-        if (mat == null || mat.empty()) {
-            return null;
-        }
-
-        Bitmap full = OpenCVHelper.getInstance().matToBitmap(mat);
-        if (full == null || full.isRecycled()) {
-            return null;
-        }
-        return full;
+        return ScreenCapture.captureLatestBitmap(null, 480L, 80L);
     }
 
     private void showScreenPointPicker(OnPointPickedListener listener) {

@@ -65,6 +65,10 @@ public class ColorMatchOperationHandler extends OperationHandler {
                 pollingController.sleepUntilNextIteration(loopStartMs);
                 continue;
             }
+            if (!pollingController.hasFreshFrame()) {
+                pollingController.sleepUntilNextIteration(loopStartMs);
+                continue;
+            }
 
             pointResults.clear();
             int matchedCount = 0;

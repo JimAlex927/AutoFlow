@@ -3,19 +3,23 @@ package com.auto.master.capture;
 import android.app.Activity;
 import android.content.Context;
 import android.content.Intent;
-import android.graphics.Rect;
 import android.graphics.Bitmap;
+import android.graphics.Rect;
 import android.media.projection.MediaProjectionManager;
 import android.os.SystemClock;
 import android.util.Log;
 
 import com.auto.master.auto.ActivityHolder;
+import com.auto.master.utils.AdaptivePollingController;
+import com.auto.master.utils.OpenCVHelper;
 
 import org.opencv.core.Mat;
 
 public final class ScreenCapture {
 
     private static final String TAG = "ScreenCapture";
+    private static final long DEFAULT_WAIT_TIMEOUT_MS = 3000L;
+    private static final long DEFAULT_WAIT_INTERVAL_MS = 80L;
 
     // 静态保存授权（保持兼容）
     private static volatile int sResultCode = 0;
@@ -73,19 +77,7 @@ public final class ScreenCapture {
         if (!ensureCaptureSession(activity)) {
             return null;
         }
-
-        //如果启动成功了这个时候返回可能是null  manager.getLatestScreenshot()
-        Mat mat = null;
-        long start1 = System.currentTimeMillis();
-        while (System.currentTimeMillis() - start1 < 3000) {
-            mat = manager.getLatestMat(false); // 内部会 poll
-            if (mat != null && !mat.empty()) {
-                return mat;
-            }
-            SystemClock.sleep(199);
-        }
-        //超时返回null
-        return null;
+        return waitForLatestFrame(null, DEFAULT_WAIT_TIMEOUT_MS, DEFAULT_WAIT_INTERVAL_MS);
     }
 
     public static Mat captureRoiNow(Activity activity, Method method, Rect roi, String outName) {
@@ -103,17 +95,7 @@ public final class ScreenCapture {
         if (!ensureCaptureSession(activity)) {
             return null;
         }
-
-        long start = System.currentTimeMillis();
-        Mat mat = null;
-        while (System.currentTimeMillis() - start < 3000) {
-            mat = manager.getLatestRoiMat(roi, false);
-            if (mat != null && !mat.empty()) {
-                return mat;
-            }
-            SystemClock.sleep(199);
-        }
-        return null;
+        return waitForLatestFrame(roi, DEFAULT_WAIT_TIMEOUT_MS, DEFAULT_WAIT_INTERVAL_MS);
     }
 
 
@@ -147,6 +129,45 @@ public final class ScreenCapture {
         }
         return ScreenCaptureManager.getInstance().getLatestRoiMat(roi, clone);
     }
+
+    public static int getFrameSequence() {
+        return ScreenCaptureManager.getInstance().getFrameSeq();
+    }
+
+    public static Mat waitForLatestFrame(Rect roi, long timeoutMs, long intervalMs) {
+        if (!ScreenCaptureManager.getInstance().isRunning()) {
+            ensureCaptureSession(ActivityHolder.getTopActivity());
+        }
+        AdaptivePollingController pollingController = AdaptivePollingController.forTemplateMatch();
+        long safeTimeoutMs = Math.max(intervalMs, timeoutMs);
+        long safeIntervalMs = Math.max(10L, intervalMs);
+        long deadline = SystemClock.uptimeMillis() + safeTimeoutMs;
+        Mat fallback = null;
+        while (SystemClock.uptimeMillis() <= deadline) {
+            Mat frame = (roi == null || roi.isEmpty())
+                    ? pollingController.acquireFrame()
+                    : pollingController.acquireFrame(roi);
+            if (frame != null && !frame.empty()) {
+                if (pollingController.hasFreshFrame()) {
+                    return frame;
+                }
+                if (fallback == null) {
+                    fallback = frame;
+                }
+            }
+            SystemClock.sleep(safeIntervalMs);
+        }
+        return fallback;
+    }
+
+    public static Bitmap captureLatestBitmap(Rect roi, long timeoutMs, long intervalMs) {
+        Mat mat = waitForLatestFrame(roi, timeoutMs, intervalMs);
+        if (mat == null || mat.empty()) {
+            return null;
+        }
+        return OpenCVHelper.getInstance().matToBitmap(mat);
+    }
+
     public enum Method {
         MEDIA_PROJECTION,
         MEDIA_PROJECTION_SINGLE_SHOOT,

@@ -623,7 +623,11 @@ public class OpenCVHelper {
             scaledTemplate = templateMat;
         }
 
-        Mat graySearch = new Mat();
+        Mat graySearch = sGraySearchMat.get();
+        if (graySearch == null) {
+            graySearch = new Mat();
+            sGraySearchMat.set(graySearch);
+        }
         Mat grayTemplate = new Mat();
         boolean grayTemplateFromCache = false;
         List<MatchResult> matches = new ArrayList<>();
@@ -710,7 +714,6 @@ public class OpenCVHelper {
             return matches;
 
         } finally {
-            graySearch.release();
             if (!grayTemplateFromCache) grayTemplate.release(); // 来自缓存则不 release
             if (scaled) {
                 scaledSearch.release();

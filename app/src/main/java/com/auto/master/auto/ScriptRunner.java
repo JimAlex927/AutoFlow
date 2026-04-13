@@ -912,7 +912,7 @@ public final class ScriptRunner {
             a.runOnUiThread(() -> Toast.makeText(a, msg, Toast.LENGTH_SHORT).show());
         } else {
             // fallback 到全局
-            new Handler(Looper.getMainLooper()).post(() ->
+            MAIN.post(() ->
                     Toast.makeText(AutoAccessibilityService.get(), msg, Toast.LENGTH_SHORT).show()
             );
         }

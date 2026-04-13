@@ -95,6 +95,10 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                 pollingController.sleepUntilNextIteration(loopStartMs);
                 continue;
             }
+            if (!pollingController.hasFreshFrame()) {
+                pollingController.sleepUntilNextIteration(loopStartMs);
+                continue;
+            }
             try {
                 Point position = OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity);
                 if (position == null || position.x < 0 || position.y < 0) {
@@ -140,7 +144,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             if (matched && result != null && bbox != null && bbox.size() >= 4 && svc != null) {
                 Point point = result.getLocation();
                 List<Integer> finalBbox = bbox;
-                new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
+                getMainHandler().post(() ->
                         svc.showRectFeedback(
                                 (int) point.x,
                                 (int) point.y,

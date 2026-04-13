@@ -110,6 +110,10 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                 pollingController.sleepUntilNextIteration(loopStart);
                 continue;
             }
+            if (!pollingController.hasFreshFrame()) {
+                pollingController.sleepUntilNextIteration(loopStart);
+                continue;
+            }
 
             MatchTask firstTask = taskList.get(0);
             MatchTaskResult firstResult = performMatchOnSubmat(screenMat, firstTask, plan.captureRoi);

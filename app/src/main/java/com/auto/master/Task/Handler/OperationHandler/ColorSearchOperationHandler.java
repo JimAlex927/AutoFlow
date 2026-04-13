@@ -70,6 +70,10 @@ public class ColorSearchOperationHandler extends OperationHandler {
                 pollingController.sleepUntilNextIteration(loopStartMs);
                 continue;
             }
+            if (!pollingController.hasFreshFrame()) {
+                pollingController.sleepUntilNextIteration(loopStartMs);
+                continue;
+            }
 
             SearchResult result = scanRegion(screenMat, localBbox, targetColor, tolerance, minPixels,
                     captureRoi.left, captureRoi.top);

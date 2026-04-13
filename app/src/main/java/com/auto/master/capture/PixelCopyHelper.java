@@ -17,6 +17,7 @@ import java.io.FileOutputStream;
 public final class PixelCopyHelper {
 
     private static final String TAG = "PixelCopyHelper";
+    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
     private PixelCopyHelper() {}
 
@@ -48,7 +49,6 @@ public final class PixelCopyHelper {
             }
 
             Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-            Handler handler = new Handler(Looper.getMainLooper());
 
             PixelCopy.request(activity.getWindow(), bmp, result -> {
                 if (result == PixelCopy.SUCCESS) {
@@ -59,7 +59,7 @@ public final class PixelCopyHelper {
                 } else {
                     Log.e(TAG, "PixelCopy failed code=" + result);
                 }
-            }, handler);
+            }, MAIN_HANDLER);
         });
     }
 

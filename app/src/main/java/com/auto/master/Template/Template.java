@@ -43,6 +43,10 @@ public class Template {
     // 缓存大小统计
     private static volatile int totalCachedMats = 0;
 
+    private static Map<String, Mat> newTaskMatCache() {
+        return new LinkedHashMap<String, Mat>(16, 0.75f, true);
+    }
+
     /**
      * 拿到task的所有的 manifest
      * @param projectName
@@ -91,11 +95,16 @@ public class Template {
         if (oldMap != null && oldMap != matMap) {
             cleanupMats(oldMap);
         }
+        Map<String, Mat> cacheToStore = matMap;
+        if (matMap != null && !(matMap instanceof LinkedHashMap)) {
+            cacheToStore = newTaskMatCache();
+            cacheToStore.putAll(matMap);
+        }
         if (oldMap != matMap) {
-            int newCount = matMap == null ? 0 : matMap.size();
+            int newCount = cacheToStore == null ? 0 : cacheToStore.size();
             totalCachedMats += Math.max(0, newCount);
         }
-        matCache.put(cacheKey, matMap);
+        matCache.put(cacheKey, cacheToStore);
 
     }
 
@@ -198,7 +207,7 @@ public class Template {
         Map<String, Mat> projectTaskMatMap = matCache.get(cacheKey);
 
         if (projectTaskMatMap == null) {
-            projectTaskMatMap = new HashMap<>();
+            projectTaskMatMap = newTaskMatCache();
             matCache.put(cacheKey, projectTaskMatMap);
         }
         

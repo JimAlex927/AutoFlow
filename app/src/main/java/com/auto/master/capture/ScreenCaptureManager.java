@@ -95,9 +95,11 @@ public class ScreenCaptureManager {
     private static final int MAX_CONSECUTIVE_FRAME_ERRORS = 7;
     private static final long MAX_STALE_FRAME_AGE_MS = 300L;
     private static final long FRAME_HEALTH_CHECK_INTERVAL_MS = 1200L;
+    private static final int BORDER_HEALTH_CHECK_WARMUP_PASSES = 3;
     private int consecutiveFrameFailures = 0;
     private long lastSuccessfulFrameMs = 0L;
     private long lastFrameHealthCheckMs = 0L;
+    private int pendingBorderHealthChecks = BORDER_HEALTH_CHECK_WARMUP_PASSES;
     private volatile boolean resetScheduled = false;
 
     // 空闲自动暂停 VirtualDisplay：无人 poll 超过此时长则暂停，下次 poll 自动恢复。
@@ -215,6 +217,7 @@ public class ScreenCaptureManager {
             lastSuccessfulFrameMs = 0L;
             lastFrameHealthCheckMs = 0L;
             consecutiveFrameFailures = 0;
+            pendingBorderHealthChecks = BORDER_HEALTH_CHECK_WARMUP_PASSES;
             resetScheduled = false;
             captureHandler.postDelayed(idleCheckRunnable, IDLE_PAUSE_THRESHOLD_MS);
 
@@ -335,7 +338,7 @@ public class ScreenCaptureManager {
                     recordFrameFailure("black_or_empty_center");
                     return false;
                 }
-                if (hasTransparentBorders(image)) {
+                if (shouldCheckTransparentBorders() && hasTransparentBorders(image)) {
                     recordFrameFailure("has transparent border");
                     return false;
                 }
@@ -347,7 +350,10 @@ public class ScreenCaptureManager {
             }
 
             consecutiveFrameFailures = 0;
-            lastSuccessfulFrameMs = System.currentTimeMillis();
+            lastSuccessfulFrameMs = now;
+            if (pendingBorderHealthChecks > 0) {
+                pendingBorderHealthChecks--;
+            }
             frameSeq.incrementAndGet();
             return true;
 
@@ -391,6 +397,9 @@ public class ScreenCaptureManager {
         synchronized (frameLock) {
             Rect safeRoi = sanitizeRoi(roi);
             if (safeRoi == null) {
+                return getLatestMat(clone);
+            }
+            if (isFullScreenRoi(safeRoi)) {
                 return getLatestMat(clone);
             }
 
@@ -494,7 +503,7 @@ public class ScreenCaptureManager {
 
             lastRoiRect.set(roi);
             consecutiveFrameFailures = 0;
-            lastSuccessfulFrameMs = System.currentTimeMillis();
+            lastSuccessfulFrameMs = now;
             frameSeq.incrementAndGet();
             return true;
         } catch (Throwable t) {
@@ -530,10 +539,15 @@ public class ScreenCaptureManager {
         }
 
         ByteBuffer dup = buf.duplicate();
-        for (int row = 0; row < h; row++) {
-            int srcOffset = (roi.top + row) * rowStride + roi.left * pixelStride;
-            dup.position(srcOffset);
-            dup.get(roiFrameBytes, row * tightRowBytes, tightRowBytes);
+        if (roi.left == 0 && w == screenWidth && rowStride == screenWidth * pixelStride) {
+            dup.position(roi.top * rowStride);
+            dup.get(roiFrameBytes, 0, totalBytes);
+        } else {
+            for (int row = 0; row < h; row++) {
+                int srcOffset = (roi.top + row) * rowStride + roi.left * pixelStride;
+                dup.position(srcOffset);
+                dup.get(roiFrameBytes, row * tightRowBytes, tightRowBytes);
+            }
         }
 
         ensureDirectRoiMat(w, h);
@@ -588,6 +602,7 @@ public class ScreenCaptureManager {
         displayPaused = false;
         consecutiveFrameFailures = 0;
         lastFrameHealthCheckMs = 0L;
+        pendingBorderHealthChecks = BORDER_HEALTH_CHECK_WARMUP_PASSES;
 
         Log.i(TAG, "resetVirtualDisplay rot=" + rotationToString(lastRotation)
                 + " size=" + screenWidth + "x" + screenHeight);
@@ -615,6 +630,7 @@ public class ScreenCaptureManager {
     }
 
     private void recordFrameFailure(String reason) {
+        pendingBorderHealthChecks = BORDER_HEALTH_CHECK_WARMUP_PASSES;
         int failureCount = ++consecutiveFrameFailures;
         if (failureCount >= MAX_CONSECUTIVE_FRAME_ERRORS) {
             consecutiveFrameFailures = 0;
@@ -662,6 +678,7 @@ public class ScreenCaptureManager {
         resetScheduled = false;
         consecutiveFrameFailures = 0;
         lastSuccessfulFrameMs = 0L;
+        pendingBorderHealthChecks = BORDER_HEALTH_CHECK_WARMUP_PASSES;
 
         // 停止空闲检查
         try {
@@ -715,6 +732,10 @@ public class ScreenCaptureManager {
             return true;
         }
         return false;
+    }
+
+    private boolean shouldCheckTransparentBorders() {
+        return pendingBorderHealthChecks > 0 || consecutiveFrameFailures > 0 || lastSuccessfulFrameMs <= 0L;
     }
 
     // ===== 轻量黑帧检测：可关掉换极限性能 =====
@@ -785,5 +806,12 @@ public class ScreenCaptureManager {
             return null;
         }
         return new Rect(left, top, right, bottom);
+    }
+
+    private boolean isFullScreenRoi(Rect roi) {
+        return roi.left == 0
+                && roi.top == 0
+                && roi.right == screenWidth
+                && roi.bottom == screenHeight;
     }
 }

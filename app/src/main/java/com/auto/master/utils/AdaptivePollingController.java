@@ -27,6 +27,8 @@ public final class AdaptivePollingController {
 
     private final long createdAtMs;
     private int consecutiveMisses = 0;
+    private int lastObservedFrameSeq = -1;
+    private boolean lastAcquireReturnedFreshFrame = false;
 
     private AdaptivePollingController(long fastIntervalMs,
                                       long mediumIntervalMs,
@@ -71,7 +73,9 @@ public final class AdaptivePollingController {
 
     @Nullable
     public Mat acquireFrame() {
-        return ScreenCapture.getSingleBitMapWhileInContinous(false);
+        Mat frame = ScreenCapture.getSingleBitMapWhileInContinous(false);
+        lastAcquireReturnedFreshFrame = updateFreshState(frame);
+        return frame;
     }
 
     @Nullable
@@ -79,7 +83,13 @@ public final class AdaptivePollingController {
         if (roi == null || roi.isEmpty()) {
             return acquireFrame();
         }
-        return ScreenCapture.getSingleBitMapRoiWhileInContinous(roi, false);
+        Mat frame = ScreenCapture.getSingleBitMapRoiWhileInContinous(roi, false);
+        lastAcquireReturnedFreshFrame = updateFreshState(frame);
+        return frame;
+    }
+
+    public boolean hasFreshFrame() {
+        return lastAcquireReturnedFreshFrame;
     }
 
     public void onMiss() {
@@ -96,6 +106,21 @@ public final class AdaptivePollingController {
         if (elapsedMs < targetIntervalMs) {
             SystemClock.sleep(targetIntervalMs - elapsedMs);
         }
+    }
+
+    private boolean updateFreshState(@Nullable Mat frame) {
+        if (frame == null || frame.empty()) {
+            return false;
+        }
+        int frameSeq = ScreenCapture.getFrameSequence();
+        if (frameSeq <= 0) {
+            return false;
+        }
+        if (frameSeq == lastObservedFrameSeq) {
+            return false;
+        }
+        lastObservedFrameSeq = frameSeq;
+        return true;
     }
 
     private long currentIntervalMs(long nowMs) {

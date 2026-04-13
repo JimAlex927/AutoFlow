@@ -42,7 +42,6 @@ import com.auto.master.auto.AutoAccessibilityService;
 import com.auto.master.auto.ColorPointPickerView;
 import com.auto.master.auto.SelectionOverlayView;
 import com.auto.master.capture.ScreenCapture;
-import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.OpenCVHelper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -655,26 +654,7 @@ public class CropRegionOperationHandler extends OperationHandler {
         Bitmap cropped = null;
         if (a == null) return false;
 
-        AdaptivePollingController pollingController = AdaptivePollingController.forTemplateMatch();
-        Mat mat = null;
-        for (int i = 0; i < 6; i++) {
-            mat = pollingController.acquireFrame();
-            if (mat != null && !mat.empty()) {
-                break;
-            }
-            SystemClock.sleep(80);
-        }
-
-        if (mat == null || mat.empty()) {
-            return false;
-        }
-
-        Bitmap full = OpenCVHelper.getInstance().matToBitmap(mat);
-        if (full == null || full.isRecycled()) {
-            return false;
-        }
-
-
+        Bitmap full = ScreenCapture.captureLatestBitmap(null, 480L, 80L);
         if (full == null || full.isRecycled()) {
             return false;
         }
