@@ -195,8 +195,8 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
 
             TextView footer = new TextView(context);
             footer.setText(component.getDisplayTypeName()
-                    + "  " + component.widthDp + "x" + component.heightDp
-                    + "  组件:" + component.scalePercent + "%");
+                    + "  " + component.getDisplayBehaviorName()
+                    + "  " + component.widthDp + "x" + component.heightDp);
             footer.setTextColor(0xFF9AA8B5);
             footer.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f * contentScale);
             LinearLayout.LayoutParams footerLp = new LinearLayout.LayoutParams(
@@ -302,8 +302,8 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
         track.addView(thumb, thumbLp);
 
         TextView footer = new TextView(context);
-        footer.setText("Toggle Switch  " + component.widthDp + "x" + component.heightDp
-                + "  组件:" + component.scalePercent + "%");
+        footer.setText("Toggle Switch  " + component.getDisplayBehaviorName()
+                + "  " + component.widthDp + "x" + component.heightDp);
         footer.setTextColor(0xFF9AA8B5);
         footer.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10f * contentScale);
         LinearLayout.LayoutParams footerLp = new LinearLayout.LayoutParams(
@@ -447,7 +447,6 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
             }
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
-                    getParent().requestDisallowInterceptTouchEvent(true);
                     downRawX = event.getRawX();
                     downRawY = event.getRawY();
                     startXDp = component.xDp;
@@ -462,6 +461,10 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
                     float deltaY = event.getRawY() - downRawY;
                     if (!dragging && (Math.abs(deltaX) > dp(8) || Math.abs(deltaY) > dp(8))) {
                         dragging = true;
+                        getParent().requestDisallowInterceptTouchEvent(true);
+                    }
+                    if (!dragging) {
+                        return true;
                     }
                     float scale = resolveScale();
                     component.xDp = startXDp + pxToDp(deltaX, scale);

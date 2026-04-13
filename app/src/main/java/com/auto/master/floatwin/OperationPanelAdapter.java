@@ -130,6 +130,15 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
             selectedId = selected.id;
         }
         List<OperationItem> targetItems = newItems == null ? Collections.emptyList() : new ArrayList<>(newItems);
+        if (hasSameItems(targetItems)) {
+            if (!TextUtils.isEmpty(selectedId)) {
+                selectedPosition.set(findPositionByKey(selectedId));
+            } else if (selectedPosition.get() >= operations.size()) {
+                selectedPosition.set(-1);
+            }
+            prevPos = findPositionByKey(runningOperationId);
+            return;
+        }
         DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
             @Override
             public int getOldListSize() {
@@ -176,6 +185,25 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
         prevPos = findPositionByKey(runningOperationId);
         notifyBatchChanged();
         diffResult.dispatchUpdatesTo(this);
+    }
+
+    private boolean hasSameItems(List<OperationItem> newItems) {
+        if (operations.size() != newItems.size()) {
+            return false;
+        }
+        for (int i = 0; i < operations.size(); i++) {
+            OperationItem oldItem = operations.get(i);
+            OperationItem newItem = newItems.get(i);
+            if (!TextUtils.equals(oldItem.id, newItem.id)
+                    || oldItem.index != newItem.index
+                    || !TextUtils.equals(oldItem.name, newItem.name)
+                    || !TextUtils.equals(oldItem.type, newItem.type)
+                    || oldItem.delayDurationMs != newItem.delayDurationMs
+                    || oldItem.delayShowCountdown != newItem.delayShowCountdown) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @NonNull

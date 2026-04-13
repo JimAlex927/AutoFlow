@@ -69,6 +69,29 @@
             android:textColor="#243244"
             android:textSize="13sp" />
 
+        <EditText
+            android:id="@+id/et_component_accent_color"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="强调色，例如 #2563EB"
+            android:inputType="text|textNoSuggestions"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <AutoCompleteTextView
+            android:id="@+id/actv_component_display_style"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:completionThreshold="0"
+            android:dropDownHeight="wrap_content"
+            android:hint="展示样式，例如 auto / dropdown / chips"
+            android:paddingStart="4dp"
+            android:paddingEnd="4dp"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
         <LinearLayout
             android:id="@+id/layout_component_size"
             android:layout_width="match_parent"
@@ -107,6 +130,66 @@
             android:inputType="number"
             android:textColor="#243244"
             android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/et_component_max_lines"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="可见行数，例如 1 / 4 / 6"
+            android:inputType="number"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <EditText
+            android:id="@+id/et_component_unit_suffix"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:hint="数字后缀，例如 ms / 次 / %"
+            android:inputType="text|textNoSuggestions"
+            android:textColor="#243244"
+            android:textSize="13sp" />
+
+        <LinearLayout
+            android:id="@+id/layout_component_number_rules"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:orientation="horizontal">
+
+            <EditText
+                android:id="@+id/et_component_number_min"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:hint="最小值"
+                android:inputType="numberDecimal|numberSigned"
+                android:textColor="#243244"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/et_component_number_max"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:hint="最大值"
+                android:inputType="numberDecimal|numberSigned"
+                android:textColor="#243244"
+                android:textSize="13sp" />
+
+            <EditText
+                android:id="@+id/et_component_number_step"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:hint="步长"
+                android:inputType="numberDecimal|numberSigned"
+                android:textColor="#243244"
+                android:textSize="13sp" />
+        </LinearLayout>
 
         <TextView
             android:id="@+id/tv_switch_theme_label"

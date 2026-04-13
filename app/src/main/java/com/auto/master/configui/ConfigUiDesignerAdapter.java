@@ -69,9 +69,9 @@ public class ConfigUiDesignerAdapter extends RecyclerView.Adapter<ConfigUiDesign
                 : component.label);
         String key = component.fieldKey == null ? "" : component.fieldKey.trim();
         if (key.isEmpty()) {
-            holder.meta.setText(component.getDisplayTypeName() + "  ·  " + component.getDisplaySpanName());
+            holder.meta.setText(component.getDisplayTypeName() + "  ·  " + component.getDisplayBehaviorName());
         } else {
-            holder.meta.setText(component.getDisplayTypeName() + "  ·  " + key + "  ·  " + component.getDisplaySpanName());
+            holder.meta.setText(component.getDisplayTypeName() + "  ·  " + key + "  ·  " + component.getDisplayBehaviorName());
         }
         holder.editBtn.setOnClickListener(v -> {
             if (listener != null) {

@@ -26,6 +26,7 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -51,11 +52,19 @@ public final class ConfigUiFormRenderer {
 
     public static final class FormSession {
         private final View rootView;
-        private final List<FieldBinding> bindings;
+        private final LinkedHashMap<String, FieldBinding> bindings;
 
         FormSession(View rootView, List<FieldBinding> bindings) {
             this.rootView = rootView;
-            this.bindings = bindings;
+            this.bindings = new LinkedHashMap<>();
+            if (bindings != null) {
+                for (FieldBinding binding : bindings) {
+                    if (binding == null || TextUtils.isEmpty(binding.getKey())) {
+                        continue;
+                    }
+                    this.bindings.put(binding.getKey(), binding);
+                }
+            }
         }
 
         public View getRootView() {
@@ -64,7 +73,7 @@ public final class ConfigUiFormRenderer {
 
         public LinkedHashMap<String, String> collectValues() {
             LinkedHashMap<String, String> values = new LinkedHashMap<>();
-            for (FieldBinding binding : bindings) {
+            for (FieldBinding binding : bindings.values()) {
                 if (binding == null) {
                     continue;
                 }
@@ -78,6 +87,34 @@ public final class ConfigUiFormRenderer {
                 }
             }
             return values;
+        }
+
+        public List<String> findMissingRequiredFields(@Nullable ConfigUiSchema schema) {
+            List<String> missing = new ArrayList<>();
+            if (schema == null) {
+                return missing;
+            }
+            schema.ensureDefaults();
+            for (ConfigUiPage page : schema.pages) {
+                if (page == null || page.components == null) {
+                    continue;
+                }
+                for (ConfigUiComponent component : page.components) {
+                    if (component == null) {
+                        continue;
+                    }
+                    component.ensureDefaults();
+                    if (!component.required || !component.bindsValue()) {
+                        continue;
+                    }
+                    FieldBinding binding = bindings.get(component.fieldKey);
+                    String value = binding == null ? "" : binding.getValue();
+                    if (TextUtils.isEmpty(value == null ? "" : value.trim())) {
+                        missing.add(TextUtils.isEmpty(component.label) ? component.fieldKey : component.label);
+                    }
+                }
+            }
+            return missing;
         }
     }
 
@@ -192,9 +229,12 @@ public final class ConfigUiFormRenderer {
                                            float pageScale) {
         float componentScale = resolveComponentScale(component);
         float contentScale = pageScale * componentScale;
+        int accentColor = resolveAccentColor(component);
         LinearLayout wrapper = new LinearLayout(context);
         wrapper.setOrientation(LinearLayout.VERTICAL);
-        wrapper.setBackground(createCardBackground());
+        wrapper.setBackground(ConfigUiComponent.TYPE_TITLE.equals(component.type)
+                ? createTitleCardBackground(accentColor)
+                : createCardBackground(accentColor));
         int innerPad = scaleDp(context, 12, contentScale);
         wrapper.setPadding(innerPad, innerPad, innerPad, innerPad);
         FrameLayout.LayoutParams wrapperLp = new FrameLayout.LayoutParams(
@@ -207,13 +247,45 @@ public final class ConfigUiFormRenderer {
         wrapper.setClickable(false);
         wrapper.setFocusable(false);
 
-        if (!TextUtils.isEmpty(component.label)) {
-            TextView label = new TextView(context);
-            label.setText(component.label + (component.required ? " *" : ""));
-            label.setTextColor(0xFF243244);
-            label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f * contentScale);
-            label.setTypeface(label.getTypeface(), android.graphics.Typeface.BOLD);
-            wrapper.addView(label);
+        LinearLayout titleRow = new LinearLayout(context);
+        titleRow.setOrientation(LinearLayout.HORIZONTAL);
+        titleRow.setGravity(Gravity.CENTER_VERTICAL);
+        wrapper.addView(titleRow, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        TextView label = new TextView(context);
+        label.setText(TextUtils.isEmpty(component.label) ? component.getDisplayTypeName() : component.label);
+        label.setTextColor(0xFF243244);
+        label.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f * contentScale);
+        label.setTypeface(label.getTypeface(), android.graphics.Typeface.BOLD);
+        label.setMaxLines(1);
+        label.setEllipsize(TextUtils.TruncateAt.END);
+        titleRow.addView(label, new LinearLayout.LayoutParams(
+                0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                1f));
+
+        TextView typeChip = buildChipView(context, component.getDisplayTypeName(), accentColor, true, contentScale);
+        titleRow.addView(typeChip);
+        if (component.required) {
+            LinearLayout.LayoutParams requiredLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            requiredLp.leftMargin = scaleDp(context, 6, contentScale);
+            titleRow.addView(buildChipView(context, "必填", 0xFFE05D4E, false, contentScale), requiredLp);
+        }
+
+        if (!TextUtils.isEmpty(component.fieldKey)) {
+            TextView keyMeta = new TextView(context);
+            keyMeta.setText("变量键: " + component.fieldKey);
+            keyMeta.setTextColor(0xFF6B7B8C);
+            keyMeta.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f * contentScale);
+            LinearLayout.LayoutParams keyLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            keyLp.topMargin = scaleDp(context, 4, contentScale);
+            wrapper.addView(keyMeta, keyLp);
         }
 
         String initialValue = initialValues == null ? null : initialValues.get(component.fieldKey);
@@ -222,16 +294,22 @@ public final class ConfigUiFormRenderer {
         }
 
         if (ConfigUiComponent.TYPE_TITLE.equals(component.type)) {
+            TextView badge = buildChipView(context, "SECTION", accentColor, true, contentScale);
+            wrapper.removeAllViews();
+            wrapper.addView(badge);
             TextView title = new TextView(context);
             title.setText(component.label);
-            title.setTextColor(0xFF2F4F7C);
-            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f * contentScale);
+            title.setTextColor(0xFF172433);
+            title.setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f * contentScale);
             title.setTypeface(title.getTypeface(), android.graphics.Typeface.BOLD);
-            wrapper.removeAllViews();
-            wrapper.addView(title);
+            LinearLayout.LayoutParams titleLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT);
+            titleLp.topMargin = scaleDp(context, 10, contentScale);
+            wrapper.addView(title, titleLp);
             if (!TextUtils.isEmpty(component.helperText)) {
                 TextView helper = buildHelperView(context, component.helperText);
-                helper.setPadding(0, scaleDp(context, 4, contentScale), 0, 0);
+                helper.setPadding(0, scaleDp(context, 6, contentScale), 0, 0);
                 helper.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f * contentScale);
                 wrapper.addView(helper);
             }
@@ -282,9 +360,47 @@ public final class ConfigUiFormRenderer {
                     return String.valueOf(checkedHolder[0]);
                 }
             });
+        } else if (ConfigUiComponent.TYPE_TEXTAREA.equals(component.type)) {
+            EditText input = new EditText(context);
+            input.setBackground(createInputBackground(accentColor));
+            input.setPadding(scaleDp(context, 12, contentScale), scaleDp(context, 10, contentScale),
+                    scaleDp(context, 12, contentScale), scaleDp(context, 10, contentScale));
+            input.setTextColor(0xFF243244);
+            input.setHint(TextUtils.isEmpty(component.placeholder) ? "请输入多行内容" : component.placeholder);
+            input.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13f * contentScale);
+            input.setGravity(Gravity.TOP | Gravity.START);
+            input.setFocusable(true);
+            input.setFocusableInTouchMode(true);
+            input.setClickable(true);
+            input.setCursorVisible(true);
+            input.setLongClickable(true);
+            input.setHorizontallyScrolling(false);
+            input.setMinLines(Math.max(3, component.maxLines));
+            input.setInputType(InputType.TYPE_CLASS_TEXT
+                    | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                    | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+            input.setLayoutParams(new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT));
+            input.setText(initialValue == null ? "" : initialValue);
+            wrapper.addView(input);
+            installScrollableChildTouchBridge(input);
+            final String key = component.fieldKey;
+            bindings.add(new FieldBinding() {
+                @Override
+                public String getKey() {
+                    return key;
+                }
+
+                @Override
+                public String getValue() {
+                    return input.getText() == null ? "" : input.getText().toString().trim();
+                }
+            });
         } else if (ConfigUiComponent.TYPE_ARRAY.equals(component.type)) {
+            wrapper.addView(buildSubtleCaption(context, "支持每行一个值，也支持直接粘贴 JSON 数组。", contentScale));
             EditText arrayInput = new EditText(context);
-            arrayInput.setBackground(createInputBackground());
+            arrayInput.setBackground(createInputBackground(accentColor));
             arrayInput.setPadding(scaleDp(context, 12, contentScale), scaleDp(context, 10, contentScale),
                     scaleDp(context, 12, contentScale), scaleDp(context, 10, contentScale));
             arrayInput.setTextColor(0xFF243244);
@@ -299,7 +415,7 @@ public final class ConfigUiFormRenderer {
             arrayInput.setCursorVisible(true);
             arrayInput.setLongClickable(true);
             arrayInput.setHorizontallyScrolling(false);
-            arrayInput.setMinLines(Math.max(4, Math.round(component.heightDp / 26f)));
+            arrayInput.setMinLines(Math.max(4, component.maxLines));
             arrayInput.setInputType(InputType.TYPE_CLASS_TEXT
                     | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
                     | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
@@ -322,9 +438,71 @@ public final class ConfigUiFormRenderer {
                 }
             });
         } else if (ConfigUiComponent.TYPE_SELECT.equals(component.type)) {
+            if (shouldRenderSelectAsChips(component)) {
+                final String[] selectedValue = { resolveInitialSelectValue(component, initialValue) };
+                HorizontalScrollView chipScroll = new HorizontalScrollView(context);
+                chipScroll.setHorizontalScrollBarEnabled(false);
+                LinearLayout chipRow = new LinearLayout(context);
+                chipRow.setOrientation(LinearLayout.HORIZONTAL);
+                chipRow.setPadding(0, scaleDp(context, 4, contentScale), 0, 0);
+                chipScroll.addView(chipRow, new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT));
+                List<TextView> chipViews = new ArrayList<>();
+                List<String> chipValues = new ArrayList<>();
+                if (component.options != null) {
+                    for (int i = 0; i < component.options.size(); i++) {
+                        ConfigUiOption option = component.options.get(i);
+                        if (option == null) {
+                            continue;
+                        }
+                        String optionLabel = TextUtils.isEmpty(option.label) ? option.value : option.label;
+                        String optionValue = TextUtils.isEmpty(option.value) ? optionLabel : option.value;
+                        TextView chip = buildSelectChip(context, optionLabel, accentColor, contentScale);
+                        LinearLayout.LayoutParams chipLp = new LinearLayout.LayoutParams(
+                                ViewGroup.LayoutParams.WRAP_CONTENT,
+                                ViewGroup.LayoutParams.WRAP_CONTENT);
+                        if (i > 0) {
+                            chipLp.leftMargin = scaleDp(context, 8, contentScale);
+                        }
+                        chipRow.addView(chip, chipLp);
+                        chipViews.add(chip);
+                        chipValues.add(optionValue);
+                        chip.setOnClickListener(v -> {
+                            selectedValue[0] = optionValue;
+                            updateSelectChipStyles(chipViews, chipValues, selectedValue[0], accentColor);
+                        });
+                    }
+                }
+                updateSelectChipStyles(chipViews, chipValues, selectedValue[0], accentColor);
+                wrapper.addView(chipScroll);
+                final String key = component.fieldKey;
+                bindings.add(new FieldBinding() {
+                    @Override
+                    public String getKey() {
+                        return key;
+                    }
+
+                    @Override
+                    public String getValue() {
+                        return selectedValue[0] == null ? "" : selectedValue[0];
+                    }
+                });
+                if (!TextUtils.isEmpty(component.helperText)) {
+                    TextView helper = buildHelperView(context, component.helperText);
+                    LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            ViewGroup.LayoutParams.WRAP_CONTENT);
+                    lp.topMargin = scaleDp(context, 6, contentScale);
+                    helper.setLayoutParams(lp);
+                    helper.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11f * contentScale);
+                    wrapper.addView(helper);
+                }
+                return wrapper;
+            }
             android.widget.AutoCompleteTextView selectView =
                     new android.widget.AutoCompleteTextView(context);
-            selectView.setBackground(createInputBackground());
+            selectView.setBackground(createInputBackground(accentColor));
             selectView.setPadding(scaleDp(context, 12, contentScale), scaleDp(context, 10, contentScale),
                     scaleDp(context, 12, contentScale), scaleDp(context, 10, contentScale));
             selectView.setTextColor(0xFF243244);
@@ -343,9 +521,9 @@ public final class ConfigUiFormRenderer {
                     if (option == null) {
                         continue;
                     }
-                    String label = TextUtils.isEmpty(option.label) ? option.value : option.label;
-                    labels.add(label);
-                    labelToValue.put(label, TextUtils.isEmpty(option.value) ? label : option.value);
+                    String label_ = TextUtils.isEmpty(option.label) ? option.value : option.label;
+                    labels.add(label_);
+                    labelToValue.put(label_, TextUtils.isEmpty(option.value) ? label_ : option.value);
                 }
             }
             ArrayAdapter<String> adapter = new ArrayAdapter<>(
@@ -383,7 +561,7 @@ public final class ConfigUiFormRenderer {
             });
         } else {
             EditText input = new EditText(context);
-            input.setBackground(createInputBackground());
+            input.setBackground(createInputBackground(accentColor));
             input.setPadding(scaleDp(context, 12, contentScale), scaleDp(context, 10, contentScale),
                     scaleDp(context, 12, contentScale), scaleDp(context, 10, contentScale));
             input.setTextColor(0xFF243244);
@@ -402,7 +580,16 @@ public final class ConfigUiFormRenderer {
                         | InputType.TYPE_NUMBER_FLAG_DECIMAL
                         | InputType.TYPE_NUMBER_FLAG_SIGNED);
             } else {
-                input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+                if (component.maxLines > 1) {
+                    input.setGravity(Gravity.TOP | Gravity.START);
+                    input.setHorizontallyScrolling(false);
+                    input.setMinLines(Math.max(2, component.maxLines));
+                    input.setInputType(InputType.TYPE_CLASS_TEXT
+                            | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS
+                            | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+                } else {
+                    input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+                }
             }
             input.setText(initialValue == null ? "" : initialValue);
             wrapper.addView(input);
@@ -416,6 +603,12 @@ public final class ConfigUiFormRenderer {
 
                 @Override
                 public String getValue() {
+                    if (ConfigUiComponent.TYPE_NUMBER.equals(component.type)) {
+                        return normalizeNumericValue(
+                                input.getText() == null ? "" : input.getText().toString(),
+                                parseOptionalDouble(component.numberMin),
+                                parseOptionalDouble(component.numberMax));
+                    }
                     return input.getText() == null ? "" : input.getText().toString().trim();
                 }
             });
@@ -439,7 +632,82 @@ public final class ConfigUiFormRenderer {
         helper.setText(text);
         helper.setTextColor(0xFF7B8794);
         helper.setTextSize(TypedValue.COMPLEX_UNIT_SP, 11);
+        helper.setLineSpacing(0f, 1.1f);
         return helper;
+    }
+
+    private static TextView buildChipView(Context context,
+                                          String text,
+                                          int accentColor,
+                                          boolean filled,
+                                          float contentScale) {
+        TextView chip = new TextView(context);
+        chip.setText(text);
+        chip.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f * contentScale);
+        chip.setTypeface(chip.getTypeface(), android.graphics.Typeface.BOLD);
+        chip.setTextColor(filled ? 0xFFFFFFFF : darkenColor(accentColor, 0.12f));
+        chip.setPadding(scaleDp(context, 10, contentScale), scaleDp(context, 5, contentScale),
+                scaleDp(context, 10, contentScale), scaleDp(context, 5, contentScale));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(scaleDp(context, 999, contentScale));
+        bg.setColor(filled ? accentColor : mixColorWithWhite(accentColor, 0.88f));
+        bg.setStroke(scaleDp(context, 1, contentScale), mixColorWithWhite(accentColor, filled ? 0.12f : 0.55f));
+        chip.setBackground(bg);
+        return chip;
+    }
+
+    private static TextView buildSubtleCaption(Context context, String text, float contentScale) {
+        TextView caption = new TextView(context);
+        caption.setText(text);
+        caption.setTextColor(0xFF6B7B8C);
+        caption.setTextSize(TypedValue.COMPLEX_UNIT_SP, 10.5f * contentScale);
+        caption.setPadding(0, scaleDp(context, 6, contentScale), 0, scaleDp(context, 6, contentScale));
+        return caption;
+    }
+
+    private static TextView buildSelectChip(Context context,
+                                            String text,
+                                            int accentColor,
+                                            float contentScale) {
+        TextView chip = new TextView(context);
+        chip.setText(text);
+        chip.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12f * contentScale);
+        chip.setPadding(scaleDp(context, 14, contentScale), scaleDp(context, 9, contentScale),
+                scaleDp(context, 14, contentScale), scaleDp(context, 9, contentScale));
+        chip.setMinWidth(scaleDp(context, 64, contentScale));
+        chip.setGravity(Gravity.CENTER);
+        applySelectChipStyle(chip, false, accentColor);
+        return chip;
+    }
+
+    private static void updateSelectChipStyles(List<TextView> chips,
+                                               List<String> chipValues,
+                                               @Nullable String selectedValue,
+                                               int accentColor) {
+        if (chips == null || chipValues == null) {
+            return;
+        }
+        for (int i = 0; i < chips.size(); i++) {
+            TextView chip = chips.get(i);
+            String value = i < chipValues.size() ? chipValues.get(i) : "";
+            applySelectChipStyle(chip, TextUtils.equals(value, selectedValue), accentColor);
+        }
+    }
+
+    private static void applySelectChipStyle(TextView chip, boolean selected, int accentColor) {
+        if (chip == null) {
+            return;
+        }
+        chip.setTextColor(selected ? 0xFFFFFFFF : 0xFF334155);
+        chip.setTypeface(chip.getTypeface(), selected
+                ? android.graphics.Typeface.BOLD
+                : android.graphics.Typeface.NORMAL);
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(dp(chip.getContext(), 14));
+        bg.setColor(selected ? accentColor : 0xFFFFFFFF);
+        bg.setStroke(dp(chip.getContext(), 1),
+                selected ? darkenColor(accentColor, 0.14f) : mixColorWithWhite(accentColor, 0.64f));
+        chip.setBackground(bg);
     }
 
     private static void showPage(FrameLayout pageContainer,
@@ -479,27 +747,117 @@ public final class ConfigUiFormRenderer {
         tab.setTextColor(selected ? 0xFFFFFFFF : 0xFF526273);
     }
 
-    private static GradientDrawable createCardBackground() {
+    private static boolean shouldRenderSelectAsChips(ConfigUiComponent component) {
+        if (component == null || !ConfigUiComponent.TYPE_SELECT.equals(component.type)) {
+            return false;
+        }
+        if (ConfigUiComponent.DISPLAY_STYLE_CHIPS.equals(component.displayStyle)) {
+            return true;
+        }
+        if (ConfigUiComponent.DISPLAY_STYLE_DROPDOWN.equals(component.displayStyle)) {
+            return false;
+        }
+        return component.options != null && component.options.size() > 0 && component.options.size() <= 5;
+    }
+
+    private static String resolveInitialSelectValue(ConfigUiComponent component, @Nullable String initialValue) {
+        if (component == null || component.options == null || component.options.isEmpty()) {
+            return initialValue == null ? "" : initialValue;
+        }
+        if (!TextUtils.isEmpty(initialValue)) {
+            for (ConfigUiOption option : component.options) {
+                if (option == null) {
+                    continue;
+                }
+                String optionLabel = TextUtils.isEmpty(option.label) ? option.value : option.label;
+                String optionValue = TextUtils.isEmpty(option.value) ? optionLabel : option.value;
+                if (TextUtils.equals(optionValue, initialValue) || TextUtils.equals(optionLabel, initialValue)) {
+                    return optionValue;
+                }
+            }
+        }
+        return "";
+    }
+
+    private static int resolveAccentColor(@Nullable ConfigUiComponent component) {
+        if (component == null) {
+            return 0xFF2563EB;
+        }
+        return parseColorOrDefault(
+                component.accentColor,
+                parseColorOrDefault(ConfigUiComponent.defaultAccentColorForType(component.type), 0xFF2563EB));
+    }
+
+    @Nullable
+    private static Double parseOptionalDouble(@Nullable String raw) {
+        if (TextUtils.isEmpty(raw)) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(raw.trim());
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private static String normalizeNumericValue(@Nullable String raw,
+                                                @Nullable Double minValue,
+                                                @Nullable Double maxValue) {
+        Double parsed = parseOptionalDouble(raw);
+        if (parsed == null) {
+            return "";
+        }
+        double clamped = parsed;
+        if (minValue != null) {
+            clamped = Math.max(clamped, minValue);
+        }
+        if (maxValue != null) {
+            clamped = Math.min(clamped, maxValue);
+        }
+        if (Math.abs(clamped - Math.rint(clamped)) < 0.0000001d) {
+            return String.valueOf((long) Math.rint(clamped));
+        }
+        return BigDecimal.valueOf(clamped).stripTrailingZeros().toPlainString();
+    }
+
+    private static GradientDrawable createCardBackground(int accentColor) {
         GradientDrawable bg = new GradientDrawable();
+        bg.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
+        bg.setColors(new int[] {
+                mixColorWithWhite(accentColor, 0.95f),
+                0xFFFFFFFF
+        });
         bg.setCornerRadius(18f);
-        bg.setColor(0xFFF9FBFD);
-        bg.setStroke(1, 0xFFE1E8F0);
+        bg.setStroke(1, mixColorWithWhite(accentColor, 0.68f));
+        return bg;
+    }
+
+    private static GradientDrawable createTitleCardBackground(int accentColor) {
+        GradientDrawable bg = new GradientDrawable();
+        bg.setOrientation(GradientDrawable.Orientation.LEFT_RIGHT);
+        bg.setColors(new int[] {
+                mixColorWithWhite(accentColor, 0.88f),
+                mixColorWithWhite(accentColor, 0.96f)
+        });
+        bg.setCornerRadius(20f);
+        bg.setStroke(1, mixColorWithWhite(accentColor, 0.58f));
         return bg;
     }
 
     private static GradientDrawable createPageHostBackground() {
         GradientDrawable bg = new GradientDrawable();
+        bg.setOrientation(GradientDrawable.Orientation.TOP_BOTTOM);
+        bg.setColors(new int[] {0xFFF8FBFF, 0xFFF2F6FB});
         bg.setCornerRadius(20f);
-        bg.setColor(0xFFF4F7FB);
-        bg.setStroke(1, 0xFFDCE5EF);
+        bg.setStroke(1, 0xFFD9E4EF);
         return bg;
     }
 
-    private static GradientDrawable createInputBackground() {
+    private static GradientDrawable createInputBackground(int accentColor) {
         GradientDrawable bg = new GradientDrawable();
         bg.setCornerRadius(16f);
         bg.setColor(0xFFFFFFFF);
-        bg.setStroke(1, 0xFFD8E1EB);
+        bg.setStroke(1, mixColorWithWhite(accentColor, 0.70f));
         return bg;
     }
 

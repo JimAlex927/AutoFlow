@@ -45,6 +45,9 @@ class ProjectPanelAdapter extends RecyclerView.Adapter<ProjectPanelAdapter.ViewH
 
     void submitProjects(List<ProjectListItem> items) {
         List<ProjectListItem> newItems = items == null ? Collections.emptyList() : new ArrayList<>(items);
+        if (hasSameItems(newItems)) {
+            return;
+        }
         DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
             @Override
             public int getOldListSize() {
@@ -75,6 +78,23 @@ class ProjectPanelAdapter extends RecyclerView.Adapter<ProjectPanelAdapter.ViewH
         projects.clear();
         projects.addAll(newItems);
         diffResult.dispatchUpdatesTo(this);
+    }
+
+    private boolean hasSameItems(List<ProjectListItem> newItems) {
+        if (projects.size() != newItems.size()) {
+            return false;
+        }
+        for (int i = 0; i < projects.size(); i++) {
+            ProjectListItem oldItem = projects.get(i);
+            ProjectListItem newItem = newItems.get(i);
+            if (!TextUtils.equals(oldItem.dir.getAbsolutePath(), newItem.dir.getAbsolutePath())
+                    || oldItem.taskCount != newItem.taskCount
+                    || oldItem.lastModified != newItem.lastModified
+                    || !TextUtils.equals(oldItem.dir.getName(), newItem.dir.getName())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @NonNull

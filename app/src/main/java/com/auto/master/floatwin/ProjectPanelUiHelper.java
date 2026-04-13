@@ -159,7 +159,7 @@ final class ProjectPanelUiHelper {
     private static final int PROJECT_PANEL_DOCK_H_DP = 112;
     private static final int PROJECT_PANEL_DOCK_TRIGGER_DP = 18;
     private static final int PROJECT_PANEL_DOCK_MARGIN_DP = 6;
-    private static final long SEARCH_REFRESH_DELAY_MS = 120L;
+    private static final long SEARCH_REFRESH_DELAY_MS = 220L;
 
     private final Host host;
 
@@ -244,9 +244,12 @@ final class ProjectPanelUiHelper {
         if (host.getCurrentTaskDir() != null) {
             clearProjectPanelSearch();
         }
+        boolean shouldRefreshOnShow = host.shouldRefreshProjectPanelContent();
         showProjectPanel();
         File currentTaskDir = host.getCurrentTaskDir();
-        if (currentTaskDir != null) {
+        if (!shouldRefreshOnShow
+                && host.getProjectPanelLevel() == LEVEL_OPERATION
+                && currentTaskDir != null) {
             host.loadOperations(currentTaskDir);
         }
         updateUIForLevel();

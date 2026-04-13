@@ -46,6 +46,9 @@ class TaskPanelAdapter extends RecyclerView.Adapter<TaskPanelAdapter.ViewHolder>
 
     void submitItems(List<File> newItems) {
         List<File> targetItems = newItems == null ? Collections.emptyList() : new ArrayList<>(newItems);
+        if (hasSameItems(targetItems)) {
+            return;
+        }
         DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
             @Override
             public int getOldListSize() {
@@ -77,6 +80,24 @@ class TaskPanelAdapter extends RecyclerView.Adapter<TaskPanelAdapter.ViewHolder>
         items.clear();
         items.addAll(targetItems);
         diffResult.dispatchUpdatesTo(this);
+    }
+
+    private boolean hasSameItems(List<File> newItems) {
+        if (items.size() != newItems.size()) {
+            return false;
+        }
+        for (int i = 0; i < items.size(); i++) {
+            File oldItem = items.get(i);
+            File newItem = newItems.get(i);
+            if (!TextUtils.equals(oldItem.getAbsolutePath(), newItem.getAbsolutePath())
+                    || oldItem.isDirectory() != newItem.isDirectory()
+                    || oldItem.lastModified() != newItem.lastModified()
+                    || oldItem.length() != newItem.length()
+                    || !TextUtils.equals(oldItem.getName(), newItem.getName())) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @NonNull

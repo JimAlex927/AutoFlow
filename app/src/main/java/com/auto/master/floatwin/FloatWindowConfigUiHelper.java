@@ -245,6 +245,8 @@ final class FloatWindowConfigUiHelper {
                 workingSchema, currentPageIndex, canvasView, ConfigUiComponent.TYPE_SWITCH);
         bindConfigUiPaletteSource(dialogView.findViewById(R.id.btn_add_select_component),
                 workingSchema, currentPageIndex, canvasView, ConfigUiComponent.TYPE_SELECT);
+        bindConfigUiPaletteSource(dialogView.findViewById(R.id.btn_add_textarea_component),
+                workingSchema, currentPageIndex, canvasView, ConfigUiComponent.TYPE_TEXTAREA);
         bindConfigUiPaletteSource(dialogView.findViewById(R.id.btn_add_array_component),
                 workingSchema, currentPageIndex, canvasView, ConfigUiComponent.TYPE_ARRAY);
         bindConfigUiPaletteSource(dialogView.findViewById(R.id.btn_add_title_component),
@@ -298,9 +300,13 @@ final class FloatWindowConfigUiHelper {
 
         dialog.show();
         if (dialog.getWindow() != null) {
+            int maxHeight = Math.min(
+                    host.dp(760),
+                    (int) (host.getContext().getResources().getDisplayMetrics().heightPixels * 0.92f));
             dialog.getWindow().setLayout(
                     Math.min(host.dp(390), (int) (host.getContext().getResources().getDisplayMetrics().widthPixels * 0.96f)),
-                    ViewGroup.LayoutParams.WRAP_CONTENT);
+                    maxHeight);
+            dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
     }
 
@@ -475,6 +481,11 @@ final class FloatWindowConfigUiHelper {
                 });
         dialogView.findViewById(R.id.btn_config_ui_runtime_save)
                 .setOnClickListener(v -> {
+                    List<String> missingRequired = session.findMissingRequiredFields(schema);
+                    if (!missingRequired.isEmpty()) {
+                        host.showToast("请先填写必填项：" + missingRequired.get(0));
+                        return;
+                    }
                     Map<String, String> merged = ConfigUiValueCodec.merge(
                             baseValues,
                             session.collectValues(),
@@ -633,9 +644,17 @@ final class FloatWindowConfigUiHelper {
         EditText placeholderInput = view.findViewById(R.id.et_component_placeholder);
         EditText defaultInput = view.findViewById(R.id.et_component_default);
         EditText helperInput = view.findViewById(R.id.et_component_helper);
+        EditText accentColorInput = view.findViewById(R.id.et_component_accent_color);
+        AutoCompleteTextView displayStyleInput = view.findViewById(R.id.actv_component_display_style);
         EditText widthInput = view.findViewById(R.id.et_component_width);
         EditText heightInput = view.findViewById(R.id.et_component_height);
         EditText scaleInput = view.findViewById(R.id.et_component_scale);
+        EditText maxLinesInput = view.findViewById(R.id.et_component_max_lines);
+        EditText unitSuffixInput = view.findViewById(R.id.et_component_unit_suffix);
+        View numberRulesLayout = view.findViewById(R.id.layout_component_number_rules);
+        EditText numberMinInput = view.findViewById(R.id.et_component_number_min);
+        EditText numberMaxInput = view.findViewById(R.id.et_component_number_max);
+        EditText numberStepInput = view.findViewById(R.id.et_component_number_step);
         TextView switchThemeLabel = view.findViewById(R.id.tv_switch_theme_label);
         EditText switchOnColorInput = view.findViewById(R.id.et_switch_on_color);
         EditText switchOffColorInput = view.findViewById(R.id.et_switch_off_color);
@@ -650,22 +669,45 @@ final class FloatWindowConfigUiHelper {
         placeholderInput.setText(component.placeholder);
         defaultInput.setText(component.defaultValue);
         helperInput.setText(component.helperText);
+        accentColorInput.setText(component.accentColor);
+        displayStyleInput.setAdapter(new ArrayAdapter<>(
+                ctx,
+                android.R.layout.simple_list_item_1,
+                new String[] {
+                        ConfigUiComponent.DISPLAY_STYLE_AUTO,
+                        ConfigUiComponent.DISPLAY_STYLE_DROPDOWN,
+                        ConfigUiComponent.DISPLAY_STYLE_CHIPS
+                }));
+        displayStyleInput.setText(component.displayStyle, false);
+        displayStyleInput.setOnClickListener(v -> displayStyleInput.showDropDown());
         optionsInput.setText(joinConfigUiOptions(component.options));
         widthInput.setText(String.valueOf(component.widthDp));
         heightInput.setText(String.valueOf(component.heightDp));
         scaleInput.setText(String.valueOf(component.scalePercent));
+        maxLinesInput.setText(String.valueOf(component.maxLines));
+        unitSuffixInput.setText(component.unitSuffix);
+        numberMinInput.setText(component.numberMin);
+        numberMaxInput.setText(component.numberMax);
+        numberStepInput.setText(component.numberStep);
         switchOnColorInput.setText(component.switchOnColor);
         switchOffColorInput.setText(component.switchOffColor);
         switchThumbColorInput.setText(component.switchThumbColor);
 
         boolean isTitle = ConfigUiComponent.TYPE_TITLE.equals(component.type);
+        boolean isTextarea = ConfigUiComponent.TYPE_TEXTAREA.equals(component.type);
         boolean isSelect = ConfigUiComponent.TYPE_SELECT.equals(component.type);
         boolean isArray = ConfigUiComponent.TYPE_ARRAY.equals(component.type);
         boolean isSwitch = ConfigUiComponent.TYPE_SWITCH.equals(component.type);
+        boolean isNumber = ConfigUiComponent.TYPE_NUMBER.equals(component.type);
         keyInput.setVisibility(isTitle ? View.GONE : View.VISIBLE);
         placeholderInput.setVisibility(isTitle ? View.GONE : View.VISIBLE);
         defaultInput.setVisibility(isTitle ? View.GONE : View.VISIBLE);
         sizeLayout.setVisibility(View.VISIBLE);
+        accentColorInput.setVisibility(View.VISIBLE);
+        displayStyleInput.setVisibility(isSelect ? View.VISIBLE : View.GONE);
+        maxLinesInput.setVisibility((isTextarea || isArray || (!isTitle && !isSwitch && !isSelect && !isNumber)) ? View.VISIBLE : View.GONE);
+        unitSuffixInput.setVisibility(isNumber ? View.VISIBLE : View.GONE);
+        numberRulesLayout.setVisibility(isNumber ? View.VISIBLE : View.GONE);
         switchThemeLabel.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
         switchOnColorInput.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
         switchOffColorInput.setVisibility(isSwitch ? View.VISIBLE : View.GONE);
@@ -676,8 +718,14 @@ final class FloatWindowConfigUiHelper {
             placeholderInput.setHint("每行一个元素，或粘贴 JSON 数组");
             defaultInput.setHint("默认值，例如 [\"A\",\"B\",1]");
             helperInput.setHint("辅助说明，例如：脚本里可直接用 vars.myArray[0]");
+        } else if (isTextarea) {
+            placeholderInput.setHint("多行输入提示");
+            defaultInput.setHint("默认值，可直接写多行文本");
+            helperInput.setHint("辅助说明，例如：支持粘贴说明、脚本片段等");
         } else if (isSwitch) {
             defaultInput.setHint("默认值，例如 true 或 false");
+        } else if (isNumber) {
+            defaultInput.setHint("默认值，例如 10 或 0.5");
         }
 
         android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
@@ -711,6 +759,12 @@ final class FloatWindowConfigUiHelper {
                     component.placeholder = isTitle ? "" : readTrimmedText(placeholderInput, "");
                     component.defaultValue = isTitle ? "" : readTrimmedText(defaultInput, "");
                     component.helperText = readTrimmedText(helperInput, "");
+                    component.accentColor = normalizeConfigUiColorInput(
+                            readTrimmedText(accentColorInput, component.accentColor),
+                            ConfigUiComponent.defaultAccentColorForType(component.type));
+                    component.displayStyle = isSelect
+                            ? readTrimmedText(displayStyleInput, ConfigUiComponent.DISPLAY_STYLE_AUTO)
+                            : ConfigUiComponent.DISPLAY_STYLE_AUTO;
                     component.widthDp = Math.max(80, parseIntDefault(readTrimmedText(widthInput,
                             String.valueOf(ConfigUiComponent.defaultWidthForType(component.type))),
                             ConfigUiComponent.defaultWidthForType(component.type)));
@@ -720,6 +774,13 @@ final class FloatWindowConfigUiHelper {
                     component.scalePercent = Math.max(40, Math.min(200, parseIntDefault(
                             readTrimmedText(scaleInput, String.valueOf(component.scalePercent)),
                             component.scalePercent)));
+                    component.maxLines = Math.max(1, parseIntDefault(
+                            readTrimmedText(maxLinesInput, String.valueOf(component.maxLines)),
+                            component.maxLines));
+                    component.unitSuffix = isNumber ? readTrimmedText(unitSuffixInput, "") : "";
+                    component.numberMin = isNumber ? readTrimmedText(numberMinInput, "") : "";
+                    component.numberMax = isNumber ? readTrimmedText(numberMaxInput, "") : "";
+                    component.numberStep = isNumber ? readTrimmedText(numberStepInput, "1") : "";
                     component.switchOnColor = isSwitch
                             ? normalizeConfigUiColorInput(readTrimmedText(switchOnColorInput, component.switchOnColor), "#16A34A")
                             : "";
@@ -820,6 +881,21 @@ final class FloatWindowConfigUiHelper {
                 }
                 if (!usedKeys.add(key)) {
                     return "字段 Key 重复：" + key;
+                }
+                if (ConfigUiComponent.TYPE_SELECT.equals(component.type)
+                        && (component.options == null || component.options.isEmpty())) {
+                    return "下拉组件至少需要一个选项";
+                }
+                if (ConfigUiComponent.TYPE_NUMBER.equals(component.type)
+                        && !TextUtils.isEmpty(component.numberMin)
+                        && !TextUtils.isEmpty(component.numberMax)) {
+                    try {
+                        if (Double.parseDouble(component.numberMin) > Double.parseDouble(component.numberMax)) {
+                            return "数字组件的最小值不能大于最大值";
+                        }
+                    } catch (Exception ignored) {
+                        return "数字组件的最小值/最大值格式不正确";
+                    }
                 }
             }
         }
