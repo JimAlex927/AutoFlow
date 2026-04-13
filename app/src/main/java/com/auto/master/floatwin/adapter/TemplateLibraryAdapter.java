@@ -1,7 +1,5 @@
 package com.auto.master.floatwin.adapter;
 
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -11,9 +9,11 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
+import com.auto.master.utils.BitmapManager;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -56,6 +56,7 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
     private final List<TemplateLibraryItem> shownItems = new ArrayList<>();
     private final OnPickListener listener;
     private final OnDeleteListener deleteListener;
+    private final BitmapManager bitmapManager = BitmapManager.getInstance();
     private final Set<String> selectedNames = new HashSet<>();
     private boolean batchMode = false;
     private boolean deleteActionEnabled = false;
@@ -74,21 +75,22 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
         }
         this.listener = listener;
         this.deleteListener = deleteListener;
+        setHasStableIds(true);
     }
 
     public void updateFilter(String query) {
-        shownItems.clear();
+        List<TemplateLibraryItem> filtered = new ArrayList<>();
         String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         if (TextUtils.isEmpty(q)) {
-            shownItems.addAll(allItems);
+            filtered.addAll(allItems);
         } else {
             for (TemplateLibraryItem item : allItems) {
                 if (item.fileName != null && item.fileName.toLowerCase(Locale.ROOT).contains(q)) {
-                    shownItems.add(item);
+                    filtered.add(item);
                 }
             }
         }
-        notifyDataSetChanged();
+        applyShownItems(filtered);
     }
 
     public void setBatchMode(boolean enabled) {
@@ -97,7 +99,7 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
             selectedNames.clear();
             notifySelectionChanged();
         }
-        notifyDataSetChanged();
+        notifyItemRangeChanged(0, shownItems.size());
     }
 
     public int getSelectedCount() {
@@ -112,7 +114,10 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
         if (fileName != null && !fileName.isEmpty()) {
             selectedNames.add(fileName);
             notifySelectionChanged();
-            notifyDataSetChanged();
+            int position = findShownPosition(fileName);
+            if (position >= 0) {
+                notifyItemChanged(position);
+            }
         }
     }
 
@@ -122,19 +127,17 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
 
     public void setDeleteActionEnabled(boolean enabled) {
         deleteActionEnabled = enabled;
-        notifyDataSetChanged();
+        notifyItemRangeChanged(0, shownItems.size());
     }
 
     public void replaceData(List<TemplateLibraryItem> items) {
         allItems.clear();
-        shownItems.clear();
         selectedNames.clear();
         if (items != null) {
             allItems.addAll(items);
-            shownItems.addAll(items);
         }
         notifySelectionChanged();
-        notifyDataSetChanged();
+        applyShownItems(new ArrayList<>(allItems));
     }
 
     private void notifySelectionChanged() {
@@ -161,8 +164,9 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
             holder.tvMeta.setText("未被引用，可删除");
             holder.tvMeta.setTextColor(0xFF7A8794);
         }
-        Bitmap bitmap = item.file == null ? null : BitmapFactory.decodeFile(item.file.getAbsolutePath());
-        holder.ivImage.setImageBitmap(bitmap);
+        holder.ivImage.setImageBitmap(item.file == null
+                ? null
+                : bitmapManager.loadThumbnail(item.file.getAbsolutePath(), 160, 120));
         holder.checkBox.setVisibility(batchMode ? View.VISIBLE : View.GONE);
         holder.checkBox.setChecked(selectedNames.contains(item.fileName));
         holder.checkBox.setClickable(false);
@@ -203,6 +207,68 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
     @Override
     public int getItemCount() {
         return shownItems.size();
+    }
+
+    @Override
+    public long getItemId(int position) {
+        TemplateLibraryItem item = shownItems.get(position);
+        if (item == null || item.file == null) {
+            return position;
+        }
+        return item.file.getAbsolutePath().hashCode();
+    }
+
+    private int findShownPosition(String fileName) {
+        for (int i = 0; i < shownItems.size(); i++) {
+            if (TextUtils.equals(fileName, shownItems.get(i).fileName)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private void applyShownItems(List<TemplateLibraryItem> nextItems) {
+        DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new SimpleDiffCallback(shownItems, nextItems));
+        shownItems.clear();
+        shownItems.addAll(nextItems);
+        diff.dispatchUpdatesTo(this);
+    }
+
+    private static final class SimpleDiffCallback extends DiffUtil.Callback {
+        private final List<TemplateLibraryItem> oldItems;
+        private final List<TemplateLibraryItem> newItems;
+
+        SimpleDiffCallback(List<TemplateLibraryItem> oldItems, List<TemplateLibraryItem> newItems) {
+            this.oldItems = oldItems;
+            this.newItems = newItems;
+        }
+
+        @Override
+        public int getOldListSize() {
+            return oldItems.size();
+        }
+
+        @Override
+        public int getNewListSize() {
+            return newItems.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            TemplateLibraryItem oldItem = oldItems.get(oldItemPosition);
+            TemplateLibraryItem newItem = newItems.get(newItemPosition);
+            String oldPath = oldItem.file == null ? oldItem.fileName : oldItem.file.getAbsolutePath();
+            String newPath = newItem.file == null ? newItem.fileName : newItem.file.getAbsolutePath();
+            return TextUtils.equals(oldPath, newPath);
+        }
+
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            TemplateLibraryItem oldItem = oldItems.get(oldItemPosition);
+            TemplateLibraryItem newItem = newItems.get(newItemPosition);
+            return TextUtils.equals(oldItem.fileName, newItem.fileName)
+                    && oldItem.usageCount == newItem.usageCount;
+        }
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {

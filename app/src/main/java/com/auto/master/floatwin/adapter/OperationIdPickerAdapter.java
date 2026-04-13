@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
@@ -16,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 
 public class OperationIdPickerAdapter extends RecyclerView.Adapter<OperationIdPickerAdapter.ViewHolder> {
+    private static final Object PAYLOAD_SELECTION = new Object();
 
     public interface OnPickListener {
         void onPick(String id);
@@ -49,18 +51,27 @@ public class OperationIdPickerAdapter extends RecyclerView.Adapter<OperationIdPi
         }
         this.selectedOperationId = selectedOperationId;
         this.listener = listener;
+        setHasStableIds(true);
     }
 
     public void updateSelectedOperation(String selectedOperationId) {
+        String previousId = this.selectedOperationId;
         this.selectedOperationId = selectedOperationId;
-        notifyDataSetChanged();
+        int previous = findPositionById(previousId);
+        int current = findPositionById(selectedOperationId);
+        if (previous >= 0) {
+            notifyItemChanged(previous, PAYLOAD_SELECTION);
+        }
+        if (current >= 0 && current != previous) {
+            notifyItemChanged(current, PAYLOAD_SELECTION);
+        }
     }
 
     public void updateFilter(String query) {
-        shownItems.clear();
+        List<OperationPickItem> filtered = new ArrayList<>();
         String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         if (TextUtils.isEmpty(q)) {
-            shownItems.addAll(allItems);
+            filtered.addAll(allItems);
         } else {
             for (OperationPickItem item : allItems) {
                 String order = String.valueOf(item.order);
@@ -68,11 +79,14 @@ public class OperationIdPickerAdapter extends RecyclerView.Adapter<OperationIdPi
                 String name = item.name == null ? "" : item.name.toLowerCase(Locale.ROOT);
                 String type = item.type == null ? "" : item.type.toLowerCase(Locale.ROOT);
                 if (order.contains(q) || id.contains(q) || name.contains(q) || type.contains(q)) {
-                    shownItems.add(item);
+                    filtered.add(item);
                 }
             }
         }
-        notifyDataSetChanged();
+        DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new SimpleDiffCallback(shownItems, filtered));
+        shownItems.clear();
+        shownItems.addAll(filtered);
+        diff.dispatchUpdatesTo(this);
     }
 
     @NonNull
@@ -85,13 +99,9 @@ public class OperationIdPickerAdapter extends RecyclerView.Adapter<OperationIdPi
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         OperationPickItem item = shownItems.get(position);
-        boolean selected = !TextUtils.isEmpty(selectedOperationId)
-                && TextUtils.equals(selectedOperationId, item.id);
-        holder.itemView.setSelected(selected);
+        bindSelection(holder, item);
         holder.tvId.setText(String.format(Locale.getDefault(), "#%02d  %s", item.order, item.name));
         holder.tvMeta.setText(item.type + "  |  " + item.id);
-        holder.tvId.setTextColor(selected ? 0xFF1F4AA8 : 0xFF253342);
-        holder.tvMeta.setTextColor(selected ? 0xFF315DBF : 0xFF6A7682);
         holder.itemView.setOnClickListener(v -> {
             if (listener != null) {
                 listener.onPick(item.id);
@@ -100,8 +110,78 @@ public class OperationIdPickerAdapter extends RecyclerView.Adapter<OperationIdPi
     }
 
     @Override
+    public void onBindViewHolder(@NonNull ViewHolder holder, int position, @NonNull List<Object> payloads) {
+        if (!payloads.isEmpty()) {
+            bindSelection(holder, shownItems.get(position));
+            return;
+        }
+        onBindViewHolder(holder, position);
+    }
+
+    private void bindSelection(@NonNull ViewHolder holder, @NonNull OperationPickItem item) {
+        boolean selected = !TextUtils.isEmpty(selectedOperationId)
+                && TextUtils.equals(selectedOperationId, item.id);
+        holder.itemView.setSelected(selected);
+        holder.tvId.setTextColor(selected ? 0xFF1F4AA8 : 0xFF253342);
+        holder.tvMeta.setTextColor(selected ? 0xFF315DBF : 0xFF6A7682);
+    }
+
+    @Override
     public int getItemCount() {
         return shownItems.size();
+    }
+
+    @Override
+    public long getItemId(int position) {
+        OperationPickItem item = shownItems.get(position);
+        return item.id == null ? position : item.id.hashCode();
+    }
+
+    private int findPositionById(String id) {
+        if (TextUtils.isEmpty(id)) {
+            return -1;
+        }
+        for (int i = 0; i < shownItems.size(); i++) {
+            if (TextUtils.equals(id, shownItems.get(i).id)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private static final class SimpleDiffCallback extends DiffUtil.Callback {
+        private final List<OperationPickItem> oldItems;
+        private final List<OperationPickItem> newItems;
+
+        SimpleDiffCallback(List<OperationPickItem> oldItems, List<OperationPickItem> newItems) {
+            this.oldItems = oldItems;
+            this.newItems = newItems;
+        }
+
+        @Override
+        public int getOldListSize() {
+            return oldItems.size();
+        }
+
+        @Override
+        public int getNewListSize() {
+            return newItems.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            return TextUtils.equals(oldItems.get(oldItemPosition).id, newItems.get(newItemPosition).id);
+        }
+
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            OperationPickItem oldItem = oldItems.get(oldItemPosition);
+            OperationPickItem newItem = newItems.get(newItemPosition);
+            return oldItem.order == newItem.order
+                    && TextUtils.equals(oldItem.id, newItem.id)
+                    && TextUtils.equals(oldItem.name, newItem.name)
+                    && TextUtils.equals(oldItem.type, newItem.type);
+        }
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {

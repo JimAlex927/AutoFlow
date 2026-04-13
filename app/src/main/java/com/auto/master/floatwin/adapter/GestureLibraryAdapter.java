@@ -7,6 +7,7 @@ import android.view.ViewGroup;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
@@ -50,22 +51,26 @@ public class GestureLibraryAdapter extends RecyclerView.Adapter<GestureLibraryAd
             shownItems.addAll(items);
         }
         this.listener = listener;
+        setHasStableIds(true);
     }
 
     public void updateFilter(String query) {
-        shownItems.clear();
+        List<GestureLibraryItem> filtered = new ArrayList<>();
         String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
         if (TextUtils.isEmpty(q)) {
-            shownItems.addAll(allItems);
+            filtered.addAll(allItems);
         } else {
             for (GestureLibraryItem item : allItems) {
                 String name = item.fileName == null ? "" : item.fileName.toLowerCase(Locale.ROOT);
                 if (name.contains(q)) {
-                    shownItems.add(item);
+                    filtered.add(item);
                 }
             }
         }
-        notifyDataSetChanged();
+        DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new SimpleDiffCallback(shownItems, filtered));
+        shownItems.clear();
+        shownItems.addAll(filtered);
+        diff.dispatchUpdatesTo(this);
     }
 
     @NonNull
@@ -97,6 +102,51 @@ public class GestureLibraryAdapter extends RecyclerView.Adapter<GestureLibraryAd
     @Override
     public int getItemCount() {
         return shownItems.size();
+    }
+
+    @Override
+    public long getItemId(int position) {
+        GestureLibraryItem item = shownItems.get(position);
+        return item.file == null ? position : item.file.getAbsolutePath().hashCode();
+    }
+
+    private static final class SimpleDiffCallback extends DiffUtil.Callback {
+        private final List<GestureLibraryItem> oldItems;
+        private final List<GestureLibraryItem> newItems;
+
+        SimpleDiffCallback(List<GestureLibraryItem> oldItems, List<GestureLibraryItem> newItems) {
+            this.oldItems = oldItems;
+            this.newItems = newItems;
+        }
+
+        @Override
+        public int getOldListSize() {
+            return oldItems.size();
+        }
+
+        @Override
+        public int getNewListSize() {
+            return newItems.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            File oldFile = oldItems.get(oldItemPosition).file;
+            File newFile = newItems.get(newItemPosition).file;
+            String oldPath = oldFile == null ? oldItems.get(oldItemPosition).fileName : oldFile.getAbsolutePath();
+            String newPath = newFile == null ? newItems.get(newItemPosition).fileName : newFile.getAbsolutePath();
+            return TextUtils.equals(oldPath, newPath);
+        }
+
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            GestureLibraryItem oldItem = oldItems.get(oldItemPosition);
+            GestureLibraryItem newItem = newItems.get(newItemPosition);
+            return TextUtils.equals(oldItem.fileName, newItem.fileName)
+                    && oldItem.duration == newItem.duration
+                    && oldItem.strokeCount == newItem.strokeCount
+                    && oldItem.node == newItem.node;
+        }
     }
 
     public static class ViewHolder extends RecyclerView.ViewHolder {

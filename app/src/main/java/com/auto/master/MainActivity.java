@@ -24,6 +24,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
@@ -42,7 +43,11 @@ import org.opencv.android.OpenCVLoader;
 
 import java.io.File;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -72,6 +77,33 @@ public class MainActivity extends AppCompatActivity {
             this.showMore = showMore;
             this.payload = payload;
         }
+
+        long stableId() {
+            if (payload instanceof HomeProjectRepository.ProjectSummary) {
+                return ((HomeProjectRepository.ProjectSummary) payload).dir.getAbsolutePath().hashCode();
+            }
+            if (payload instanceof HomeProjectRepository.TaskSummary) {
+                return ((HomeProjectRepository.TaskSummary) payload).dir.getAbsolutePath().hashCode();
+            }
+            return (String.valueOf(title) + '\n' + subtitle + '\n' + badge).hashCode();
+        }
+
+        boolean isSameItem(@NonNull EntryItem other) {
+            return stableId() == other.stableId()
+                    && getPayloadType() == other.getPayloadType();
+        }
+
+        boolean hasSameContent(@NonNull EntryItem other) {
+            return iconRes == other.iconRes
+                    && showMore == other.showMore
+                    && TextUtils.equals(title, other.title)
+                    && TextUtils.equals(subtitle, other.subtitle)
+                    && TextUtils.equals(badge, other.badge);
+        }
+
+        private int getPayloadType() {
+            return payload instanceof HomeProjectRepository.ProjectSummary ? 1 : 0;
+        }
     }
 
     private static final class ActionSheetItem {
@@ -86,19 +118,53 @@ public class MainActivity extends AppCompatActivity {
             this.desc = desc;
             this.enabled = enabled;
         }
+
+        boolean isSameItem(@NonNull ActionSheetItem other) {
+            return id == other.id;
+        }
+
+        boolean hasSameContent(@NonNull ActionSheetItem other) {
+            return enabled == other.enabled
+                    && TextUtils.equals(title, other.title)
+                    && TextUtils.equals(desc, other.desc);
+        }
     }
 
     private static final class ActionSheetAdapter extends RecyclerView.Adapter<ActionSheetAdapter.ViewHolder> {
         private final List<ActionSheetItem> items = new ArrayList<>();
         private ActionSheetHandler handler;
 
+        ActionSheetAdapter() {
+            setHasStableIds(true);
+        }
+
         void submitItems(List<ActionSheetItem> nextItems, ActionSheetHandler nextHandler) {
+            List<ActionSheetItem> targetItems = nextItems == null ? Collections.emptyList() : new ArrayList<>(nextItems);
+            DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+                @Override
+                public int getOldListSize() {
+                    return items.size();
+                }
+
+                @Override
+                public int getNewListSize() {
+                    return targetItems.size();
+                }
+
+                @Override
+                public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+                    return items.get(oldItemPosition).isSameItem(targetItems.get(newItemPosition));
+                }
+
+                @Override
+                public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+                    return items.get(oldItemPosition).hasSameContent(targetItems.get(newItemPosition));
+                }
+            });
             items.clear();
-            if (nextItems != null) {
-                items.addAll(nextItems);
-            }
+            items.addAll(targetItems);
             handler = nextHandler;
-            notifyDataSetChanged();
+            diffResult.dispatchUpdatesTo(this);
         }
 
         @NonNull
@@ -124,6 +190,11 @@ public class MainActivity extends AppCompatActivity {
         @Override
         public int getItemCount() {
             return items.size();
+        }
+
+        @Override
+        public long getItemId(int position) {
+            return items.get(position).id;
         }
 
         static class ViewHolder extends RecyclerView.ViewHolder {
@@ -157,14 +228,35 @@ public class MainActivity extends AppCompatActivity {
         EntryAdapter(OnItemClickListener clickListener, OnMoreClickListener moreClickListener) {
             this.clickListener = clickListener;
             this.moreClickListener = moreClickListener;
+            setHasStableIds(true);
         }
 
         void submitItems(List<EntryItem> nextItems) {
+            List<EntryItem> targetItems = nextItems == null ? Collections.emptyList() : new ArrayList<>(nextItems);
+            DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new DiffUtil.Callback() {
+                @Override
+                public int getOldListSize() {
+                    return items.size();
+                }
+
+                @Override
+                public int getNewListSize() {
+                    return targetItems.size();
+                }
+
+                @Override
+                public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+                    return items.get(oldItemPosition).isSameItem(targetItems.get(newItemPosition));
+                }
+
+                @Override
+                public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+                    return items.get(oldItemPosition).hasSameContent(targetItems.get(newItemPosition));
+                }
+            });
             items.clear();
-            if (nextItems != null) {
-                items.addAll(nextItems);
-            }
-            notifyDataSetChanged();
+            items.addAll(targetItems);
+            diffResult.dispatchUpdatesTo(this);
         }
 
         @NonNull
@@ -200,6 +292,11 @@ public class MainActivity extends AppCompatActivity {
         }
 
         @Override
+        public long getItemId(int position) {
+            return items.get(position).stableId();
+        }
+
+        @Override
         public int getItemViewType(int position) {
             EntryItem item = items.get(position);
             return item.payload instanceof HomeProjectRepository.ProjectSummary
@@ -226,6 +323,8 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private final HomeProjectRepository repository = new HomeProjectRepository();
+    private final ExecutorService panelLoadExecutor = Executors.newSingleThreadExecutor();
+    private final AtomicInteger panelLoadToken = new AtomicInteger();
 
     private TextView tvPermissionStatus;
     private TextView btnPermissionQuick;
@@ -291,6 +390,13 @@ public class MainActivity extends AppCompatActivity {
         syncFloatPanelState();
         refreshPermissionStatus();
         reloadCurrentLevel();
+    }
+
+    @Override
+    protected void onDestroy() {
+        panelLoadToken.incrementAndGet();
+        panelLoadExecutor.shutdownNow();
+        super.onDestroy();
     }
 
     private void bindViews() {
@@ -464,24 +570,8 @@ public class MainActivity extends AppCompatActivity {
         currentProjectDir = null;
         currentTaskDir = null;
         applyPanelLayoutManager(Level.PROJECT);
-        List<HomeProjectRepository.ProjectSummary> projects = repository.loadProjects(this);
-        List<EntryItem> entries = new ArrayList<>();
-        for (HomeProjectRepository.ProjectSummary project : projects) {
-            String subtitle = project.taskCount <= 0
-                    ? "暂无 Task"
-                    : project.taskCount + " 个 Task";
-            entries.add(new EntryItem(
-                    R.drawable.ic_folder_colored,
-                    project.name,
-                    subtitle,
-                    null,
-                    true,
-                    project));
-        }
-        entryAdapter.submitItems(entries);
         updatePanelChrome("Projects", "主界面 / 项目", "这里直接管理全部项目，不再跳转旧页面。", false, true);
-        updateEmptyState(entries.isEmpty(), "暂无项目", "点击右上角添加项目", "创建项目");
-        swipeRefreshLayout.setRefreshing(false);
+        loadPanelEntries(Level.PROJECT, null);
     }
 
     private void showTasks(File projectDir) {
@@ -489,8 +579,56 @@ public class MainActivity extends AppCompatActivity {
         currentProjectDir = projectDir;
         currentTaskDir = null;
         applyPanelLayoutManager(Level.TASK);
-        List<HomeProjectRepository.TaskSummary> tasks = repository.loadTasks(projectDir);
+        updatePanelChrome(projectDir.getName(), "项目 / " + projectDir.getName(), "当前项目下的 Task 列表和菜单操作。", true, true);
+        loadPanelEntries(Level.TASK, projectDir);
+    }
+
+    private void loadPanelEntries(Level level, File projectDir) {
+        final int token = panelLoadToken.incrementAndGet();
+        swipeRefreshLayout.setRefreshing(true);
+        panelLoadExecutor.execute(() -> {
+            List<EntryItem> entries = buildEntries(level, projectDir);
+            runOnUiThread(() -> {
+                if (isFinishing() || isDestroyed() || token != panelLoadToken.get()) {
+                    return;
+                }
+                if (level == Level.PROJECT) {
+                    if (currentLevel != Level.PROJECT) {
+                        return;
+                    }
+                    updateEmptyState(entries.isEmpty(), "暂无项目", "点击右上角添加项目", "创建项目");
+                } else {
+                    if (currentLevel != Level.TASK || currentProjectDir == null || projectDir == null
+                            || !TextUtils.equals(currentProjectDir.getAbsolutePath(), projectDir.getAbsolutePath())) {
+                        return;
+                    }
+                    updateEmptyState(entries.isEmpty(), "暂无 Task", "点击右上角添加 Task", "创建 Task");
+                }
+                entryAdapter.submitItems(entries);
+                swipeRefreshLayout.setRefreshing(false);
+            });
+        });
+    }
+
+    private List<EntryItem> buildEntries(Level level, File projectDir) {
         List<EntryItem> entries = new ArrayList<>();
+        if (level == Level.PROJECT) {
+            List<HomeProjectRepository.ProjectSummary> projects = repository.loadProjects(this);
+            for (HomeProjectRepository.ProjectSummary project : projects) {
+                String subtitle = project.taskCount <= 0
+                        ? "暂无 Task"
+                        : project.taskCount + " 个 Task";
+                entries.add(new EntryItem(
+                        R.drawable.ic_folder_colored,
+                        project.name,
+                        subtitle,
+                        null,
+                        true,
+                        project));
+            }
+            return entries;
+        }
+        List<HomeProjectRepository.TaskSummary> tasks = repository.loadTasks(projectDir);
         for (HomeProjectRepository.TaskSummary task : tasks) {
             String subtitle = task.assetCount > 0
                     ? task.operationCount + " 个节点 · " + task.assetCount + " 个资源"
@@ -503,10 +641,7 @@ public class MainActivity extends AppCompatActivity {
                     true,
                     task));
         }
-        entryAdapter.submitItems(entries);
-        updatePanelChrome(projectDir.getName(), "项目 / " + projectDir.getName(), "当前项目下的 Task 列表和菜单操作。", true, true);
-        updateEmptyState(entries.isEmpty(), "暂无 Task", "点击右上角添加 Task", "创建 Task");
-        swipeRefreshLayout.setRefreshing(false);
+        return entries;
     }
 
     private void applyPanelLayoutManager(Level level) {

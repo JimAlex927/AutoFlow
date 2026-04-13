@@ -11,6 +11,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.Vibrator;
 import android.text.TextUtils;
+import android.text.TextPaint;
 import android.util.AttributeSet;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
@@ -29,7 +30,7 @@ import java.util.Map;
  * Interactive flow graph canvas.
  *
  * Features:
- *  - Material-style node cards with type color bar + shadow
+ *  - Material-style node cards with type color bar
  *  - Pan (drag canvas) / Pinch-to-zoom
  *  - Long-press node body → drag to reposition node
  *  - Drag from port dot → connect to another node (set next/fallback)
@@ -99,10 +100,16 @@ public class FlowGraphView extends View {
     private final Paint pEmpty     = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pJumpFill  = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint pJumpText  = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pJumpDivider = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pPortRing = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pBranchDot = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pBranchRail = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint pBranchCountBg = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     // ──────────────── Node state ────────────────
 
     private final List<Node>              nodes         = new ArrayList<>();
+    private final Map<String, Node>       nodeMap       = new HashMap<>();
     private final Map<String, PointF>     nodePositions = new HashMap<>();
     private final Map<String, RectF>      nodeRects     = new HashMap<>();
     private boolean positionsReady = false;
@@ -178,6 +185,10 @@ public class FlowGraphView extends View {
     // ──────────────── Reusable path ────────────────
 
     private final Path reusablePath = new Path();
+    private final RectF tempRect = new RectF();
+    private final TextPaint titleTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+    private final TextPaint subTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+    private float density;
 
     // ═══════════════════════════════════════════════════════
     //  Constructor & init
@@ -200,10 +211,8 @@ public class FlowGraphView extends View {
     }
 
     private void init() {
-        // Enable hardware shadow (setShadowLayer works only on software layer)
-        setLayerType(LAYER_TYPE_SOFTWARE, null);
-
-        float d = getResources().getDisplayMetrics().density;
+        density = getResources().getDisplayMetrics().density;
+        float d = density;
         float s = getResources().getDisplayMetrics().scaledDensity;
 
         NODE_W   = 248 * d;
@@ -219,7 +228,6 @@ public class FlowGraphView extends View {
         // Node card background + shadow
         pNodeBg.setColor(0xFFF8FAFF);
         pNodeBg.setStyle(Paint.Style.FILL);
-        pNodeBg.setShadowLayer(6 * d, 0, 2 * d, 0x26000000);
 
         pStroke.setColor(0xFFDDE4F0);
         pStroke.setStyle(Paint.Style.STROKE);
@@ -239,9 +247,11 @@ public class FlowGraphView extends View {
         pTitle.setColor(0xFF1A2537);
         pTitle.setTextSize(13 * s);
         pTitle.setFakeBoldText(true);
+        titleTextPaint.set(pTitle);
 
         pSub.setColor(0xFF7A8798);
         pSub.setTextSize(10 * s);
+        subTextPaint.set(pSub);
 
         pIdxBg.setColor(0xFF3C6DE4);
         pIdxBg.setStyle(Paint.Style.FILL);
@@ -286,12 +296,27 @@ public class FlowGraphView extends View {
 
         pJumpFill.setColor(0xFF1F2937);
         pJumpFill.setStyle(Paint.Style.FILL);
-        pJumpFill.setShadowLayer(4 * d, 0, 2 * d, 0x30000000);
 
         pJumpText.setColor(0xFFFFFFFF);
         pJumpText.setTextSize(10 * s);
         pJumpText.setFakeBoldText(true);
         pJumpText.setTextAlign(Paint.Align.CENTER);
+
+        pJumpDivider.setColor(0x55FFFFFF);
+        pJumpDivider.setStrokeWidth(dp(1));
+
+        pPortRing.setColor(0xFFFFFFFF);
+        pPortRing.setStyle(Paint.Style.FILL);
+
+        pBranchDot.setColor(0xFF9A6B2F);
+        pBranchDot.setStyle(Paint.Style.FILL);
+
+        pBranchRail.setColor(0x7F9A6B2F);
+        pBranchRail.setStrokeWidth(dp(2));
+        pBranchRail.setStrokeCap(Paint.Cap.ROUND);
+
+        pBranchCountBg.setColor(0xFF9A6B2F);
+        pBranchCountBg.setStyle(Paint.Style.FILL);
 
         pHaloConn.setColor(0x503C6DE4);
         pHaloConn.setStyle(Paint.Style.STROKE);
@@ -306,26 +331,34 @@ public class FlowGraphView extends View {
 
     public void setNodes(List<Node> data) {
         nodes.clear();
+        nodeMap.clear();
         nodePositions.clear();
         nodeRects.clear();
         routes.clear();
         selectedRoute = null;
         selectedRouteActionCenter = null;
         positionsReady = false;
-        if (data != null) nodes.addAll(data);
+        if (data != null) {
+            nodes.addAll(data);
+            for (Node node : data) {
+                if (node != null && !TextUtils.isEmpty(node.id)) {
+                    nodeMap.put(node.id, node);
+                }
+            }
+        }
         if (selectedNodeId != null && findById(selectedNodeId) == null) selectedNodeId = null;
-        invalidate();
+        invalidateView();
     }
 
     public void setSelectedNodeId(@Nullable String id) {
         selectedNodeId = id;
-        invalidate();
+        invalidateView();
         if (selectListener != null) selectListener.onSelected(findById(id));
     }
 
     public void setHighlightedNodeId(@Nullable String id) {
         highlightedNodeId = id;
-        invalidate();
+        invalidateView();
     }
 
     public @Nullable Node getSelectedNode() { return findById(selectedNodeId); }
@@ -340,7 +373,7 @@ public class FlowGraphView extends View {
             dragMode = DragMode.NONE;
             draggingNodeId = null;
             connectFromId = null;
-            invalidate();
+            invalidateView();
         }
     }
 
@@ -348,14 +381,14 @@ public class FlowGraphView extends View {
         scale   = 1f;
         offsetX = 0f;
         offsetY = 0f;
-        invalidate();
+        invalidateView();
     }
 
     public void autoArrange() {
         positionsReady = false;
         nodePositions.clear();
         initPositions();
-        invalidate();
+        invalidateView();
     }
 
     // ═══════════════════════════════════════════════════════
@@ -366,8 +399,7 @@ public class FlowGraphView extends View {
         if (getWidth() == 0) return; // defer to first onDraw
         float canvasW = getWidth() / scale;
         float startX  = (canvasW - NODE_W) / 2f;
-        float startX2 = startX + NODE_W + 40 * getResources().getDisplayMetrics().density;
-        float y = 24 * getResources().getDisplayMetrics().density;
+        float y = 24 * density;
 
         // Simple 1-column linear layout ordered by node.order
         for (Node n : nodes) {
@@ -403,7 +435,7 @@ public class FlowGraphView extends View {
     private PointF fallPort(String id) {
         PointF p = nodePositions.get(id);
         if (p == null) return new PointF(0, 0);
-        return new PointF(p.x + NODE_W - 24 * getResources().getDisplayMetrics().density, p.y + NODE_H);
+        return new PointF(p.x + NODE_W - 24 * density, p.y + NODE_H);
     }
 
     private PointF switchBranchPort(String id, int slotIndex, int slotCount) {
@@ -500,7 +532,7 @@ public class FlowGraphView extends View {
                                 dragMode        = DragMode.MOVE_NODE;
                                 draggingNodeId  = longPressCandidateId;
                                 vibrate();
-                                invalidate();
+                                invalidateView();
                             }
                         };
                         longPressHandler.postDelayed(longPressRunnable, LONG_PRESS_MS);
@@ -531,7 +563,7 @@ public class FlowGraphView extends View {
                     case CONNECT_MAIN:
                     case CONNECT_FALLBACK:
                         connectTipX = wx; connectTipY = wy;
-                        invalidate();
+                        invalidateView();
                         break;
 
                     case MOVE_NODE:
@@ -539,7 +571,7 @@ public class FlowGraphView extends View {
                             PointF p = nodePositions.get(draggingNodeId);
                             if (p != null) { p.x += dsx / scale; p.y += dsy / scale; }
                             updateRects();
-                            invalidate();
+                            invalidateView();
                         }
                         break;
 
@@ -548,7 +580,7 @@ public class FlowGraphView extends View {
                             dragMode  = DragMode.PAN;
                             offsetX  += dsx;
                             offsetY  += dsy;
-                            invalidate();
+                            invalidateView();
                         }
                         break;
                 }
@@ -578,7 +610,7 @@ public class FlowGraphView extends View {
                 }
 
                 dragMode = DragMode.NONE;
-                invalidate();
+                invalidateView();
                 return true;
             }
         }
@@ -607,7 +639,7 @@ public class FlowGraphView extends View {
             selectedRoute = (selectedRoute == conn) ? null : conn; // toggle
             selectedRouteActionCenter = selectedRoute == null ? null : new PointF(wx, wy);
             selectedNodeId = null;
-            invalidate();
+            invalidateView();
             if (selectListener != null) selectListener.onSelected(null);
             return;
         }
@@ -623,12 +655,11 @@ public class FlowGraphView extends View {
             return 0;
         }
         float radius = dp(14);
-        PointF left = new PointF(c.x - dp(18), c.y);
-        PointF right = new PointF(c.x + dp(18), c.y);
-        if (dist(wx - left.x, wy - left.y) <= radius) {
+        float offset = dp(18);
+        if (dist(wx - (c.x - offset), wy - c.y) <= radius) {
             return -1;
         }
-        if (dist(wx - right.x, wy - right.y) <= radius) {
+        if (dist(wx - (c.x + offset), wy - c.y) <= radius) {
             return 1;
         }
         return 0;
@@ -641,7 +672,7 @@ public class FlowGraphView extends View {
         }
         offsetX = getWidth() * 0.5f - rect.centerX() * scale;
         offsetY = getHeight() * 0.5f - rect.centerY() * scale;
-        invalidate();
+        invalidateView();
     }
 
     private void cancelPendingLongPress() {
@@ -937,12 +968,9 @@ public class FlowGraphView extends View {
         float offset = dp(18);
         float pillHalfW = dp(28);
         float pillHalfH = dp(16);
-        RectF pill = new RectF(c.x - pillHalfW, c.y - pillHalfH, c.x + pillHalfW, c.y + pillHalfH);
-        canvas.drawRoundRect(pill, dp(16), dp(16), pJumpFill);
-        Paint divider = new Paint(Paint.ANTI_ALIAS_FLAG);
-        divider.setColor(0x55FFFFFF);
-        divider.setStrokeWidth(dp(1));
-        canvas.drawLine(c.x, c.y - dp(10), c.x, c.y + dp(10), divider);
+        tempRect.set(c.x - pillHalfW, c.y - pillHalfH, c.x + pillHalfW, c.y + pillHalfH);
+        canvas.drawRoundRect(tempRect, dp(16), dp(16), pJumpFill);
+        canvas.drawLine(c.x, c.y - dp(10), c.x, c.y + dp(10), pJumpDivider);
         canvas.drawCircle(c.x - offset, c.y, radius, pJumpFill);
         canvas.drawCircle(c.x + offset, c.y, radius, pJumpFill);
         canvas.drawText("←", c.x - offset, c.y + dp(4), pJumpText);
@@ -1035,9 +1063,9 @@ public class FlowGraphView extends View {
         // Left color bar (clip to left rounded region)
         int typeColor = typeColor(n.type);
         pBar.setColor(typeColor);
-        RectF barRect = new RectF(r.left, r.top, r.left + BAR_W, r.bottom);
+        tempRect.set(r.left, r.top, r.left + BAR_W, r.bottom);
         canvas.save();
-        canvas.clipRect(barRect);
+        canvas.clipRect(tempRect);
         canvas.drawRoundRect(r, CORNER_R, CORNER_R, pBar);
         canvas.restore();
 
@@ -1050,8 +1078,7 @@ public class FlowGraphView extends View {
         float badgeCY  = r.top  + NODE_H / 2f;
         pIdxBg.setColor(typeColor);
         canvas.drawCircle(badgeCX, badgeCY, badgeR, pIdxBg);
-        String idxStr = String.format(Locale.getDefault(), "%02d", n.order);
-        canvas.drawText(idxStr, badgeCX, badgeCY + dp(4), pIdxTxt);
+        canvas.drawText(formatOrder(n.order), badgeCX, badgeCY + dp(4), pIdxTxt);
 
         // Operation name
         float titleY = r.top + NODE_H * 0.40f;
@@ -1073,15 +1100,7 @@ public class FlowGraphView extends View {
         PointF mp = mainPort(n.id);
 
         // White ring + colored fill
-        Paint ring = new Paint(Paint.ANTI_ALIAS_FLAG);
-        ring.setColor(0xFFFFFFFF);
-        ring.setStyle(Paint.Style.FILL);
-        ring.setShadowLayer(dp(3), 0, dp(1), 0x30000000);
-        Paint branchDot = new Paint(Paint.ANTI_ALIAS_FLAG);
-        branchDot.setColor(0xFF9A6B2F);
-        branchDot.setStyle(Paint.Style.FILL);
-
-        canvas.drawCircle(mp.x, mp.y, PORT_R + dp(2), ring);
+        canvas.drawCircle(mp.x, mp.y, PORT_R + dp(2), pPortRing);
         canvas.drawCircle(mp.x, mp.y, PORT_R, pPortMain);
 
         if (isSwitchBranchNode(n) && !n.extraEdges.isEmpty()) {
@@ -1096,11 +1115,7 @@ public class FlowGraphView extends View {
                 float railX = switchBranchPort(n.id, 0, branchCount).x;
                 float topY = switchBranchRailTop(n.id, branchCount);
                 float bottomY = switchBranchRailBottom(n.id, branchCount);
-                Paint railPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-                railPaint.setColor(0x7F9A6B2F);
-                railPaint.setStrokeWidth(dp(2));
-                railPaint.setStrokeCap(Paint.Cap.ROUND);
-                canvas.drawLine(railX, topY, railX, bottomY, railPaint);
+                canvas.drawLine(railX, topY, railX, bottomY, pBranchRail);
             }
             int visibleDots = branchCount > 12 ? 3 : branchCount;
             for (int i = 0; i < visibleDots; i++) {
@@ -1115,22 +1130,19 @@ public class FlowGraphView extends View {
                     slotIndex = branchCount / 2;
                 }
                 PointF bp = switchBranchPort(n.id, slotIndex, branchCount);
-                canvas.drawCircle(bp.x, bp.y, PORT_R + dp(2), ring);
-                canvas.drawCircle(bp.x, bp.y, PORT_R, branchDot);
+                canvas.drawCircle(bp.x, bp.y, PORT_R + dp(2), pPortRing);
+                canvas.drawCircle(bp.x, bp.y, PORT_R, pBranchDot);
             }
             if (branchCount > 12) {
                 float badgeCx = switchBranchPort(n.id, branchCount / 2, branchCount).x + dp(18);
                 float badgeCy = n.extraEdges.isEmpty() ? mp.y : switchBranchPort(n.id, branchCount / 2, branchCount).y;
-                Paint countBg = new Paint(Paint.ANTI_ALIAS_FLAG);
-                countBg.setColor(0xFF9A6B2F);
-                countBg.setStyle(Paint.Style.FILL);
-                canvas.drawRoundRect(new RectF(badgeCx - dp(16), badgeCy - dp(10), badgeCx + dp(16), badgeCy + dp(10)),
-                        dp(10), dp(10), countBg);
+                tempRect.set(badgeCx - dp(16), badgeCy - dp(10), badgeCx + dp(16), badgeCy + dp(10));
+                canvas.drawRoundRect(tempRect, dp(10), dp(10), pBranchCountBg);
                 canvas.drawText(String.valueOf(branchCount), badgeCx, badgeCy + dp(4), pJumpText);
             }
         } else {
             PointF fp = fallPort(n.id);
-            canvas.drawCircle(fp.x, fp.y, PORT_R + dp(2), ring);
+            canvas.drawCircle(fp.x, fp.y, PORT_R + dp(2), pPortRing);
             canvas.drawCircle(fp.x, fp.y, PORT_R, pPortFall);
         }
     }
@@ -1162,30 +1174,29 @@ public class FlowGraphView extends View {
 
     private @Nullable Node findById(@Nullable String id) {
         if (TextUtils.isEmpty(id)) return null;
-        for (Node n : nodes) if (TextUtils.equals(id, n.id)) return n;
-        return null;
+        return nodeMap.get(id);
     }
 
     private String safe(String s)  { return s == null ? "" : s; }
+    private String formatOrder(int order) {
+        if (order >= 0 && order < 10) {
+            return "0" + order;
+        }
+        return String.valueOf(order);
+    }
     private String shortId(String s) {
         if (s == null || s.length() <= 8) return safe(s);
         return s.substring(0, 8) + "…";
     }
 
-    private float dp(float v) { return v * getResources().getDisplayMetrics().density; }
+    private float dp(float v) { return v * density; }
 
     private static float dist(float dx, float dy) { return (float) Math.sqrt(dx * dx + dy * dy); }
 
     private String ellipsize(String text, float maxW, Paint p) {
         if (TextUtils.isEmpty(text) || p.measureText(text) <= maxW) return safe(text);
-        String dots = "…";
-        float dW = p.measureText(dots);
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < text.length(); i++) {
-            if (p.measureText(sb.toString() + text.charAt(i)) + dW > maxW) break;
-            sb.append(text.charAt(i));
-        }
-        return sb + dots;
+        TextPaint textPaint = p == pTitle ? titleTextPaint : subTextPaint;
+        return TextUtils.ellipsize(text, textPaint, maxW, TextUtils.TruncateAt.END).toString();
     }
 
     // ═══════════════════════════════════════════════════════
@@ -1217,9 +1228,13 @@ public class FlowGraphView extends View {
             offsetX = focusX - (focusX - offsetX) * (newScale / scale);
             offsetY = focusY - (focusY - offsetY) * (newScale / scale);
             scale   = newScale;
-            invalidate();
+            invalidateView();
             return true;
         }
+    }
+
+    private void invalidateView() {
+        postInvalidateOnAnimation();
     }
 
 }

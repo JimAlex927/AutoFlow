@@ -8,6 +8,7 @@ import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.NonNull;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
@@ -28,14 +29,23 @@ public class ConfigUiDesignerAdapter extends RecyclerView.Adapter<ConfigUiDesign
 
     public ConfigUiDesignerAdapter(Listener listener) {
         this.listener = listener;
+        setHasStableIds(true);
     }
 
     public void submitComponents(List<ConfigUiComponent> items) {
-        components.clear();
+        List<ConfigUiComponent> nextItems = new ArrayList<>();
         if (items != null) {
-            components.addAll(items);
+            for (ConfigUiComponent item : items) {
+                if (item != null) {
+                    item.ensureDefaults();
+                    nextItems.add(item);
+                }
+            }
         }
-        notifyDataSetChanged();
+        DiffUtil.DiffResult diff = DiffUtil.calculateDiff(new SimpleDiffCallback(components, nextItems));
+        components.clear();
+        components.addAll(nextItems);
+        diff.dispatchUpdatesTo(this);
     }
 
     public boolean moveItem(int fromPosition, int toPosition) {
@@ -95,6 +105,54 @@ public class ConfigUiDesignerAdapter extends RecyclerView.Adapter<ConfigUiDesign
     @Override
     public int getItemCount() {
         return components.size();
+    }
+
+    @Override
+    public long getItemId(int position) {
+        ConfigUiComponent component = components.get(position);
+        component.ensureDefaults();
+        return component.id.hashCode();
+    }
+
+    private static final class SimpleDiffCallback extends DiffUtil.Callback {
+        private final List<ConfigUiComponent> oldItems;
+        private final List<ConfigUiComponent> newItems;
+
+        SimpleDiffCallback(List<ConfigUiComponent> oldItems, List<ConfigUiComponent> newItems) {
+            this.oldItems = oldItems;
+            this.newItems = newItems;
+        }
+
+        @Override
+        public int getOldListSize() {
+            return oldItems.size();
+        }
+
+        @Override
+        public int getNewListSize() {
+            return newItems.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            ConfigUiComponent oldItem = oldItems.get(oldItemPosition);
+            ConfigUiComponent newItem = newItems.get(newItemPosition);
+            oldItem.ensureDefaults();
+            newItem.ensureDefaults();
+            return oldItem.id.equals(newItem.id);
+        }
+
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            ConfigUiComponent oldItem = oldItems.get(oldItemPosition);
+            ConfigUiComponent newItem = newItems.get(newItemPosition);
+            oldItem.ensureDefaults();
+            newItem.ensureDefaults();
+            return oldItem.type.equals(newItem.type)
+                    && oldItem.label.equals(newItem.label)
+                    && oldItem.fieldKey.equals(newItem.fieldKey)
+                    && oldItem.getDisplayBehaviorName().equals(newItem.getDisplayBehaviorName());
+        }
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {

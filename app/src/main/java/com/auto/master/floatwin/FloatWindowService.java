@@ -75,6 +75,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -125,6 +127,7 @@ import com.auto.master.ocr.OcrEngine;
 import com.auto.master.importer.ProjectImportPickerActivity;
 import com.auto.master.importer.ScriptPackageManager;
 import com.auto.master.utils.AdaptivePollingController;
+import com.auto.master.utils.BitmapManager;
 import com.auto.master.utils.CrashLogger;
 import com.auto.master.utils.OpenCVHelper;
 import com.auto.master.utils.OperationGsonUtils;
@@ -235,6 +238,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private final List<OperationClipboardEntry> operationClipboardLibrary = new ArrayList<>();
     private static final int OPERATION_CLIPBOARD_LIMIT = 24;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private final ExecutorService panelDataExecutor = Executors.newSingleThreadExecutor();
+    private final AtomicInteger panelDataLoadToken = new AtomicInteger();
     /** Service 存活标志：onDestroy 后置 false，后台线程回调据此短路，避免访问已销毁状态 */
     private volatile boolean serviceAlive = true;
     private final Runnable searchRefreshRunnable = this::refreshCurrentLevelList;
@@ -1024,6 +1029,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             fileIOManager.shutdown();
             fileIOManager = null;
         }
+        panelDataExecutor.shutdownNow();
     }
 
     private void scheduleServiceRestart(long delayMs) {
@@ -1694,13 +1700,16 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
      * 显示编辑 Operation JSON 对话框
      */
     private void showEditOperationDialog(OperationItem selected, OperationPanelAdapter adapter) {
-        // 获取当前 operation 的 JSON
-        String operationJson = getOperationJson(selected.id);
-        if (operationJson == null) {
-            Toast.makeText(this, "无法读取 operation 数据", Toast.LENGTH_SHORT).show();
-            return;
-        }
+        getOperationJsonAsync(selected.id, operationJson -> {
+            if (!serviceAlive || operationJson == null) {
+                Toast.makeText(this, "无法读取 operation 数据", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            showEditOperationDialogWithJson(selected, adapter, operationJson);
+        });
+    }
 
+    private void showEditOperationDialogWithJson(OperationItem selected, OperationPanelAdapter adapter, String operationJson) {
         try {
             JSONObject operationObject = new JSONObject(operationJson);
             int type = operationObject.optInt("type", -1);
@@ -1843,36 +1852,44 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
      * 获取指定 operation 的 JSON 字符串（异步版本）
      */
     private void getOperationJsonAsync(String operationId, OperationJsonCallback callback) {
-        if (currentTaskDir == null) {
-            callback.onResult(null);
+        File taskDirSnapshot = currentTaskDir;
+        if (taskDirSnapshot == null) {
+            uiHandler.post(() -> callback.onResult(null));
             return;
         }
-        
-        File jsonFile = new File(currentTaskDir, "operations.json");
-        fileIOManager.readFileAsync(jsonFile, (content, error) -> {
-            if (error != null || content == null) {
-                callback.onResult(null);
-                return;
-            }
-            
+
+        File jsonFile = new File(taskDirSnapshot, "operations.json");
+        panelDataExecutor.execute(() -> {
+            String result = null;
             try {
-                // 解析 JSON 数组
+                String content = readFileContent(jsonFile);
+                if (TextUtils.isEmpty(content)) {
+                    postOperationJsonResult(taskDirSnapshot, callback, null);
+                    return;
+                }
                 JSONArray jsonArray = new JSONArray(content);
-                
-                // 查找对应的 operation
                 for (int i = 0; i < jsonArray.length(); i++) {
                     JSONObject jsonObject = jsonArray.getJSONObject(i);
                     if (operationId.equals(jsonObject.optString("id"))) {
-                        // 返回格式化的 JSON
-                        callback.onResult(jsonObject.toString(2));
-                        return;
+                        result = jsonObject.toString(2);
+                        break;
                     }
                 }
-                callback.onResult(null);
             } catch (Exception e) {
                 Log.e(TAG, "Failed to parse operation JSON", e);
-                callback.onResult(null);
             }
+            postOperationJsonResult(taskDirSnapshot, callback, result);
+        });
+    }
+
+    private void postOperationJsonResult(@NonNull File taskDirSnapshot,
+                                         @NonNull OperationJsonCallback callback,
+                                         @Nullable String result) {
+        uiHandler.post(() -> {
+            if (!serviceAlive || !isSameFile(currentTaskDir, taskDirSnapshot)) {
+                return;
+            }
+            callback.onResult(result);
         });
     }
     
@@ -1959,8 +1976,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
             int cleaned = 0;
             
-            // 重新加载当前 project 到缓存（从文件重新解析）
-            reloadCurrentProject();
+            // 仅刷新当前 Task 的缓存，避免每次保存都整项目重读
+            refreshCurrentTaskCache();
             
             // 刷新列表
             loadOperations(currentTaskDir);
@@ -1993,6 +2010,82 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             Log.e(TAG, "重新加载 project 失败", e);
         }
     }
+
+    private void refreshCurrentTaskCache() {
+        if (currentProjectDir == null || currentTaskDir == null) {
+            reloadCurrentProject();
+            return;
+        }
+        try {
+            Template.clearProjectCache(currentProjectDir.getName());
+            Task refreshedTask = parseTaskFromDir(currentTaskDir);
+            if (refreshedTask == null) {
+                return;
+            }
+            Project cachedProject = findCachedProjectByName(currentProjectDir.getName());
+            if (cachedProject == null) {
+                Project refreshedProject = loadProjectFromDir(currentProjectDir);
+                if (refreshedProject != null) {
+                    upsertCachedProject(refreshedProject);
+                }
+                return;
+            }
+            if (cachedProject.getTaskMap() == null) {
+                cachedProject.setTaskMap(new HashMap<>());
+            }
+            cachedProject.getTaskMap().put(currentTaskDir.getName(), refreshedTask);
+            syncTaskMemoryCaches(currentProjectDir, currentTaskDir, refreshedTask);
+        } catch (Exception e) {
+            Log.e(TAG, "刷新当前 Task 缓存失败", e);
+        }
+    }
+
+    @Nullable
+    private Task parseTaskFromDir(@Nullable File taskDir) {
+        if (taskDir == null || !taskDir.isDirectory()) {
+            return null;
+        }
+        Task task = new Task();
+        task.setId(taskDir.getName());
+        task.setName(taskDir.getName());
+
+        File opFile = new File(taskDir, "operations.json");
+        if (!opFile.exists()) {
+            return task;
+        }
+
+        boolean loaded = false;
+        try {
+            String content = readFileContent(opFile);
+            List<MetaOperation> ops = OperationGsonUtils.fromJson(content);
+            for (MetaOperation op : ops) {
+                if (op == null || TextUtils.isEmpty(op.getId())) continue;
+                task.putOperation(op);
+            }
+            loaded = !task.getOperationMap().isEmpty();
+        } catch (Exception ignored) {
+        }
+        if (!loaded) {
+            try {
+                String content = readFileContent(opFile);
+                JSONArray arr = new JSONArray(content);
+                for (int i = 0; i < arr.length(); i++) {
+                    JSONObject obj = arr.optJSONObject(i);
+                    if (obj == null) continue;
+                    String id = obj.optString("id", "");
+                    if (TextUtils.isEmpty(id)) continue;
+                    int typeInt = obj.optInt("type", 1);
+                    MetaOperation stub = new com.auto.master.Task.Operation.ClickOperation();
+                    stub.setId(id);
+                    stub.setName(obj.optString("name", "未命名"));
+                    stub.setType(typeInt);
+                    task.putOperation(stub);
+                }
+            } catch (Exception ignored2) {
+            }
+        }
+        return task;
+    }
     
     /**
      * 从目录加载 Project 对象
@@ -2006,45 +2099,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             File[] taskDirs = projectDir.listFiles(File::isDirectory);
             if (taskDirs != null) {
                 for (File taskDir : taskDirs) {
-                    File opFile = new File(taskDir, "operations.json");
-                    if (opFile.exists()) {
-                        Task task = new Task();
-                        task.setId(taskDir.getName());
-                        task.setName(taskDir.getName());
-
-                        // 优先用 Gson 完整解析（脚本执行需要），失败时回退到 JSONArray 轻量解析
-                        boolean loaded = false;
-                        try {
-                            String content = readFileContent(opFile);
-                            List<MetaOperation> ops = OperationGsonUtils.fromJson(content);
-                            for (MetaOperation op : ops) {
-                                if (op == null || TextUtils.isEmpty(op.getId())) continue;
-                                task.putOperation(op);
-                            }
-                            loaded = !task.getOperationMap().isEmpty();
-                        } catch (Exception ignored) {
-                        }
-                        if (!loaded) {
-                            // Gson 失败时（release 混淆可能导致），用 JSONArray 解析
-                            // 仅保存 id/name/type，足够面板展示；执行路径会在运行时再次解析
-                            try {
-                                String content = readFileContent(opFile);
-                                JSONArray arr = new JSONArray(content);
-                                for (int i = 0; i < arr.length(); i++) {
-                                    JSONObject obj = arr.optJSONObject(i);
-                                    if (obj == null) continue;
-                                    String id = obj.optString("id", "");
-                                    if (TextUtils.isEmpty(id)) continue;
-                                    int typeInt = obj.optInt("type", 1);
-                                    MetaOperation stub = new com.auto.master.Task.Operation.ClickOperation();
-                                    stub.setId(id);
-                                    stub.setName(obj.optString("name", "未命名"));
-                                    stub.setType(typeInt);
-                                    task.putOperation(stub);
-                                }
-                            } catch (Exception ignored2) {
-                            }
-                        }
+                    Task task = parseTaskFromDir(taskDir);
+                    if (task != null) {
                         taskMap.put(taskDir.getName(), task);
                     }
                 }
@@ -2117,12 +2173,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         dialogFactory.setOperationIdGenerator(this::generateOperationId);
 
         dialogFactory.setOnOperationAddedListener(() -> {
-            reloadCurrentProject();
+            refreshCurrentTaskCache();
             loadOperations(currentTaskDir);
         });
 
         dialogFactory.setOnOperationUpdatedListener(() -> {
-            reloadCurrentProject();
+            refreshCurrentTaskCache();
             loadOperations(currentTaskDir);
         });
 
@@ -2897,6 +2953,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (projectPanelView == null) return;
         RecyclerView rv = getProjectPanelRecyclerView();
         if (rv == null) return;
+        final int loadToken = panelDataLoadToken.incrementAndGet();
         
         // 优化RecyclerView性能
         if (!(rv.getLayoutManager() instanceof LinearLayoutManager)
@@ -2911,9 +2968,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             return;
         }
 
-        new Thread(() -> {
+        final File rootSnapshot = root;
+        final String querySnapshot = currentSearchQuery;
+        panelDataExecutor.execute(() -> {
             List<ProjectListItem> items = new ArrayList<>();
-            File[] dirs = root.listFiles(File::isDirectory);
+            File[] dirs = rootSnapshot.listFiles(File::isDirectory);
             if (dirs != null) {
                 for (File dir : dirs) {
                     File[] taskDirs = dir.listFiles(File::isDirectory);
@@ -2929,15 +2988,20 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return left.dir.getName().compareToIgnoreCase(right.dir.getName());
             });
 
-            long resolvedVersion = root.lastModified();
+            long resolvedVersion = rootSnapshot.lastModified();
             uiHandler.post(() -> {
-                if (projectPanelView == null) return;
+                if (!serviceAlive
+                        || loadToken != panelDataLoadToken.get()
+                        || currentLevel != NavigationLevel.PROJECT
+                        || projectPanelView == null) {
+                    return;
+                }
                 projectListCache.clear();
                 projectListCache.addAll(items);
                 projectListCacheVersion = resolvedVersion;
-                renderProjectItems(filterProjectItems(projectListCache, currentSearchQuery));
+                renderProjectItems(filterProjectItems(projectListCache, querySnapshot));
             });
-        }, "project-panel-load").start();
+        });
     }
 
     private void loadProjectsLegacy() {
@@ -3026,6 +3090,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (projectDir == null || projectPanelView == null) return;
         RecyclerView rv = getProjectPanelRecyclerView();
         if (rv == null) return;
+        final int loadToken = panelDataLoadToken.incrementAndGet();
         
         // 优化RecyclerView性能
         if (!(rv.getLayoutManager() instanceof LinearLayoutManager)
@@ -3053,15 +3118,29 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             return;
         }
 
-        List<File> items = readTaskItems(projectDir);
-
-        taskListCacheProjectDir = projectDir;
-        taskListCacheVersion = version;
-        taskListCache.clear();
-        taskListCache.addAll(items);
-        taskItemsMemoryCache.put(projectKey, new ArrayList<>(items));
-        taskItemsMemoryVersions.put(projectKey, version);
-        renderTaskItems(filterTaskItems(taskListCache, currentSearchQuery));
+        final File projectDirSnapshot = projectDir;
+        final long versionSnapshot = version;
+        final String projectKeySnapshot = projectKey;
+        final String querySnapshot = currentSearchQuery;
+        panelDataExecutor.execute(() -> {
+            List<File> items = readTaskItems(projectDirSnapshot);
+            uiHandler.post(() -> {
+                if (!serviceAlive
+                        || loadToken != panelDataLoadToken.get()
+                        || currentLevel != NavigationLevel.TASK
+                        || !isSameFile(currentProjectDir, projectDirSnapshot)
+                        || projectPanelView == null) {
+                    return;
+                }
+                taskListCacheProjectDir = projectDirSnapshot;
+                taskListCacheVersion = versionSnapshot;
+                taskListCache.clear();
+                taskListCache.addAll(items);
+                taskItemsMemoryCache.put(projectKeySnapshot, new ArrayList<>(items));
+                taskItemsMemoryVersions.put(projectKeySnapshot, versionSnapshot);
+                renderTaskItems(filterTaskItems(taskListCache, querySnapshot));
+            });
+        });
     }
 
     private void loadTasksLegacy(File projectDir) {
@@ -3125,6 +3204,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (taskDir == null || projectPanelView == null) return;
         RecyclerView rv = getProjectPanelRecyclerView();
         if (rv == null) return;
+        final int loadToken = panelDataLoadToken.incrementAndGet();
         
         // 优化RecyclerView性能（操作列表使用独立配置）
         if (!(rv.getLayoutManager() instanceof LinearLayoutManager)
@@ -3149,6 +3229,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 && taskDir.equals(operationListCacheTaskDir)
                 && operationListCacheVersion == version) {
             allOperations = new ArrayList<>(operationListCache);
+            renderOperationItems(taskDir, allOperations, taskKey);
+            return;
         } else if (!forceReload
                 && operationItemsMemoryCache.containsKey(taskKey)
                 && operationItemsMemoryVersions.containsKey(taskKey)
@@ -3158,34 +3240,62 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             operationListCacheVersion = version;
             operationListCache.clear();
             operationListCache.addAll(allOperations);
+            renderOperationItems(taskDir, allOperations, taskKey);
+            return;
         } else {
-            allOperations = readOperationItems(taskDir);
-            operationListCacheTaskDir = taskDir;
-            operationListCacheVersion = version;
-            operationListCache.clear();
-            operationListCache.addAll(allOperations);
-            operationItemsMemoryCache.put(taskKey, new ArrayList<>(allOperations));
-            operationItemsMemoryVersions.put(taskKey, version);
+            allOperations = null;
         }
 
-        if (allOperations.isEmpty()) {
-            List<OperationItem> fallbackOperations = readOperationItemsDirect(taskDir);
-            if (!fallbackOperations.isEmpty()) {
-                allOperations = fallbackOperations;
-                operationListCacheTaskDir = taskDir;
-                operationListCacheVersion = version;
-                operationListCache.clear();
-                operationListCache.addAll(allOperations);
-                operationItemsMemoryCache.put(taskKey, new ArrayList<>(allOperations));
-                operationItemsMemoryVersions.put(taskKey, version);
+        final File taskDirSnapshot = taskDir;
+        final long versionSnapshot = version;
+        final String taskKeySnapshot = taskKey;
+        final String querySnapshot = currentSearchQuery;
+        panelDataExecutor.execute(() -> {
+            List<OperationItem> loadedOperations = readOperationItems(taskDirSnapshot);
+            if (loadedOperations.isEmpty()) {
+                List<OperationItem> fallbackOperations = readOperationItemsDirect(taskDirSnapshot);
+                if (!fallbackOperations.isEmpty()) {
+                    loadedOperations = fallbackOperations;
+                }
             }
-        }
+            final List<OperationItem> resolvedOperations = loadedOperations;
+            uiHandler.post(() -> {
+                if (!serviceAlive
+                        || loadToken != panelDataLoadToken.get()
+                        || currentLevel != NavigationLevel.OPERATION
+                        || !isSameFile(currentTaskDir, taskDirSnapshot)
+                        || projectPanelView == null) {
+                    return;
+                }
+                operationListCacheTaskDir = taskDirSnapshot;
+                operationListCacheVersion = versionSnapshot;
+                operationListCache.clear();
+                operationListCache.addAll(resolvedOperations);
+                operationItemsMemoryCache.put(taskKeySnapshot, new ArrayList<>(resolvedOperations));
+                operationItemsMemoryVersions.put(taskKeySnapshot, versionSnapshot);
+                renderOperationItems(taskDirSnapshot, resolvedOperations, taskKeySnapshot, querySnapshot);
+            });
+        });
+    }
 
-        List<OperationItem> operations = filterOperationItems(allOperations, currentSearchQuery);
+    private void renderOperationItems(@NonNull File taskDir,
+                                      @NonNull List<OperationItem> allOperations,
+                                      @NonNull String taskKey) {
+        renderOperationItems(taskDir, allOperations, taskKey, currentSearchQuery);
+    }
+
+    private void renderOperationItems(@NonNull File taskDir,
+                                      @NonNull List<OperationItem> allOperations,
+                                      @NonNull String taskKey,
+                                      @Nullable String query) {
+        RecyclerView rv = getProjectPanelRecyclerView();
+        if (rv == null || !isSameFile(currentTaskDir, taskDir)) {
+            return;
+        }
+        List<OperationItem> operations = filterOperationItems(allOperations, query);
         ensureProjectPanelAdapters();
         switchProjectPanelAdapter(operationPanelAdapter);
         attachOperationDragHelperIfNeeded(rv);
-        // 在 submitOperations 之前静默写入颜色映射，保证 DiffUtil 绑定时数据已就绪
         operationPanelAdapter.initFloatBtnColors(buildFloatBtnColorMap());
         operationPanelAdapter.submitOperations(operations);
         operationPanelAdapter.setBatchMode(operationBatchMode);
@@ -3623,6 +3733,16 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             Log.e(TAG, "readFileContent failed: " + file.getAbsolutePath(), e);
             return "";
         }
+    }
+
+    private boolean isSameFile(@Nullable File first, @Nullable File second) {
+        if (first == second) {
+            return true;
+        }
+        if (first == null || second == null) {
+            return false;
+        }
+        return TextUtils.equals(first.getAbsolutePath(), second.getAbsolutePath());
     }
 
     private void clearProjectPanelSearch() {
@@ -4914,7 +5034,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 writer.write(jsonArray.toString(2));
             }
 
-            reloadCurrentProject();
+            refreshCurrentTaskCache();
             loadOperations(currentTaskDir);
             Toast.makeText(this, "已添加操作", Toast.LENGTH_SHORT).show();
             return true;
@@ -5045,7 +5165,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 writer.write(jsonArray.toString(2));
             }
             int cleaned = 0;
-            reloadCurrentProject();
+            refreshCurrentTaskCache();
             loadOperations(currentTaskDir);
             if (!TextUtils.isEmpty(successText)) {
                 if (cleaned > 0) {
@@ -5827,7 +5947,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             tvTip.setText("暂无模板预览，点击上方按钮可立即截图");
             return;
         }
-        Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+        Bitmap bitmap = BitmapManager.getInstance().loadThumbnail(
+                file.getAbsolutePath(),
+                dp(320),
+                dp(220));
         if (bitmap == null) {
             ivPreview.setImageDrawable(null);
             ivPreview.setImageBitmap(null);
@@ -6223,7 +6346,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             LinearLayout.LayoutParams imgLp = new LinearLayout.LayoutParams(dp(60), dp(42));
             img.setLayoutParams(imgLp);
             img.setScaleType(ImageView.ScaleType.CENTER_CROP);
-            Bitmap bitmap = BitmapFactory.decodeFile(file.getAbsolutePath());
+            Bitmap bitmap = BitmapManager.getInstance().loadThumbnail(
+                    file.getAbsolutePath(),
+                    dp(120),
+                    dp(84));
             img.setImageBitmap(bitmap);
 
             TextView name = new TextView(this);
@@ -6682,6 +6808,28 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         cachedProjects.removeIf(p -> TextUtils.equals(project.getProjectName(), p.getProjectName()));
         cachedProjects.add(project);
         syncProjectMemoryCaches(project);
+    }
+
+    private void syncTaskMemoryCaches(@NonNull File projectDir, @NonNull File taskDir, @NonNull Task task) {
+        List<File> taskItems = readTaskItems(projectDir);
+        String projectKey = buildFileCacheKey(projectDir);
+        taskItemsMemoryCache.put(projectKey, new ArrayList<>(taskItems));
+        taskItemsMemoryVersions.put(projectKey, projectDir.lastModified());
+
+        List<OperationItem> operationItems = buildOperationItemsFromTask(task);
+        if (operationItems.isEmpty()) {
+            operationItems = readOperationItemsDirect(taskDir);
+        }
+        File opFile = new File(taskDir, "operations.json");
+        long opVersion = opFile.exists() ? opFile.lastModified() : Long.MIN_VALUE;
+        String taskKey = buildFileCacheKey(taskDir);
+        operationItemsMemoryCache.put(taskKey, new ArrayList<>(operationItems));
+        operationItemsMemoryVersions.put(taskKey, opVersion);
+        if (isSameFile(operationListCacheTaskDir, taskDir)) {
+            operationListCacheVersion = opVersion;
+            operationListCache.clear();
+            operationListCache.addAll(operationItems);
+        }
     }
 
     private List<OperationItem> buildOperationItemsFromTask(Task task) {
@@ -8261,7 +8409,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         // 在主线程刷新面板
         new Handler(Looper.getMainLooper()).post(() -> {
             if (runningPanelAdapter != null) {
-                runningPanelAdapter.notifyDataSetChanged();
+                runningPanelAdapter.setOperations(runningOperations);
                 Log.d(TAG, "已刷新 runningPanelAdapter，数据条数: " + runningOperations.size());
             } else {
                 Log.w(TAG, "runningPanelAdapter 为 null，无法刷新");
@@ -8338,7 +8486,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         CrashLogger.updateRunContext(currentRunningProject, taskName, currentRunningOperationId, currentRunningOperationName);
         
         if (runningPanelAdapter != null) {
-            runningPanelAdapter.notifyDataSetChanged();
+            runningPanelAdapter.setOperations(runningOperations);
         }
         updateRunningPanelProgress();
     }
