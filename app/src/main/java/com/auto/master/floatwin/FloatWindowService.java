@@ -2313,7 +2313,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 Arrays.asList(
                         new AddOperationMenuAdapter.MenuItem("jump_task", "跳转任务", "切换到目标任务或节点", "跳", R.color.op_jump_task, true),
                         new AddOperationMenuAdapter.MenuItem("switch_branch", "分支判断", "根据条件选择不同路径", "支", R.color.op_condition, true),
-                        new AddOperationMenuAdapter.MenuItem("loop", "循环", "重复执行一段流程", "循", R.color.op_condition, true)
+                        new AddOperationMenuAdapter.MenuItem("loop", "二分之", "二分之判断", "二", R.color.op_condition, true)
                 )));
 
         sections.add(new AddOperationMenuAdapter.MenuSection(
