@@ -27,9 +27,9 @@ public final class ActivityHolder implements Application.ActivityLifecycleCallba
 
     @Override public void onActivityResumed(Activity activity)  { sTopRef = new WeakReference<>(activity); }
     @Override public void onActivityStopped(Activity activity)  {
-        // Activity 进入后台（不可见）时清除引用，避免持有已后台 Activity
-        WeakReference<Activity> ref = sTopRef;
-        if (ref != null && ref.get() == activity) sTopRef = new WeakReference<>(null);
+        // 注意：不在此处清除引用。
+        // 本 app 以 FloatWindowService 悬浮窗为主 UI，主 Activity 长期处于 stopped（后台）但未销毁。
+        // 在 stopped 时清除会导致悬浮窗内的取色/框选等功能拿不到 Activity，改为只在 destroyed 时清。
     }
     @Override public void onActivityDestroyed(Activity activity) {
         WeakReference<Activity> ref = sTopRef;

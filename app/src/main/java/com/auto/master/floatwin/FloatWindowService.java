@@ -7420,12 +7420,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     @Nullable
     private Bitmap captureFreshScreenBitmap() {
-        final Activity a = ActivityHolder.getTopActivity();
-
-        if (a == null) return null;
-
+        // 注意：此处不需要 Activity。真正取帧由 ScreenCaptureManager 的 MediaProjection 缓冲区提供，
+        // Activity 只在首次初始化 ScreenCaptureManager 时才用到，运行中无需重新获取。
         AutoAccessibilityService autoAccessibilityService = AutoAccessibilityService.get();
-        if (autoAccessibilityService==null){
+        if (autoAccessibilityService == null) {
             return null;
         }
 
