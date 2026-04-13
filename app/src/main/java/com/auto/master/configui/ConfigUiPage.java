@@ -24,7 +24,7 @@ public class ConfigUiPage {
             title = "";
         }
         if (canvasHeightDp <= 0) {
-            canvasHeightDp = 560;
+            canvasHeightDp = 420;
         }
         if (scalePercent <= 0) {
             scalePercent = 100;

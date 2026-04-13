@@ -24,7 +24,7 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
         void onCanvasChanged();
     }
 
-    private static final int CANVAS_MIN_HEIGHT_DP = 560;
+    private static final int CANVAS_MIN_HEIGHT_DP = 420;
     private ConfigUiPage page;
     private Listener listener;
     private final TextView emptyHintView;
@@ -116,7 +116,7 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
         }
         page.ensureDefaults();
         selectedBlockView = null;
-        setMinimumHeight(scaleDp(Math.max(CANVAS_MIN_HEIGHT_DP, computeCanvasHeightDp()), resolveScale()));
+        syncCanvasHeightToContent();
         if (page.components == null || page.components.isEmpty()) {
             emptyHintView.setVisibility(View.VISIBLE);
             return;
@@ -132,7 +132,7 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
     }
 
     private int computeCanvasHeightDp() {
-        int result = page == null ? CANVAS_MIN_HEIGHT_DP : page.canvasHeightDp;
+        int result = CANVAS_MIN_HEIGHT_DP;
         if (page != null && page.components != null) {
             for (ConfigUiComponent component : page.components) {
                 if (component == null) {
@@ -222,6 +222,7 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
                 return;
             }
             page.components.remove(component);
+            syncCanvasHeightToContent();
             if (listener != null) {
                 listener.onDeleteComponent(component);
                 listener.onCanvasChanged();
@@ -358,6 +359,15 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
             return;
         }
         page.canvasHeightDp = Math.max(page.canvasHeightDp, component.yDp + component.heightDp + 40);
+    }
+
+    private void syncCanvasHeightToContent() {
+        if (page == null) {
+            setMinimumHeight(dp(CANVAS_MIN_HEIGHT_DP));
+            return;
+        }
+        page.canvasHeightDp = computeCanvasHeightDp();
+        setMinimumHeight(scaleDp(page.canvasHeightDp, resolveScale()));
     }
 
     private GradientDrawable buildCanvasBackground(boolean active) {
@@ -504,7 +514,7 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
             lp.width = scaleDp(component.widthDp, contentScale);
             lp.height = scaleDp(component.heightDp, contentScale);
             block.setLayoutParams(lp);
-            setMinimumHeight(scaleDp(computeCanvasHeightDp(), pageScale));
+            syncCanvasHeightToContent();
         }
     }
 }

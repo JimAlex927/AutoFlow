@@ -11,6 +11,7 @@ import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.EditText;
@@ -123,14 +124,32 @@ final class FloatWindowConfigUiHelper {
         View dialogView = LayoutInflater.from(ctx).inflate(R.layout.dialog_config_ui_designer, null);
         EditText nameInput = dialogView.findViewById(R.id.et_config_ui_name);
         AutoCompleteTextView pageSelector = dialogView.findViewById(R.id.actv_config_ui_page);
+        TextView prevPageBtn = dialogView.findViewById(R.id.btn_config_ui_prev_page);
+        TextView nextPageBtn = dialogView.findViewById(R.id.btn_config_ui_next_page);
+        TextView pageMetaView = dialogView.findViewById(R.id.tv_config_ui_page_meta);
         TextView addPageBtn = dialogView.findViewById(R.id.btn_config_ui_add_page);
         TextView renamePageBtn = dialogView.findViewById(R.id.btn_config_ui_rename_page);
         TextView deletePageBtn = dialogView.findViewById(R.id.btn_config_ui_delete_page);
         TextView pageScaleBtn = dialogView.findViewById(R.id.btn_config_ui_page_scale);
         ConfigUiCanvasEditorView canvasView = dialogView.findViewById(R.id.view_config_ui_canvas);
         final int[] currentPageIndex = {0};
+        final Runnable[] refreshPageUiRef = new Runnable[1];
+        Runnable showPagePicker = () -> showConfigUiPagePickerDialog(
+                workingSchema,
+                currentPageIndex[0],
+                index -> {
+                    currentPageIndex[0] = index;
+                    if (refreshPageUiRef[0] != null) {
+                        refreshPageUiRef[0].run();
+                    }
+                });
 
         nameInput.setText(TextUtils.isEmpty(workingSchema.name) ? cfg.operationName + " 配置" : workingSchema.name);
+        pageSelector.setKeyListener(null);
+        pageSelector.setCursorVisible(false);
+        pageSelector.setFocusable(false);
+        pageSelector.setClickable(true);
+        pageSelector.setLongClickable(false);
         if (canvasView != null) {
             canvasView.setListener(new ConfigUiCanvasEditorView.Listener() {
                 @Override
@@ -169,6 +188,9 @@ final class FloatWindowConfigUiHelper {
             if (!pageTitles.isEmpty()) {
                 pageSelector.setText(pageTitles.get(currentPageIndex[0]), false);
             }
+            if (pageMetaView != null) {
+                pageMetaView.setText("第 " + (currentPageIndex[0] + 1) + " / " + workingSchema.pages.size() + " 页");
+            }
             ConfigUiPage page = getSafeConfigUiPage(workingSchema, currentPageIndex[0]);
             if (canvasView != null) {
                 canvasView.setPage(page);
@@ -178,14 +200,39 @@ final class FloatWindowConfigUiHelper {
                 pageScaleBtn.setText("缩放 " + scalePercent + "%");
             }
             deletePageBtn.setAlpha(workingSchema.pages.size() > 1 ? 1f : 0.45f);
+            if (prevPageBtn != null) {
+                prevPageBtn.setAlpha(currentPageIndex[0] > 0 ? 1f : 0.4f);
+            }
+            if (nextPageBtn != null) {
+                nextPageBtn.setAlpha(currentPageIndex[0] < workingSchema.pages.size() - 1 ? 1f : 0.4f);
+            }
         };
+        refreshPageUiRef[0] = refreshPageUi;
         refreshPageUi.run();
 
-        pageSelector.setOnClickListener(v -> pageSelector.showDropDown());
+        pageSelector.setOnClickListener(v -> showPagePicker.run());
         pageSelector.setOnItemClickListener((parent, view, position, id) -> {
             currentPageIndex[0] = position;
             refreshPageUi.run();
         });
+        if (prevPageBtn != null) {
+            prevPageBtn.setOnClickListener(v -> {
+                if (currentPageIndex[0] <= 0) {
+                    return;
+                }
+                currentPageIndex[0]--;
+                refreshPageUi.run();
+            });
+        }
+        if (nextPageBtn != null) {
+            nextPageBtn.setOnClickListener(v -> {
+                if (currentPageIndex[0] >= workingSchema.pages.size() - 1) {
+                    return;
+                }
+                currentPageIndex[0]++;
+                refreshPageUi.run();
+            });
+        }
         addPageBtn.setOnClickListener(v -> showSimpleOverlayTextInputDialog(
                 "新增页面",
                 "页面名称",
@@ -301,10 +348,10 @@ final class FloatWindowConfigUiHelper {
         dialog.show();
         if (dialog.getWindow() != null) {
             int maxHeight = Math.min(
-                    host.dp(760),
-                    (int) (host.getContext().getResources().getDisplayMetrics().heightPixels * 0.92f));
+                    host.dp(780),
+                    (int) (host.getContext().getResources().getDisplayMetrics().heightPixels * 0.94f));
             dialog.getWindow().setLayout(
-                    Math.min(host.dp(390), (int) (host.getContext().getResources().getDisplayMetrics().widthPixels * 0.96f)),
+                    Math.min(host.dp(560), (int) (host.getContext().getResources().getDisplayMetrics().widthPixels * 0.98f)),
                     maxHeight);
             dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
@@ -738,65 +785,127 @@ final class FloatWindowConfigUiHelper {
             dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
                     ? TYPE_APPLICATION_OVERLAY
                     : WindowManager.LayoutParams.TYPE_PHONE);
+            dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
-        dialog.setOnShowListener(d -> dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE)
-                .setOnClickListener(v -> {
-                    String label = readTrimmedText(labelInput, component.getDisplayTypeName());
-                    String key = readTrimmedText(keyInput, "");
-                    if (!isTitle && TextUtils.isEmpty(key)) {
-                        host.showToast("请输入字段 Key");
-                        return;
+        dialog.setOnShowListener(d -> {
+            if (dialog.getWindow() != null) {
+                dialog.getWindow().setLayout(
+                        Math.min(host.dp(500), (int) (host.getContext().getResources().getDisplayMetrics().widthPixels * 0.96f)),
+                        Math.min(host.dp(760), (int) (host.getContext().getResources().getDisplayMetrics().heightPixels * 0.92f)));
+            }
+            TextView positiveBtn = dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE);
+            if (positiveBtn == null) {
+                return;
+            }
+            final boolean[] saving = {false};
+            positiveBtn.setOnClickListener(v -> {
+                if (saving[0]) {
+                    return;
+                }
+                saving[0] = true;
+                v.setEnabled(false);
+                positiveBtn.setText("保存中...");
+                clearFocusAndHideKeyboard(view);
+                view.post(() -> {
+                    try {
+                        String label = readTrimmedText(labelInput, component.getDisplayTypeName());
+                        String key = readTrimmedText(keyInput, "");
+                        if (!isTitle && TextUtils.isEmpty(key)) {
+                            host.showToast("请输入字段 Key");
+                            return;
+                        }
+                        List<ConfigUiOption> options = isSelect
+                                ? parseConfigUiOptions(optionsInput.getText() == null ? "" : optionsInput.getText().toString())
+                                : new ArrayList<>();
+                        if (isSelect && options.isEmpty()) {
+                            host.showToast("下拉组件至少需要一个选项");
+                            return;
+                        }
+                        component.label = label;
+                        component.fieldKey = isTitle ? "" : key;
+                        component.placeholder = isTitle ? "" : readTrimmedText(placeholderInput, "");
+                        component.defaultValue = isTitle ? "" : readTrimmedText(defaultInput, "");
+                        component.helperText = readTrimmedText(helperInput, "");
+                        component.accentColor = normalizeConfigUiColorInput(
+                                readTrimmedText(accentColorInput, component.accentColor),
+                                ConfigUiComponent.defaultAccentColorForType(component.type));
+                        component.displayStyle = isSelect
+                                ? readTrimmedText(displayStyleInput, ConfigUiComponent.DISPLAY_STYLE_AUTO)
+                                : ConfigUiComponent.DISPLAY_STYLE_AUTO;
+                        component.widthDp = Math.max(80, parseIntDefault(readTrimmedText(widthInput,
+                                String.valueOf(ConfigUiComponent.defaultWidthForType(component.type))),
+                                ConfigUiComponent.defaultWidthForType(component.type)));
+                        component.heightDp = Math.max(48, parseIntDefault(readTrimmedText(heightInput,
+                                String.valueOf(ConfigUiComponent.defaultHeightForType(component.type))),
+                                ConfigUiComponent.defaultHeightForType(component.type)));
+                        component.scalePercent = Math.max(40, Math.min(200, parseIntDefault(
+                                readTrimmedText(scaleInput, String.valueOf(component.scalePercent)),
+                                component.scalePercent)));
+                        component.maxLines = Math.max(1, parseIntDefault(
+                                readTrimmedText(maxLinesInput, String.valueOf(component.maxLines)),
+                                component.maxLines));
+                        component.unitSuffix = isNumber ? readTrimmedText(unitSuffixInput, "") : "";
+                        component.numberMin = isNumber ? readTrimmedText(numberMinInput, "") : "";
+                        component.numberMax = isNumber ? readTrimmedText(numberMaxInput, "") : "";
+                        component.numberStep = isNumber ? readTrimmedText(numberStepInput, "1") : "";
+                        component.switchOnColor = isSwitch
+                                ? normalizeConfigUiColorInput(readTrimmedText(switchOnColorInput, component.switchOnColor), "#16A34A")
+                                : "";
+                        component.switchOffColor = isSwitch
+                                ? normalizeConfigUiColorInput(readTrimmedText(switchOffColorInput, component.switchOffColor), "#64748B")
+                                : "";
+                        component.switchThumbColor = isSwitch
+                                ? normalizeConfigUiColorInput(readTrimmedText(switchThumbColorInput, component.switchThumbColor), "#FDE68A")
+                                : "";
+                        component.options = options;
+                        component.ensureDefaults();
+                        dialog.dismiss();
+                        if (onSaved != null) {
+                            onSaved.run();
+                        }
+                        host.showToast("组件已保存");
+                    } finally {
+                        if (dialog.isShowing()) {
+                            saving[0] = false;
+                            v.setEnabled(true);
+                            positiveBtn.setText("保存");
+                        }
                     }
-                    List<ConfigUiOption> options = isSelect
-                            ? parseConfigUiOptions(optionsInput.getText() == null ? "" : optionsInput.getText().toString())
-                            : new ArrayList<>();
-                    if (isSelect && options.isEmpty()) {
-                        host.showToast("下拉组件至少需要一个选项");
-                        return;
-                    }
-                    component.label = label;
-                    component.fieldKey = isTitle ? "" : key;
-                    component.placeholder = isTitle ? "" : readTrimmedText(placeholderInput, "");
-                    component.defaultValue = isTitle ? "" : readTrimmedText(defaultInput, "");
-                    component.helperText = readTrimmedText(helperInput, "");
-                    component.accentColor = normalizeConfigUiColorInput(
-                            readTrimmedText(accentColorInput, component.accentColor),
-                            ConfigUiComponent.defaultAccentColorForType(component.type));
-                    component.displayStyle = isSelect
-                            ? readTrimmedText(displayStyleInput, ConfigUiComponent.DISPLAY_STYLE_AUTO)
-                            : ConfigUiComponent.DISPLAY_STYLE_AUTO;
-                    component.widthDp = Math.max(80, parseIntDefault(readTrimmedText(widthInput,
-                            String.valueOf(ConfigUiComponent.defaultWidthForType(component.type))),
-                            ConfigUiComponent.defaultWidthForType(component.type)));
-                    component.heightDp = Math.max(48, parseIntDefault(readTrimmedText(heightInput,
-                            String.valueOf(ConfigUiComponent.defaultHeightForType(component.type))),
-                            ConfigUiComponent.defaultHeightForType(component.type)));
-                    component.scalePercent = Math.max(40, Math.min(200, parseIntDefault(
-                            readTrimmedText(scaleInput, String.valueOf(component.scalePercent)),
-                            component.scalePercent)));
-                    component.maxLines = Math.max(1, parseIntDefault(
-                            readTrimmedText(maxLinesInput, String.valueOf(component.maxLines)),
-                            component.maxLines));
-                    component.unitSuffix = isNumber ? readTrimmedText(unitSuffixInput, "") : "";
-                    component.numberMin = isNumber ? readTrimmedText(numberMinInput, "") : "";
-                    component.numberMax = isNumber ? readTrimmedText(numberMaxInput, "") : "";
-                    component.numberStep = isNumber ? readTrimmedText(numberStepInput, "1") : "";
-                    component.switchOnColor = isSwitch
-                            ? normalizeConfigUiColorInput(readTrimmedText(switchOnColorInput, component.switchOnColor), "#16A34A")
-                            : "";
-                    component.switchOffColor = isSwitch
-                            ? normalizeConfigUiColorInput(readTrimmedText(switchOffColorInput, component.switchOffColor), "#64748B")
-                            : "";
-                    component.switchThumbColor = isSwitch
-                            ? normalizeConfigUiColorInput(readTrimmedText(switchThumbColorInput, component.switchThumbColor), "#FDE68A")
-                            : "";
-                    component.options = options;
-                    component.ensureDefaults();
-                    dialog.dismiss();
-                    if (onSaved != null) {
-                        onSaved.run();
-                    }
-                }));
+                });
+            });
+        });
+        dialog.show();
+    }
+
+    private void showConfigUiPagePickerDialog(ConfigUiSchema schema,
+                                              int selectedIndex,
+                                              java.util.function.IntConsumer onSelected) {
+        if (schema == null) {
+            return;
+        }
+        schema.ensureDefaults();
+        Context ctx = new android.view.ContextThemeWrapper(host.getContext(), R.style.Theme_AtomMaster);
+        String[] pageTitles = new String[schema.pages.size()];
+        for (int i = 0; i < schema.pages.size(); i++) {
+            ConfigUiPage page = schema.pages.get(i);
+            pageTitles[i] = (i + 1) + ". " + (page == null || TextUtils.isEmpty(page.title) ? "页面" : page.title);
+        }
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
+                .setTitle("切换页面")
+                .setSingleChoiceItems(pageTitles, Math.max(0, Math.min(selectedIndex, pageTitles.length - 1)),
+                        (d, which) -> {
+                            if (onSelected != null) {
+                                onSelected.accept(which);
+                            }
+                            d.dismiss();
+                        })
+                .setNegativeButton("取消", null)
+                .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
         dialog.show();
     }
 
@@ -847,6 +956,22 @@ final class FloatWindowConfigUiHelper {
                     dialog.dismiss();
                 }));
         dialog.show();
+    }
+
+    private void clearFocusAndHideKeyboard(View view) {
+        if (view == null) {
+            return;
+        }
+        view.clearFocus();
+        View focused = view.findFocus();
+        if (focused != null) {
+            focused.clearFocus();
+        }
+        InputMethodManager imm = (InputMethodManager) host.getContext().getSystemService(Context.INPUT_METHOD_SERVICE);
+        if (imm != null) {
+            View target = focused != null ? focused : view;
+            imm.hideSoftInputFromWindow(target.getWindowToken(), 0);
+        }
     }
 
     private String ensureNodeConfigUiSchemaId(NodeFloatButtonConfig cfg) {

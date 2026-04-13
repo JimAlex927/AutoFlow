@@ -207,21 +207,24 @@ public class ConfigUiComponent {
 
     public static int defaultWidthForType(String type) {
         if (TYPE_TITLE.equals(type)) {
-            return 280;
+            return 320;
         }
         if (TYPE_SWITCH.equals(type)) {
-            return 168;
+            return 220;
         }
         if (TYPE_ARRAY.equals(type)) {
-            return 250;
+            return 300;
         }
         if (TYPE_TEXTAREA.equals(type)) {
-            return 240;
+            return 300;
         }
         if (TYPE_SELECT.equals(type)) {
-            return 200;
+            return 240;
         }
-        return 180;
+        if (TYPE_NUMBER.equals(type)) {
+            return 220;
+        }
+        return 240;
     }
 
     public static int defaultHeightForType(String type) {
