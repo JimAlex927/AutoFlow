@@ -27,8 +27,9 @@ public class ClickOperationHandler extends OperationHandler {
     private static final long FAST_DISPATCH_TIMEOUT_MS = 250L;
     private static final long FAST_SETTLE_MS = 32L;
     private static final long STRICT_WAIT_TIMEOUT_MS = 3000L;
-    // 复用主线程 Handler，避免每次 handle() 重新构造
     private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
+    // 静态缓存：避免 extractNumbers() 每次调用都重新编译正则
+    private static final Pattern COORD_PATTERN = Pattern.compile("(-?\\d+)\\D+(-?\\d+)");
 
     private static class ClickConfig {
         final boolean fastMode;
@@ -62,8 +63,7 @@ public class ClickOperationHandler extends OperationHandler {
             return null;
         }
 
-        Pattern pattern = Pattern.compile("(-?\\d+)\\D+(-?\\d+)");
-        Matcher matcher = pattern.matcher(str.trim());
+        Matcher matcher = COORD_PATTERN.matcher(str.trim());
 
         if (matcher.find()) {
             try {

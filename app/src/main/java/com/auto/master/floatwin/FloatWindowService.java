@@ -235,6 +235,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private final List<OperationClipboardEntry> operationClipboardLibrary = new ArrayList<>();
     private static final int OPERATION_CLIPBOARD_LIMIT = 24;
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    /** Service 存活标志：onDestroy 后置 false，后台线程回调据此短路，避免访问已销毁状态 */
+    private volatile boolean serviceAlive = true;
     private final Runnable searchRefreshRunnable = this::refreshCurrentLevelList;
     private RecyclerView projectPanelRecyclerView;
     private ProjectPanelAdapter projectPanelAdapter;
@@ -994,6 +996,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     @Override
     public void onDestroy() {
+        serviceAlive = false;
         super.onDestroy();
         
         // 清理Handler的pending消息，防止内存泄漏
@@ -2678,6 +2681,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 Template.clearProjectCache(newName);
             }
             uiHandler.post(() -> {
+                if (!serviceAlive) return;
                 if (!success || !newProjectDir.exists()) {
                     Toast.makeText(this, "项目重命名失败", Toast.LENGTH_SHORT).show();
                     return;
@@ -2750,6 +2754,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 Template.invalidateTaskCache(projectName, newName);
             }
             uiHandler.post(() -> {
+                if (!serviceAlive) return;
                 if (!success || !newTaskDir.exists()) {
                     Toast.makeText(this, "Task 重命名失败", Toast.LENGTH_SHORT).show();
                     return;

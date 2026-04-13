@@ -3,7 +3,6 @@ package com.auto.master.Task.Handler.OperationHandler;
 import android.os.SystemClock;
 import android.util.Log;
 
-import com.auto.master.Task.Operation.LoadImgToMatOperation;
 import com.auto.master.Task.Operation.MatchMapTemplateOperation;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
@@ -13,9 +12,15 @@ import com.auto.master.capture.ScreenCapture;
 import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.MatchResult;
 import com.auto.master.utils.OpenCVHelper;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+
+import java.io.File;
+
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
+import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
@@ -61,8 +66,8 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
     private static final ExecutorService SHARED_POOL =
             Executors.newFixedThreadPool(POOL_SIZE);
 
-    // 复用的 fallback 加载上下文，避免 preloadTemplates 里重复 new
-    private static final OperationContext FALLBACK_CTX = new OperationContext();
+    // parseMatchMap 复用，避免每次 String 输入时 new Gson()
+    private static final Gson GSON = new Gson();
 
     MatchMaptemplateOperationHandler() {
         this.setType(7);
@@ -382,13 +387,9 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
 
                 Mat templateMat = Template.getTaskSingleMutCache(projectName, taskName, templateName);
 
-                // Fallback：尝试加载一次（复用静态 FALLBACK_CTX，避免重复 new）
+                // Fallback：只加载这一张图，不再触发全量项目扫描
                 if (templateMat == null || templateMat.empty()) {
-                    templateMat = tryLoadTemplate(projectName, templateName);
-                    // 加载后再取缓存
-                    if (templateMat == null || templateMat.empty()) {
-                        templateMat = Template.getTaskSingleMutCache(projectName, taskName, templateName);
-                    }
+                    templateMat = tryLoadTemplate(projectName, taskName, templateName);
                 }
 
                 if (templateMat != null && !templateMat.empty()) {
@@ -407,20 +408,45 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         return cache;
     }
 
-    /** 单次模板加载，复用静态 context 避免 GC 压力 */
-    private static Mat tryLoadTemplate(String projectName, String templateName) {
+    /**
+     * 精准加载单张模板，只读取 {project}/{task}/img/{templateName} 这一个文件。
+     * 原来的实现会通过 LoadImgToMatOperationHandler 扫描整个 project 的所有图片，
+     * 导致每次 cache miss 时把整批 Bitmap 全部解码，引发明显卡顿。
+     */
+    private static Mat tryLoadTemplate(String projectName, String taskName, String templateName) {
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) return null;
         try {
-            LoadImgToMatOperation loadOp = new LoadImgToMatOperation();
-            loadOp.setId("tmp_" + templateName);
-            loadOp.setResponseType(1);
-            HashMap<String, Object> tmpMap = new HashMap<>();
-            tmpMap.put(MetaOperation.PROJECT, projectName);
-            loadOp.setInputMap(tmpMap);
-            new LoadImgToMatOperationHandler().handle(loadOp, FALLBACK_CTX);
+            File imgFile = new File(
+                    svc.getApplicationContext().getExternalFilesDir(null),
+                    "projects" + File.separator + projectName
+                            + File.separator + taskName
+                            + File.separator + "img"
+                            + File.separator + templateName);
+            if (!imgFile.exists()) {
+                Log.w(TAG, "模板文件不存在: " + imgFile.getPath());
+                return null;
+            }
+            Bitmap bitmap = BitmapFactory.decodeFile(imgFile.getAbsolutePath());
+            if (bitmap == null) {
+                Log.w(TAG, "模板解码失败: " + imgFile.getPath());
+                return null;
+            }
+            Mat mat = new Mat();
+            try {
+                Utils.bitmapToMat(bitmap, mat);
+            } finally {
+                bitmap.recycle();
+            }
+            if (mat.empty()) {
+                mat.release();
+                return null;
+            }
+            return mat;
         } catch (Exception e) {
             Log.e(TAG, "tryLoadTemplate error: " + e.getMessage());
+            return null;
         }
-        return null; // 调用方从 cache 重新取
     }
 
     // ─────────────────────────── 响应处理 ────────────────────────────────────
@@ -475,7 +501,7 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         if (raw instanceof String) {
             try {
                 Type type = new TypeToken<Map<String, Map<String, Double>>>() {}.getType();
-                return new Gson().fromJson((String) raw, type);
+                return GSON.fromJson((String) raw, type);
             } catch (Exception e) {
                 Log.e(TAG, "解析 MATCHMAP JSON 失败: " + e.getMessage());
             }

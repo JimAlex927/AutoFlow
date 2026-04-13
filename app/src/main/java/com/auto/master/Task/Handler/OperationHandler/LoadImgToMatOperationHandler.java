@@ -81,16 +81,9 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
         AutoAccessibilityService svc = AutoAccessibilityService.get();
         if (svc == null) return false;
 
-
-//        加载图像只需要一个projectName
-        Activity top = ActivityHolder.getTopActivity();
-
-
-        //这是这个operation定义的一些东西
         Map<String, Object> inputMap = loadImgToMatOperation.getInputMap();
 
         Object project = inputMap.get(MetaOperation.PROJECT);
-
         String projectName;
         if (project instanceof String) {
             projectName = (String) project;
@@ -98,9 +91,9 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
             projectName = "fallback";
         }
 
-        final Activity a = ActivityHolder.getTopActivity();
-
-        File projectDir_ = new File(a.getExternalFilesDir(null), "projects");
+        // 优先用 Service 自身 Context，避免依赖 Activity（Activity 可能为 null）
+        final Context appCtx = svc.getApplicationContext();
+        File projectDir_ = new File(appCtx.getExternalFilesDir(null), "projects");
         File projectDir = new File(projectDir_, projectName);
         File[] taskDirs = projectDir.listFiles();
         if (taskDirs == null || taskDirs.length == 0) {
@@ -185,21 +178,16 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
                         continue;
                     }
                     Mat mat = new Mat();
+                    boolean matOk = false;
                     try {
                         Utils.bitmapToMat(bitmap, mat);
+                        projectTaskMatMap.put(imgName, mat);
+                        matOk = true;
                     } finally {
                         bitmap.recycle();
+                        // bitmapToMat 抛出异常时释放 Mat，防止 OpenCV 内存泄漏
+                        if (!matOk) mat.release();
                     }
-//                    这里决定是否灰度化
-//                    if (grayscale) {
-//                        Mat gray = new Mat();
-//                        Imgproc.cvtColor(mat, gray, Imgproc.COLOR_BGR2GRAY);
-//                        mat.release();
-//                        return gray;
-//                    }
-//                    todo 这里会不会多次写入很慢 一次性写入可以吗
-//                    Template.putTaskMutCache(projectName,taskName,imgName,mat);
-                    projectTaskMatMap.put(imgName, mat);
                 }
                 // todo 一次性写入吧
                 Template.putTaskMatCache(projectName, taskName, projectTaskMatMap);
