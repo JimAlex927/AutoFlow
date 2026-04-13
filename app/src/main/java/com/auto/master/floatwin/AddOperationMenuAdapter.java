@@ -12,6 +12,7 @@ import android.widget.TextView;
 import androidx.annotation.ColorRes;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
@@ -89,13 +90,11 @@ final class AddOperationMenuAdapter extends RecyclerView.Adapter<RecyclerView.Vi
         int previousPosition = findItemPosition(selectedItemId);
         int nextPosition = findItemPosition(nextId);
         selectedItemId = nextId;
-        if (previousPosition >= 0 && nextPosition >= 0) {
+        if (previousPosition >= 0) {
             notifyItemChanged(previousPosition);
-            if (previousPosition != nextPosition) {
-                notifyItemChanged(nextPosition);
-            }
-        } else {
-            notifyDataSetChanged();
+        }
+        if (nextPosition >= 0 && previousPosition != nextPosition) {
+            notifyItemChanged(nextPosition);
         }
     }
 
@@ -154,8 +153,7 @@ final class AddOperationMenuAdapter extends RecyclerView.Adapter<RecyclerView.Vi
         for (MenuSection section : sections) {
             section.expanded = containsItem(section, itemId);
         }
-        rebuildRows();
-        notifyDataSetChanged();
+        applyRebuiltRows();
     }
 
     void toggleSection(@NonNull MenuSection targetSection) {
@@ -171,20 +169,33 @@ final class AddOperationMenuAdapter extends RecyclerView.Adapter<RecyclerView.Vi
         if (!changed) {
             return;
         }
-        rebuildRows();
-        notifyDataSetChanged();
+        applyRebuiltRows();
+    }
+
+    private void applyRebuiltRows() {
+        List<Row> newRows = buildRowsSnapshot();
+        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new RowDiffCallback(rows, newRows));
+        rows.clear();
+        rows.addAll(newRows);
+        diffResult.dispatchUpdatesTo(this);
     }
 
     private void rebuildRows() {
         rows.clear();
+        rows.addAll(buildRowsSnapshot());
+    }
+
+    private List<Row> buildRowsSnapshot() {
+        List<Row> snapshot = new ArrayList<>();
         for (MenuSection section : sections) {
-            rows.add(new SectionRow(section));
+            snapshot.add(new SectionRow(section));
             if (section.expanded) {
                 for (MenuItem item : section.items) {
-                    rows.add(new ItemRow(item));
+                    snapshot.add(new ItemRow(item));
                 }
             }
         }
+        return snapshot;
     }
 
     private int findItemPosition(String itemId) {
@@ -264,6 +275,58 @@ final class AddOperationMenuAdapter extends RecyclerView.Adapter<RecyclerView.Vi
         ItemRow(@NonNull MenuItem item) {
             super(VIEW_TYPE_ITEM, ("item:" + item.id).hashCode());
             this.item = item;
+        }
+    }
+
+    private static final class RowDiffCallback extends DiffUtil.Callback {
+        private final List<Row> oldRows;
+        private final List<Row> newRows;
+
+        RowDiffCallback(@NonNull List<Row> oldRows, @NonNull List<Row> newRows) {
+            this.oldRows = oldRows;
+            this.newRows = newRows;
+        }
+
+        @Override
+        public int getOldListSize() {
+            return oldRows.size();
+        }
+
+        @Override
+        public int getNewListSize() {
+            return newRows.size();
+        }
+
+        @Override
+        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
+            return oldRows.get(oldItemPosition).stableId == newRows.get(newItemPosition).stableId;
+        }
+
+        @Override
+        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
+            Row oldRow = oldRows.get(oldItemPosition);
+            Row newRow = newRows.get(newItemPosition);
+            if (oldRow.viewType != newRow.viewType) {
+                return false;
+            }
+            if (oldRow instanceof SectionRow && newRow instanceof SectionRow) {
+                MenuSection oldSection = ((SectionRow) oldRow).section;
+                MenuSection newSection = ((SectionRow) newRow).section;
+                return TextUtils.equals(oldSection.title, newSection.title)
+                        && TextUtils.equals(oldSection.description, newSection.description)
+                        && oldSection.expanded == newSection.expanded;
+            }
+            if (oldRow instanceof ItemRow && newRow instanceof ItemRow) {
+                MenuItem oldItem = ((ItemRow) oldRow).item;
+                MenuItem newItem = ((ItemRow) newRow).item;
+                return TextUtils.equals(oldItem.id, newItem.id)
+                        && TextUtils.equals(oldItem.label, newItem.label)
+                        && TextUtils.equals(oldItem.description, newItem.description)
+                        && TextUtils.equals(oldItem.badgeText, newItem.badgeText)
+                        && oldItem.colorRes == newItem.colorRes
+                        && oldItem.enabled == newItem.enabled;
+            }
+            return false;
         }
     }
 

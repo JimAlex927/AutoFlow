@@ -5,6 +5,8 @@ import static android.view.WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
 import android.content.ClipData;
 import android.content.Context;
 import android.graphics.Color;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
@@ -16,6 +18,8 @@ import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
+import android.widget.LinearLayout;
 import android.widget.TextView;
 
 import androidx.annotation.Nullable;
@@ -123,33 +127,52 @@ final class FloatWindowConfigUiHelper {
         Context ctx = new android.view.ContextThemeWrapper(host.getContext(), R.style.Theme_AtomMaster);
         View dialogView = LayoutInflater.from(ctx).inflate(R.layout.dialog_config_ui_designer, null);
         EditText nameInput = dialogView.findViewById(R.id.et_config_ui_name);
-        AutoCompleteTextView pageSelector = dialogView.findViewById(R.id.actv_config_ui_page);
-        TextView prevPageBtn = dialogView.findViewById(R.id.btn_config_ui_prev_page);
-        TextView nextPageBtn = dialogView.findViewById(R.id.btn_config_ui_next_page);
+        HorizontalScrollView pageTabsScroll = dialogView.findViewById(R.id.scroll_config_ui_tabs);
+        LinearLayout pageTabsContainer = dialogView.findViewById(R.id.layout_config_ui_tabs);
         TextView pageMetaView = dialogView.findViewById(R.id.tv_config_ui_page_meta);
         TextView addPageBtn = dialogView.findViewById(R.id.btn_config_ui_add_page);
         TextView renamePageBtn = dialogView.findViewById(R.id.btn_config_ui_rename_page);
         TextView deletePageBtn = dialogView.findViewById(R.id.btn_config_ui_delete_page);
         TextView pageScaleBtn = dialogView.findViewById(R.id.btn_config_ui_page_scale);
+        TextView editComponentBtn = dialogView.findViewById(R.id.btn_config_ui_edit_component);
+        TextView moveComponentBtn = dialogView.findViewById(R.id.btn_config_ui_move_component);
+        TextView selectionHintView = dialogView.findViewById(R.id.tv_config_ui_selection_hint);
         ConfigUiCanvasEditorView canvasView = dialogView.findViewById(R.id.view_config_ui_canvas);
         final int[] currentPageIndex = {0};
         final Runnable[] refreshPageUiRef = new Runnable[1];
-        Runnable showPagePicker = () -> showConfigUiPagePickerDialog(
-                workingSchema,
-                currentPageIndex[0],
-                index -> {
-                    currentPageIndex[0] = index;
-                    if (refreshPageUiRef[0] != null) {
-                        refreshPageUiRef[0].run();
-                    }
-                });
 
         nameInput.setText(TextUtils.isEmpty(workingSchema.name) ? cfg.operationName + " 配置" : workingSchema.name);
-        pageSelector.setKeyListener(null);
-        pageSelector.setCursorVisible(false);
-        pageSelector.setFocusable(false);
-        pageSelector.setClickable(true);
-        pageSelector.setLongClickable(false);
+        Runnable refreshSelectionUi = () -> {
+            ConfigUiComponent selectedComponent = canvasView == null ? null : canvasView.getSelectedComponent();
+            boolean moveModeActive = canvasView != null && canvasView.isMoveModeEnabled();
+            String selectedName = selectedComponent == null
+                    ? ""
+                    : host.abbreviate(TextUtils.isEmpty(selectedComponent.label)
+                    ? selectedComponent.getDisplayTypeName()
+                    : selectedComponent.label, 12);
+            if (editComponentBtn != null) {
+                editComponentBtn.setAlpha(selectedComponent == null ? 0.45f : 1f);
+                editComponentBtn.setText(selectedComponent == null
+                        ? "编辑已选组件"
+                        : ("编辑 " + selectedName));
+            }
+            if (moveComponentBtn != null) {
+                moveComponentBtn.setAlpha(selectedComponent == null ? 0.45f : 1f);
+                moveComponentBtn.setText(moveModeActive
+                        ? "结束移动"
+                        : (selectedComponent == null ? "移动已选组件" : ("移动 " + selectedName)));
+                moveComponentBtn.setTextColor(moveModeActive ? 0xFF0F766E : 0xFF2F4F7C);
+            }
+            if (selectionHintView != null) {
+                if (selectedComponent == null) {
+                    selectionHintView.setText("先点选一个组件，再编辑或移动；双指可直接缩放选中的组件。");
+                } else if (moveModeActive) {
+                    selectionHintView.setText("正在移动「" + selectedName + "」：单指拖动位置，双指可继续缩放，点“结束移动”退出。");
+                } else {
+                    selectionHintView.setText("已选中「" + selectedName + "」：点上方按钮进入移动，或直接双指缩放这个组件。");
+                }
+            }
+        };
         if (canvasView != null) {
             canvasView.setListener(new ConfigUiCanvasEditorView.Listener() {
                 @Override
@@ -165,6 +188,11 @@ final class FloatWindowConfigUiHelper {
                 @Override
                 public void onCanvasChanged() {
                 }
+
+                @Override
+                public void onSelectionChanged(@Nullable ConfigUiComponent component, boolean moveModeEnabled) {
+                    refreshSelectionUi.run();
+                }
             });
         }
 
@@ -176,20 +204,19 @@ final class FloatWindowConfigUiHelper {
             if (currentPageIndex[0] >= workingSchema.pages.size()) {
                 currentPageIndex[0] = Math.max(0, workingSchema.pages.size() - 1);
             }
-            pageSelector.setTag(currentPageIndex[0]);
-            List<String> pageTitles = new ArrayList<>();
-            for (int i = 0; i < workingSchema.pages.size(); i++) {
-                ConfigUiPage page = workingSchema.pages.get(i);
-                pageTitles.add((i + 1) + ". " + (page == null || TextUtils.isEmpty(page.title) ? "页面" : page.title));
-            }
-            ArrayAdapter<String> pageAdapter = new ArrayAdapter<>(
-                    host.getContext(), android.R.layout.simple_list_item_1, pageTitles);
-            pageSelector.setAdapter(pageAdapter);
-            if (!pageTitles.isEmpty()) {
-                pageSelector.setText(pageTitles.get(currentPageIndex[0]), false);
-            }
+            populateConfigUiPageTabs(pageTabsScroll, pageTabsContainer, workingSchema, currentPageIndex[0], index -> {
+                currentPageIndex[0] = index;
+                if (refreshPageUiRef[0] != null) {
+                    refreshPageUiRef[0].run();
+                }
+            });
             if (pageMetaView != null) {
-                pageMetaView.setText("第 " + (currentPageIndex[0] + 1) + " / " + workingSchema.pages.size() + " 页");
+                ConfigUiPage currentPage = getSafeConfigUiPage(workingSchema, currentPageIndex[0]);
+                String title = currentPage == null || TextUtils.isEmpty(currentPage.title)
+                        ? ("页面 " + (currentPageIndex[0] + 1))
+                        : currentPage.title;
+                pageMetaView.setText("第 " + (currentPageIndex[0] + 1) + " / " + workingSchema.pages.size()
+                        + " 页 · 当前：" + title);
             }
             ConfigUiPage page = getSafeConfigUiPage(workingSchema, currentPageIndex[0]);
             if (canvasView != null) {
@@ -200,39 +227,11 @@ final class FloatWindowConfigUiHelper {
                 pageScaleBtn.setText("缩放 " + scalePercent + "%");
             }
             deletePageBtn.setAlpha(workingSchema.pages.size() > 1 ? 1f : 0.45f);
-            if (prevPageBtn != null) {
-                prevPageBtn.setAlpha(currentPageIndex[0] > 0 ? 1f : 0.4f);
-            }
-            if (nextPageBtn != null) {
-                nextPageBtn.setAlpha(currentPageIndex[0] < workingSchema.pages.size() - 1 ? 1f : 0.4f);
-            }
+            refreshSelectionUi.run();
         };
         refreshPageUiRef[0] = refreshPageUi;
         refreshPageUi.run();
 
-        pageSelector.setOnClickListener(v -> showPagePicker.run());
-        pageSelector.setOnItemClickListener((parent, view, position, id) -> {
-            currentPageIndex[0] = position;
-            refreshPageUi.run();
-        });
-        if (prevPageBtn != null) {
-            prevPageBtn.setOnClickListener(v -> {
-                if (currentPageIndex[0] <= 0) {
-                    return;
-                }
-                currentPageIndex[0]--;
-                refreshPageUi.run();
-            });
-        }
-        if (nextPageBtn != null) {
-            nextPageBtn.setOnClickListener(v -> {
-                if (currentPageIndex[0] >= workingSchema.pages.size() - 1) {
-                    return;
-                }
-                currentPageIndex[0]++;
-                refreshPageUi.run();
-            });
-        }
         addPageBtn.setOnClickListener(v -> showSimpleOverlayTextInputDialog(
                 "新增页面",
                 "页面名称",
@@ -281,6 +280,35 @@ final class FloatWindowConfigUiHelper {
                             page.scalePercent = Math.max(40, Math.min(200, scale));
                             refreshPageUi.run();
                         });
+            });
+        }
+        if (editComponentBtn != null) {
+            editComponentBtn.setOnClickListener(v -> {
+                ConfigUiComponent selectedComponent = canvasView == null ? null : canvasView.getSelectedComponent();
+                if (selectedComponent == null) {
+                    host.showToast("先选中一个组件");
+                    return;
+                }
+                showConfigUiComponentEditDialog(selectedComponent, () -> {
+                    if (canvasView != null) {
+                        canvasView.setPage(getSafeConfigUiPage(workingSchema, currentPageIndex[0]));
+                    }
+                    refreshSelectionUi.run();
+                });
+            });
+        }
+        if (moveComponentBtn != null) {
+            moveComponentBtn.setOnClickListener(v -> {
+                if (canvasView == null) {
+                    return;
+                }
+                if (canvasView.isMoveModeEnabled()) {
+                    canvasView.endMoveMode();
+                    return;
+                }
+                if (!canvasView.beginMoveSelectedComponent()) {
+                    host.showToast("先选中一个组件");
+                }
             });
         }
 
@@ -348,10 +376,10 @@ final class FloatWindowConfigUiHelper {
         dialog.show();
         if (dialog.getWindow() != null) {
             int maxHeight = Math.min(
-                    host.dp(780),
+                    host.dp(860),
                     (int) (host.getContext().getResources().getDisplayMetrics().heightPixels * 0.94f));
             dialog.getWindow().setLayout(
-                    Math.min(host.dp(560), (int) (host.getContext().getResources().getDisplayMetrics().widthPixels * 0.98f)),
+                    Math.min(host.dp(760), (int) (host.getContext().getResources().getDisplayMetrics().widthPixels * 0.99f)),
                     maxHeight);
             dialog.getWindow().setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
         }
@@ -676,6 +704,64 @@ final class FloatWindowConfigUiHelper {
             page.ensureDefaults();
         }
         return page;
+    }
+
+    private void populateConfigUiPageTabs(@Nullable HorizontalScrollView scrollView,
+                                          @Nullable LinearLayout container,
+                                          ConfigUiSchema schema,
+                                          int selectedIndex,
+                                          @Nullable java.util.function.IntConsumer onSelected) {
+        if (container == null || schema == null) {
+            return;
+        }
+        schema.ensureDefaults();
+        container.removeAllViews();
+        Context context = host.getContext();
+        int safeIndex = Math.max(0, Math.min(selectedIndex, Math.max(0, schema.pages.size() - 1)));
+        for (int i = 0; i < schema.pages.size(); i++) {
+            ConfigUiPage page = schema.pages.get(i);
+            String title = page == null || TextUtils.isEmpty(page.title)
+                    ? ("页面 " + (i + 1))
+                    : page.title;
+            TextView tabView = new TextView(context);
+            tabView.setText(title);
+            tabView.setSingleLine(true);
+            tabView.setEllipsize(TextUtils.TruncateAt.END);
+            tabView.setTypeface(tabView.getTypeface(), i == safeIndex ? Typeface.BOLD : Typeface.NORMAL);
+            tabView.setPadding(host.dp(14), host.dp(9), host.dp(14), host.dp(9));
+            applyConfigUiPageTabStyle(tabView, i == safeIndex);
+            LinearLayout.LayoutParams tabLp = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT);
+            if (i > 0) {
+                tabLp.leftMargin = host.dp(8);
+            }
+            final int pageIndex = i;
+            tabView.setOnClickListener(v -> {
+                if (onSelected != null) {
+                    onSelected.accept(pageIndex);
+                }
+            });
+            container.addView(tabView, tabLp);
+            if (i == safeIndex && scrollView != null) {
+                tabView.post(() -> {
+                    int scrollX = Math.max(0, tabView.getLeft() - host.dp(12));
+                    scrollView.smoothScrollTo(scrollX, 0);
+                });
+            }
+        }
+    }
+
+    private void applyConfigUiPageTabStyle(TextView view, boolean selected) {
+        if (view == null) {
+            return;
+        }
+        GradientDrawable bg = new GradientDrawable();
+        bg.setCornerRadius(host.dp(14));
+        bg.setColor(selected ? 0xFF3C6DE4 : 0xFFF3F6FA);
+        bg.setStroke(host.dp(1), selected ? 0xFF2C58C7 : 0xFFD7E1EB);
+        view.setBackground(bg);
+        view.setTextColor(selected ? 0xFFFFFFFF : 0xFF526273);
     }
 
     private void showConfigUiComponentEditDialog(ConfigUiComponent component, Runnable onSaved) {

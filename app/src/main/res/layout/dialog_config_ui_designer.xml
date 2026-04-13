@@ -29,7 +29,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:text="一个 UI 可包含多个页面；现在支持显式切页，设计区会优先给画布留出更宽空间。"
+        android:text="手机优先的设计面板：组件库收成快捷栏，把更多空间留给画布。点击可快速加入，长按可直接拖进画布。"
         android:textColor="#7B8794"
         android:textSize="11sp" />
 
@@ -53,53 +53,30 @@
         android:baselineAligned="false"
         android:orientation="horizontal">
 
-        <TextView
-            android:id="@+id/btn_config_ui_prev_page"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:background="@drawable/item_operation_compact_bg"
-            android:gravity="center"
-            android:text="‹"
-            android:textColor="#2F4F7C"
-            android:textSize="18sp"
-            android:textStyle="bold" />
-
-        <AutoCompleteTextView
-            android:id="@+id/actv_config_ui_page"
+        <HorizontalScrollView
+            android:id="@+id/scroll_config_ui_tabs"
             android:layout_width="0dp"
             android:layout_height="40dp"
-            android:layout_marginStart="8dp"
             android:layout_weight="1"
-            android:background="@drawable/item_operation_compact_bg"
-            android:completionThreshold="0"
-            android:dropDownHeight="wrap_content"
-            android:hint="选择页面"
-            android:paddingStart="10dp"
-            android:paddingEnd="10dp"
-            android:textColor="#243244"
-            android:textColorHint="#AABBCC"
-            android:textSize="13sp" />
+            android:fadeScrollbars="false"
+            android:scrollbars="none">
 
-        <TextView
-            android:id="@+id/btn_config_ui_next_page"
-            android:layout_width="40dp"
-            android:layout_height="40dp"
-            android:layout_marginStart="8dp"
-            android:background="@drawable/item_operation_compact_bg"
-            android:gravity="center"
-            android:text="›"
-            android:textColor="#2F4F7C"
-            android:textSize="18sp"
-            android:textStyle="bold" />
+            <LinearLayout
+                android:id="@+id/layout_config_ui_tabs"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center_vertical"
+                android:orientation="horizontal" />
+        </HorizontalScrollView>
 
         <TextView
             android:id="@+id/btn_config_ui_add_page"
-            android:layout_width="64dp"
+            android:layout_width="72dp"
             android:layout_height="40dp"
             android:layout_marginStart="8dp"
             android:background="@drawable/item_operation_compact_bg"
             android:gravity="center"
-            android:text="加页"
+            android:text="+ 页面"
             android:textColor="#2F4F7C"
             android:textSize="12sp"
             android:textStyle="bold" />
@@ -159,19 +136,186 @@
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="12dp"
-        android:baselineAligned="false"
+        android:layout_marginTop="8dp"
         android:orientation="horizontal">
 
-        <LinearLayout
+        <TextView
+            android:id="@+id/btn_config_ui_edit_component"
             android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_marginEnd="6dp"
+            android:layout_weight="1"
+            android:background="@drawable/item_operation_compact_bg"
+            android:gravity="center"
+            android:text="编辑已选组件"
+            android:textColor="#2F4F7C"
+            android:textSize="12sp" />
+
+        <TextView
+            android:id="@+id/btn_config_ui_move_component"
+            android:layout_width="0dp"
+            android:layout_height="38dp"
+            android:layout_weight="1"
+            android:background="@drawable/item_operation_compact_bg"
+            android:gravity="center"
+            android:text="移动已选组件"
+            android:textColor="#2F4F7C"
+            android:textSize="12sp"
+            android:textStyle="bold" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/tv_config_ui_selection_hint"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:text="先点选一个组件，再编辑或移动；双指可直接缩放选中的组件。"
+        android:textColor="#7B8794"
+        android:textSize="11sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="12dp"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1.45"
+            android:text="组件快捷栏"
+            android:textColor="#243244"
+            android:textSize="13sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_config_ui_palette_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="点一下快速加入当前页。选中组件后，用顶部按钮移动；双指可缩放。"
+            android:textColor="#7B8794"
+            android:textSize="11sp" />
+
+        <HorizontalScrollView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:fadeScrollbars="false"
+            android:scrollbars="none">
+
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/btn_add_text_component"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:minWidth="72dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:text="文本"
+                    android:textColor="#2F4F7C"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btn_add_number_component"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:minWidth="72dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:text="数字"
+                    android:textColor="#2F4F7C"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btn_add_switch_component"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:minWidth="72dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:text="开关"
+                    android:textColor="#2F4F7C"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btn_add_select_component"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:minWidth="72dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:text="下拉"
+                    android:textColor="#2F4F7C"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btn_add_textarea_component"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:minWidth="82dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:text="长文本"
+                    android:textColor="#2F4F7C"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btn_add_array_component"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:minWidth="72dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:text="数组"
+                    android:textColor="#2F4F7C"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btn_add_title_component"
+                    android:layout_width="wrap_content"
+                    android:layout_height="38dp"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/item_operation_compact_bg"
+                    android:gravity="center"
+                    android:minWidth="98dp"
+                    android:paddingStart="14dp"
+                    android:paddingEnd="14dp"
+                    android:text="标题 / 分组"
+                    android:textColor="#2F4F7C"
+                    android:textSize="12sp" />
+            </LinearLayout>
+        </HorizontalScrollView>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
             android:orientation="vertical">
 
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
                 android:text="页面画布"
                 android:textColor="#243244"
                 android:textSize="13sp"
@@ -190,7 +334,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/item_operation_compact_bg"
-                android:minHeight="260dp"
+                android:minHeight="420dp"
                 android:padding="8dp">
 
                 <com.auto.master.configui.ConfigUiCanvasEditorView
@@ -198,131 +342,6 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content" />
             </FrameLayout>
-        </LinearLayout>
-
-        <LinearLayout
-            android:layout_width="172dp"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:orientation="vertical">
-
-            <TextView
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="组件仓库"
-                android:textColor="#243244"
-                android:textSize="13sp"
-                android:textStyle="bold" />
-
-            <TextView
-                android:id="@+id/tv_config_ui_palette_hint"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="4dp"
-                android:text="长按拖进画布，也可以点一下快速加入当前页。"
-                android:textColor="#7B8794"
-                android:textSize="11sp" />
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/btn_add_text_component"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_marginEnd="6dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/item_operation_compact_bg"
-                    android:gravity="center"
-                    android:text="文本"
-                    android:textColor="#2F4F7C"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/btn_add_number_component"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/item_operation_compact_bg"
-                    android:gravity="center"
-                    android:text="数字"
-                    android:textColor="#2F4F7C"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/btn_add_switch_component"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_marginEnd="6dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/item_operation_compact_bg"
-                    android:gravity="center"
-                    android:text="开关"
-                    android:textColor="#2F4F7C"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/btn_add_select_component"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/item_operation_compact_bg"
-                    android:gravity="center"
-                    android:text="下拉"
-                    android:textColor="#2F4F7C"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:orientation="horizontal">
-
-                <TextView
-                    android:id="@+id/btn_add_textarea_component"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_marginEnd="6dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/item_operation_compact_bg"
-                    android:gravity="center"
-                    android:text="长文本"
-                    android:textColor="#2F4F7C"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/btn_add_array_component"
-                    android:layout_width="0dp"
-                    android:layout_height="38dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/item_operation_compact_bg"
-                    android:gravity="center"
-                    android:text="数组"
-                    android:textColor="#2F4F7C"
-                    android:textSize="12sp" />
-            </LinearLayout>
-
-            <TextView
-                android:id="@+id/btn_add_title_component"
-                android:layout_width="match_parent"
-                android:layout_height="38dp"
-                android:layout_marginTop="6dp"
-                android:background="@drawable/item_operation_compact_bg"
-                android:gravity="center"
-                android:text="标题 / 分组"
-                android:textColor="#2F4F7C"
-                android:textSize="12sp" />
         </LinearLayout>
     </LinearLayout>
 

@@ -10,6 +10,7 @@ import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
@@ -22,6 +23,7 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
         void onEditComponent(ConfigUiComponent component);
         void onDeleteComponent(ConfigUiComponent component);
         void onCanvasChanged();
+        void onSelectionChanged(@Nullable ConfigUiComponent component, boolean moveModeEnabled);
     }
 
     private static final int CANVAS_MIN_HEIGHT_DP = 420;
@@ -32,6 +34,7 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
     private String selectedComponentId;
     @Nullable
     private View selectedBlockView;
+    private boolean moveModeEnabled;
 
     public ConfigUiCanvasEditorView(Context context) {
         this(context, null);
@@ -67,6 +70,11 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
         if (this.page != null) {
             this.page.ensureDefaults();
         }
+        if (findSelectedComponent() == null) {
+            selectedComponentId = null;
+            selectedBlockView = null;
+            moveModeEnabled = false;
+        }
         post(this::render);
     }
 
@@ -96,12 +104,42 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
         clampComponentIntoCanvas(component);
         page.components.add(component);
         selectedComponentId = component.id;
+        moveModeEnabled = false;
         ensureCanvasHeight(component);
         render();
+        notifySelectionChanged();
         if (listener != null) {
             listener.onCanvasChanged();
             listener.onEditComponent(component);
         }
+    }
+
+    @Nullable
+    public ConfigUiComponent getSelectedComponent() {
+        return findSelectedComponent();
+    }
+
+    public boolean isMoveModeEnabled() {
+        return moveModeEnabled && findSelectedComponent() != null;
+    }
+
+    public boolean beginMoveSelectedComponent() {
+        if (findSelectedComponent() == null) {
+            return false;
+        }
+        moveModeEnabled = true;
+        refreshSelectionVisuals();
+        notifySelectionChanged();
+        return true;
+    }
+
+    public void endMoveMode() {
+        if (!moveModeEnabled) {
+            return;
+        }
+        moveModeEnabled = false;
+        refreshSelectionVisuals();
+        notifySelectionChanged();
     }
 
     private void render() {
@@ -129,6 +167,8 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
             component.ensureDefaults();
             addView(createComponentBlock(component));
         }
+        refreshSelectionVisuals();
+        notifySelectionChanged();
     }
 
     private int computeCanvasHeightDp() {
@@ -222,6 +262,11 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
                 return;
             }
             page.components.remove(component);
+            if (TextUtils.equals(selectedComponentId, component.id)) {
+                selectedComponentId = null;
+                selectedBlockView = null;
+                moveModeEnabled = false;
+            }
             syncCanvasHeightToContent();
             if (listener != null) {
                 listener.onDeleteComponent(component);
@@ -345,8 +390,9 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
             return;
         }
         int availableWidthDp = pxToDp(Math.max(0, getWidth() - getPaddingLeft() - getPaddingRight()), resolveScale());
+        int occupiedWidthDp = Math.max(1, Math.round(component.widthDp * resolveComponentScale(component)));
         if (availableWidthDp > 0) {
-            int maxLeft = Math.max(0, availableWidthDp - component.widthDp);
+            int maxLeft = Math.max(0, availableWidthDp - occupiedWidthDp);
             component.xDp = Math.max(0, Math.min(component.xDp, maxLeft));
         } else {
             component.xDp = Math.max(0, component.xDp);
@@ -384,8 +430,9 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
         }
         GradientDrawable shellBg = new GradientDrawable();
         shellBg.setCornerRadius(dp(16));
-        shellBg.setColor(0xFFFFFFFF);
-        shellBg.setStroke(dp(1), selected ? 0xFF3C6DE4 : 0xFFD9E2EC);
+        boolean moveTarget = selected && moveModeEnabled;
+        shellBg.setColor(moveTarget ? 0xFFF3FBF7 : 0xFFFFFFFF);
+        shellBg.setStroke(dp(1), moveTarget ? 0xFF0F766E : (selected ? 0xFF3C6DE4 : 0xFFD9E2EC));
         shell.setBackground(shellBg);
     }
 
@@ -402,6 +449,41 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
                 selectedBlockView = child;
             }
         }
+    }
+
+    private void notifySelectionChanged() {
+        if (listener != null) {
+            listener.onSelectionChanged(findSelectedComponent(), isMoveModeEnabled());
+        }
+    }
+
+    @Nullable
+    private ConfigUiComponent findSelectedComponent() {
+        if (page == null || page.components == null || TextUtils.isEmpty(selectedComponentId)) {
+            return null;
+        }
+        for (ConfigUiComponent component : page.components) {
+            if (component == null) {
+                continue;
+            }
+            component.ensureDefaults();
+            if (TextUtils.equals(component.id, selectedComponentId)) {
+                return component;
+            }
+        }
+        return null;
+    }
+
+    private void selectComponent(ConfigUiComponent component, boolean preserveMoveMode) {
+        String nextId = component == null ? null : component.id;
+        boolean sameSelection = TextUtils.equals(selectedComponentId, nextId);
+        selectedComponentId = nextId;
+        selectedBlockView = null;
+        if (!preserveMoveMode || !sameSelection) {
+            moveModeEnabled = false;
+        }
+        refreshSelectionVisuals();
+        notifySelectionChanged();
     }
 
     private int dp(int value) {
@@ -439,21 +521,64 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
     private final class ComponentDragTouchListener implements OnTouchListener {
         private final View blockView;
         private final ConfigUiComponent component;
+        private final ScaleGestureDetector scaleGestureDetector;
         private float downRawX;
         private float downRawY;
         private int startXDp;
         private int startYDp;
         private boolean dragging;
+        private boolean scaling;
 
         ComponentDragTouchListener(View blockView, ConfigUiComponent component) {
             this.blockView = blockView;
             this.component = component;
+            this.scaleGestureDetector = new ScaleGestureDetector(getContext(),
+                    new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+                        @Override
+                        public boolean onScaleBegin(ScaleGestureDetector detector) {
+                            selectComponent(component, TextUtils.equals(selectedComponentId, component.id));
+                            scaling = true;
+                            getParent().requestDisallowInterceptTouchEvent(true);
+                            return true;
+                        }
+
+                        @Override
+                        public boolean onScale(ScaleGestureDetector detector) {
+                            if (detector == null) {
+                                return false;
+                            }
+                            component.scalePercent = Math.max(40, Math.min(220,
+                                    Math.round(component.scalePercent * detector.getScaleFactor())));
+                            clampComponentIntoCanvas(component);
+                            ensureCanvasHeight(component);
+                            updateBlockLayout(blockView, component);
+                            if (listener != null) {
+                                listener.onCanvasChanged();
+                            }
+                            notifySelectionChanged();
+                            return true;
+                        }
+
+                        @Override
+                        public void onScaleEnd(ScaleGestureDetector detector) {
+                            scaling = false;
+                            getParent().requestDisallowInterceptTouchEvent(false);
+                            if (listener != null) {
+                                listener.onCanvasChanged();
+                            }
+                            notifySelectionChanged();
+                        }
+                    });
         }
 
         @Override
         public boolean onTouch(View v, MotionEvent event) {
             if (component == null) {
                 return false;
+            }
+            scaleGestureDetector.onTouchEvent(event);
+            if (event != null && event.getPointerCount() > 1) {
+                return true;
             }
             switch (event.getActionMasked()) {
                 case MotionEvent.ACTION_DOWN:
@@ -462,11 +587,12 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
                     startXDp = component.xDp;
                     startYDp = component.yDp;
                     dragging = false;
-                    selectedComponentId = component.id;
-                    selectedBlockView = blockView;
-                    refreshSelectionVisuals();
+                    selectComponent(component, TextUtils.equals(selectedComponentId, component.id));
                     return true;
                 case MotionEvent.ACTION_MOVE:
+                    if (scaling || !moveModeEnabled || !TextUtils.equals(selectedComponentId, component.id)) {
+                        return true;
+                    }
                     float deltaX = event.getRawX() - downRawX;
                     float deltaY = event.getRawY() - downRawY;
                     if (!dragging && (Math.abs(deltaX) > dp(8) || Math.abs(deltaY) > dp(8))) {
@@ -488,14 +614,15 @@ public class ConfigUiCanvasEditorView extends FrameLayout {
                     return true;
                 case MotionEvent.ACTION_UP:
                     getParent().requestDisallowInterceptTouchEvent(false);
-                    if (!dragging && listener != null) {
-                        listener.onEditComponent(component);
-                    } else if (listener != null) {
+                    if (dragging && listener != null) {
                         listener.onCanvasChanged();
                     }
+                    dragging = false;
                     return true;
                 case MotionEvent.ACTION_CANCEL:
                     getParent().requestDisallowInterceptTouchEvent(false);
+                    dragging = false;
+                    scaling = false;
                     return true;
                 default:
                     return false;
