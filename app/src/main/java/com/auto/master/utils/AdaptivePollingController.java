@@ -49,25 +49,25 @@ public final class AdaptivePollingController {
 
     public static AdaptivePollingController forTemplateMatch() {
         return new AdaptivePollingController(
-                200L, 280L, 380L,
-                1200L, 4000L,
-                3, 8
+                220L, 380L, 600L,
+                800L, 2500L,
+                2, 5
         );
     }
 
     public static AdaptivePollingController forMatchMap() {
         return new AdaptivePollingController(
-                200L, 260L, 340L,
-                1600L, 3600L,
-                3, 7
+                220L, 380L, 560L,
+                800L, 2500L,
+                2, 5
         );
     }
 
     public static AdaptivePollingController forColorCheck() {
         return new AdaptivePollingController(
-                200L, 300L, 420L,
-                1200L, 4200L,
-                2, 5
+                220L, 420L, 700L,
+                800L, 2500L,
+                2, 4
         );
     }
 

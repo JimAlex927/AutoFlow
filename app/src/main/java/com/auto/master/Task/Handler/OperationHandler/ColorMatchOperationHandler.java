@@ -10,6 +10,7 @@ import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.auto.AutoAccessibilityService;
 import com.auto.master.capture.ScreenCapture;
+import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.utils.AdaptivePollingController;
 
 import org.opencv.core.Mat;
@@ -128,12 +129,16 @@ public class ColorMatchOperationHandler extends OperationHandler {
     }
 
     private PointMatchResult evaluate(Mat screenMat, PointRule rule, android.graphics.Rect captureRoi) {
+        // rule.x/y 是 screen 坐标，screenMat 是 capture 坐标（半分辨率）
         int localX = rule.x;
         int localY = rule.y;
         if (captureRoi != null) {
             localX -= captureRoi.left;
             localY -= captureRoi.top;
         }
+        // 换算到 capture 坐标
+        localX = (int)(localX * ScreenCaptureManager.CAPTURE_SCALE);
+        localY = (int)(localY * ScreenCaptureManager.CAPTURE_SCALE);
         if (localX < 0 || localY < 0 || localX >= screenMat.cols() || localY >= screenMat.rows()) {
             return new PointMatchResult(rule, false, 255, Color.TRANSPARENT);
         }

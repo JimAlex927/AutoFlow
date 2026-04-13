@@ -40,6 +40,7 @@ import com.auto.master.homepanel.HomeProjectRepository;
 import com.auto.master.utils.BatteryHardeningHelper;
 
 import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Core;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -373,6 +374,8 @@ public class MainActivity extends AppCompatActivity {
         ScreenCaptureManager.getInstance().init(this);
         ActivityHolder.register(getApplication());
         OpenCVLoader.initLocal();
+        // 限制 OpenCV 内部线程数，避免 matchTemplate 等操作占满全部核心引起过热
+        Core.setNumThreads(2);
 
         setContentView(R.layout.activity_main);
         bindViews();

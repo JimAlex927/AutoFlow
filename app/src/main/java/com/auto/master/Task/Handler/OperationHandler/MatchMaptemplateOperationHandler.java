@@ -10,9 +10,13 @@ import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.Template.Template;
 import com.auto.master.auto.AutoAccessibilityService;
+import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.MatchResult;
 import com.auto.master.utils.OpenCVHelper;
+
+import org.opencv.core.Size;
+import org.opencv.imgproc.Imgproc;
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
 
@@ -214,16 +218,18 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                                                         android.graphics.Rect captureRoi) {
         Mat roi = null;
         try {
-            roi = safeSubmat(screen, toLocalRect(task.region, captureRoi));
+            roi = safeSubmat(screen, toLocalRectCapture(task.region, captureRoi));
             if (roi == null || roi.empty()) {
                 return new MatchTaskResult(false, null, task);
             }
             Point positionInRoi = OpenCVHelper.getInstance()
                     .fastSingleMatch(roi, task.info.mat, null, task.info.similarity);
             if (positionInRoi != null && positionInRoi.x >= 0) {
+                // positionInRoi 是 capture 坐标，换算回 screen 坐标后加上 screen region 偏移
+                float invScale = 1.0f / ScreenCaptureManager.CAPTURE_SCALE;
                 Point positionGlobal = new Point(
-                        positionInRoi.x + task.region.x,
-                        positionInRoi.y + task.region.y);
+                        positionInRoi.x * invScale + task.region.x,
+                        positionInRoi.y * invScale + task.region.y);
                 return new MatchTaskResult(true, positionGlobal, task);
             }
         } catch (Exception e) {
@@ -307,6 +313,16 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
             if (mat.empty()) {
                 mat.release();
                 return null;
+            }
+            // 缩放到 capture 分辨率，与 VirtualDisplay 采集尺寸一致
+            if (ScreenCaptureManager.CAPTURE_SCALE != 1.0f) {
+                Mat scaled = new Mat();
+                Imgproc.resize(mat, scaled, new Size(),
+                        ScreenCaptureManager.CAPTURE_SCALE,
+                        ScreenCaptureManager.CAPTURE_SCALE,
+                        Imgproc.INTER_LINEAR);
+                mat.release();
+                mat = scaled;
             }
             Template.putTaskSingleMatCache(projectName, taskName, templateName, mat);
             return mat;
@@ -411,11 +427,15 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         MatchResult matchResult = new MatchResult(result.position, 1.0);
         Integer responseType = obj.getResponseType();
         if (responseType != null && responseType == 1) {
+            // info.width/height 是 capture 尺寸，换算回 screen 尺寸
+            float invScale = 1.0f / ScreenCaptureManager.CAPTURE_SCALE;
+            int screenW = (int)(result.task.info.width  * invScale);
+            int screenH = (int)(result.task.info.height * invScale);
             List<Integer> matchedBbox = Arrays.asList(
                     (int) result.position.x,
                     (int) result.position.y,
-                    result.task.info.width,
-                    result.task.info.height);
+                    screenW,
+                    screenH);
             resMap.put(MetaOperation.RESULT, matchResult);
             resMap.put(MetaOperation.BBOX, matchedBbox);
             resMap.put(MetaOperation.MATCHED, true);
@@ -423,8 +443,8 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
             MAIN_HANDLER.postDelayed(() -> svc.showRectFeedback(
                     (int) result.position.x,
                     (int) result.position.y,
-                    result.task.info.width,
-                    result.task.info.height,
+                    screenW,
+                    screenH,
                     120,
                     0xFFCD0C0C,
                     1.5f,
@@ -580,15 +600,24 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         return screen.submat(new Rect(x, y, w, h));
     }
 
-    private static Rect toLocalRect(Rect region, android.graphics.Rect captureRoi) {
+    /**
+     * 将 screen 坐标系的 region 转换为 capture 坐标系的本地 Rect，用于在 capture-scale Mat 中取子矩阵。
+     */
+    private static Rect toLocalRectCapture(Rect region, android.graphics.Rect captureRoi) {
         if (captureRoi == null) {
-            return region;
+            // 无 captureRoi 时直接缩放到 capture 坐标
+            return new Rect(
+                    (int)(region.x      * ScreenCaptureManager.CAPTURE_SCALE),
+                    (int)(region.y      * ScreenCaptureManager.CAPTURE_SCALE),
+                    (int)(region.width  * ScreenCaptureManager.CAPTURE_SCALE),
+                    (int)(region.height * ScreenCaptureManager.CAPTURE_SCALE));
         }
+        // (region - captureRoi偏移) 后缩放到 capture 坐标
         return new Rect(
-                region.x - captureRoi.left,
-                region.y - captureRoi.top,
-                region.width,
-                region.height);
+                (int)((region.x - captureRoi.left) * ScreenCaptureManager.CAPTURE_SCALE),
+                (int)((region.y - captureRoi.top)  * ScreenCaptureManager.CAPTURE_SCALE),
+                (int)(region.width  * ScreenCaptureManager.CAPTURE_SCALE),
+                (int)(region.height * ScreenCaptureManager.CAPTURE_SCALE));
     }
 
     private static final class MatchTask {

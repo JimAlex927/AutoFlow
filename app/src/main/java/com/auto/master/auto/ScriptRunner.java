@@ -72,6 +72,10 @@ public final class ScriptRunner {
     // 当前执行线程，用于中断
     private static volatile Thread currentExecuteThread;
 
+    // MAIN.post 节流：onOperationStart/Complete 最多每 50ms 通知一次，减少 UI 线程压力
+    private static volatile long lastListenerNotifyMs = 0;
+    private static final long LISTENER_THROTTLE_MS = 50;
+
     /**
      * 脚本执行监听器接口
      * 用于实时通知 UI 当前执行状态
@@ -444,7 +448,12 @@ public final class ScriptRunner {
 
                                 final String opId = operation.getId();
                                 final String opName = operation.getName();
-                                if (currentListener != null) {
+                                // MAIN.post 节流：快速逻辑操作连续时不必每次刷新 UI
+                                long nowMs = System.currentTimeMillis();
+                                boolean shouldNotify = currentListener != null
+                                        && (nowMs - lastListenerNotifyMs >= LISTENER_THROTTLE_MS);
+                                if (shouldNotify) {
+                                    lastListenerNotifyMs = nowMs;
                                     final ScriptExecutionListener listener = currentListener;
                                     MAIN.post(() -> listener.onOperationStart(opId, opName));
                                 }
@@ -463,10 +472,14 @@ public final class ScriptRunner {
 
                                 boolean ok = operationHandler.handle(operation, scriptExecuteContext.sharedContext);
 
-                                if (currentListener != null) {
+                                if (shouldNotify && currentListener != null) {
                                     final ScriptExecutionListener listener = currentListener;
                                     MAIN.post(() -> listener.onOperationComplete(opId, ok));
                                 }
+
+                                // 纯逻辑操作（变量/分支/循环判断）完成极快，
+                                // 主动让出 CPU 时间片，防止脚本逻辑循环把单核跑满
+                                Thread.yield();
 
                                 if (!ok) {
                                     scriptExecuteContext.running = false;

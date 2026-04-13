@@ -181,6 +181,17 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
                     boolean matOk = false;
                     try {
                         Utils.bitmapToMat(bitmap, mat);
+                        // 与 VirtualDisplay 采集分辨率对齐，模板必须同步缩放
+                        if (ScreenCaptureManager.CAPTURE_SCALE != 1.0f) {
+                            Mat scaled = new Mat();
+                            Imgproc.resize(mat, scaled,
+                                    new org.opencv.core.Size(),
+                                    ScreenCaptureManager.CAPTURE_SCALE,
+                                    ScreenCaptureManager.CAPTURE_SCALE,
+                                    Imgproc.INTER_LINEAR);
+                            mat.release();
+                            mat = scaled;
+                        }
                         projectTaskMatMap.put(imgName, mat);
                         matOk = true;
                     } finally {

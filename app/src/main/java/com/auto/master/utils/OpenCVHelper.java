@@ -62,6 +62,11 @@ public class OpenCVHelper {
     // 复用灰度搜索图 Mat：fastSingleMatch 热路径灰度转换时避免每次分配
     private static final ThreadLocal<Mat> sGraySearchMat = new ThreadLocal<>();
 
+    // NMS 循环复用 Scalar，避免热路径每次 new 对象
+    private static final Scalar SCALAR_ZERO = new Scalar(0);
+    private static final Scalar SCALAR_SUPPRESS_POS = new Scalar(1e10);
+    private static final Scalar SCALAR_SUPPRESS_NEG = new Scalar(-1e10);
+
     // 灰度模板缓存上限：超过 MAX_GRAY_CACHE 条时淘汰最旧的（LinkedHashMap accessOrder）
     private static final int MAX_GRAY_CACHE = 40;
     private final Map<Long, Mat> grayTemplateCache = java.util.Collections.synchronizedMap(
@@ -669,7 +674,7 @@ public class OpenCVHelper {
             }
 
             boolean isSqDiff = (method == Imgproc.TM_SQDIFF || method == Imgproc.TM_SQDIFF_NORMED);
-            double suppressionValue = isSqDiff ? 1e10 : -1e10;  // SQDIFF 用大正数抑制，其他用负大数
+            Scalar suppressScalar = isSqDiff ? SCALAR_SUPPRESS_POS : SCALAR_SUPPRESS_NEG;
 
             // 复用 NMS suppressionMask，避免每次 new Mat.zeros()（热路径）
             Mat suppressionMask = sSuppressionMask.get();
@@ -695,7 +700,7 @@ public class OpenCVHelper {
 
                 // NMS 抑制：复用 suppressionMask，create() 只在尺寸/类型变化时重新分配 native 内存
                 suppressionMask.create(result.rows(), result.cols(), CvType.CV_8UC1);
-                suppressionMask.setTo(new Scalar(0));
+                suppressionMask.setTo(SCALAR_ZERO);
                 int pad = Math.max(5, Math.min(tplWidth / 4, tplHeight / 4));   // 20px模板 → pad ≈ 5
                 Imgproc.rectangle(
                         suppressionMask,
@@ -705,7 +710,7 @@ public class OpenCVHelper {
                         -1
                 );
 
-                result.setTo(new Scalar(suppressionValue), suppressionMask);
+                result.setTo(suppressScalar, suppressionMask);
                 // suppressionMask 来自 ThreadLocal，不 release，留给下次复用
 
                 if (matches.size() >= 10) break;

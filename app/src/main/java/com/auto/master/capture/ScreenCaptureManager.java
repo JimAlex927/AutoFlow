@@ -62,8 +62,17 @@ public class ScreenCaptureManager {
     private VirtualDisplay virtualDisplay;
     private ImageReader imageReader;
 
+    // ===== 采集缩放比（降分辨率采集，减少 GPU 管线和内存带宽开销）=====
+    // 注意：部分设备 MediaProjection 实现会将 VirtualDisplay 尺寸对齐到 16/32 的倍数，
+    // 若 captureWidth/captureHeight 不是 16 的倍数，会导致 size mismatch → 无限 reset → 无帧。
+    // 0.5f 在 1080x2340 等分辨率上会产生 1170（非16的倍数）而报错，故暂时设为 1.0f。
+    // 待后续用 "对齐到16的倍数 + size 自适应更新" 方案再重新启用半分辨率。
+    public static final float CAPTURE_SCALE = 1.0f;
+
     // ===== 屏幕参数 =====
     private int screenWidth, screenHeight, screenDpi;
+    /** 实际采集分辨率（= screen × CAPTURE_SCALE，用于 ImageReader / VirtualDisplay）*/
+    private int captureWidth, captureHeight;
     private volatile int lastRotation = Surface.ROTATION_0;
 
     // ===== 线程 =====
@@ -89,9 +98,9 @@ public class ScreenCaptureManager {
     private long lastLimitResetTime = 0;
     private int pollCountThisSecond = 0;
     /**
-     * 1s 5个frames = 1000/5 = 200ms
+     * 1s 4个frames = 1000/4 = 250ms，降低采集频率减少发热
      */
-    private static final int MAX_POLLS_PER_SECOND = 5;
+    private static final int MAX_POLLS_PER_SECOND = 4;
     private static final int MAX_CONSECUTIVE_FRAME_ERRORS = 7;
     private static final long MAX_STALE_FRAME_AGE_MS = 300L;
     private static final long FRAME_HEALTH_CHECK_INTERVAL_MS = 1200L;
@@ -103,8 +112,10 @@ public class ScreenCaptureManager {
     private volatile boolean resetScheduled = false;
 
     // 空闲自动暂停 VirtualDisplay：无人 poll 超过此时长则暂停，下次 poll 自动恢复。
-    // 设为 8s：手势/延迟等操作通常在 3~5s 内，3s 阈值太激进，
-    // 容易在下一次模板匹配开始时触发 VirtualDisplay reset，造成明显卡顿。
+    // 注意：不能设太小——VD 恢复是异步重建，期间 acquireLatestImage() 持续返回 null，
+    // 若阈值小于常见操作（点击/手势/短延时）的耗时，会导致下次匹配一开始就在等 VD 重建，
+    // 消耗大量超时时间，出现"一直拿到 null"的假性卡死。
+    // 3000ms：手势/短延时通常 <2s，留足余量避免频繁暂停/恢复。
     private static final long IDLE_PAUSE_THRESHOLD_MS = 3000L;
     private static final long FULL_CLEANUP_IDLE_THRESHOLD_MS = 45_000L;
     private volatile boolean displayPaused = false;
@@ -326,9 +337,9 @@ public class ScreenCaptureManager {
             }
 
             // 尺寸不一致直接 reset（旋转/分辨率变化时会发生）
-            if (image.getWidth() != screenWidth || image.getHeight() != screenHeight) {
+            if (image.getWidth() != captureWidth || image.getHeight() != captureHeight) {
                 Log.w(TAG, "size mismatch img=" + image.getWidth() + "x" + image.getHeight()
-                        + " screen=" + screenWidth + "x" + screenHeight);
+                        + " capture=" + captureWidth + "x" + captureHeight);
                 recordFrameFailure("size_mismatch");
                 return false;
             }
@@ -431,7 +442,7 @@ public class ScreenCaptureManager {
             return false;
         }
 
-        int w = screenWidth, h = screenHeight;
+        int w = captureWidth, h = captureHeight;
         int tightRowBytes = w * 4;
 
         // 需要拷贝的总字节数：h * rowStride（包含 padding）
@@ -486,9 +497,9 @@ public class ScreenCaptureManager {
                 recordFrameFailure("acquireLatestImage_null_roi");
                 return false;
             }
-            if (image.getWidth() != screenWidth || image.getHeight() != screenHeight) {
+            if (image.getWidth() != captureWidth || image.getHeight() != captureHeight) {
                 Log.w(TAG, "ROI size mismatch img=" + image.getWidth() + "x" + image.getHeight()
-                        + " screen=" + screenWidth + "x" + screenHeight);
+                        + " capture=" + captureWidth + "x" + captureHeight);
                 recordFrameFailure("size_mismatch_roi");
                 return false;
             }
@@ -539,7 +550,7 @@ public class ScreenCaptureManager {
         }
 
         ByteBuffer dup = buf.duplicate();
-        if (roi.left == 0 && w == screenWidth && rowStride == screenWidth * pixelStride) {
+        if (roi.left == 0 && w == captureWidth && rowStride == captureWidth * pixelStride) {
             dup.position(roi.top * rowStride);
             dup.get(roiFrameBytes, 0, totalBytes);
         } else {
@@ -609,14 +620,14 @@ public class ScreenCaptureManager {
 
         try {
             imageReader = ImageReader.newInstance(
-                    screenWidth, screenHeight,
-                    PixelFormat.RGBA_8888, // 你原来用的这个就先不动，避免你工程里 API 兼容问题
+                    captureWidth, captureHeight,
+                    PixelFormat.RGBA_8888,
                     IMAGE_READER_MAX_IMAGES
             );
 
             virtualDisplay = mediaProjection.createVirtualDisplay(
                     "ScreenCapture",
-                    screenWidth, screenHeight, screenDpi,
+                    captureWidth, captureHeight, screenDpi,
                     DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                     imageReader.getSurface(),
                     null, captureHandler
@@ -778,6 +789,9 @@ public class ScreenCaptureManager {
         screenWidth = metrics.widthPixels;
         screenHeight = metrics.heightPixels;
         screenDpi = metrics.densityDpi;
+        // 计算采集分辨率（偶数对齐，避免编解码对齐问题）
+        captureWidth  = (int)(screenWidth  * CAPTURE_SCALE) & ~1;
+        captureHeight = (int)(screenHeight * CAPTURE_SCALE) & ~1;
     }
 
     private int getCurrentPhysicalRotation(Context context) {
@@ -794,14 +808,18 @@ public class ScreenCaptureManager {
         }
     }
 
+    /**
+     * 将 screen 坐标系的 ROI 转换为 capture 坐标系，并夹紧到 capture 分辨率。
+     * handlers 传入的 roi 始终使用 screen 坐标；ScreenCaptureManager 内部统一用 capture 坐标。
+     */
     private Rect sanitizeRoi(Rect roi) {
         if (roi == null) {
             return null;
         }
-        int left = Math.max(0, roi.left);
-        int top = Math.max(0, roi.top);
-        int right = Math.min(screenWidth, roi.right);
-        int bottom = Math.min(screenHeight, roi.bottom);
+        int left   = Math.max(0, (int)(roi.left   * CAPTURE_SCALE));
+        int top    = Math.max(0, (int)(roi.top    * CAPTURE_SCALE));
+        int right  = Math.min(captureWidth,  (int)(roi.right  * CAPTURE_SCALE));
+        int bottom = Math.min(captureHeight, (int)(roi.bottom * CAPTURE_SCALE));
         if (right <= left || bottom <= top) {
             return null;
         }
@@ -811,7 +829,7 @@ public class ScreenCaptureManager {
     private boolean isFullScreenRoi(Rect roi) {
         return roi.left == 0
                 && roi.top == 0
-                && roi.right == screenWidth
-                && roi.bottom == screenHeight;
+                && roi.right == captureWidth
+                && roi.bottom == captureHeight;
     }
 }

@@ -10,6 +10,7 @@ import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.Template.Template;
 import com.auto.master.auto.AutoAccessibilityService;
+import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.MatchResult;
 import com.auto.master.utils.OpenCVHelper;
@@ -19,6 +20,8 @@ import org.json.JSONObject;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
+import org.opencv.core.Size;
+import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -106,16 +109,21 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                     pollingController.sleepUntilNextIteration(loopStartMs);
                     continue;
                 }
+                // capture 坐标 → screen 坐标
+                float invScale = 1.0f / ScreenCaptureManager.CAPTURE_SCALE;
+                position.x = (int)(position.x * invScale);
+                position.y = (int)(position.y * invScale);
                 if (captureRoi != null) {
                     position.x += captureRoi.left;
                     position.y += captureRoi.top;
                 }
                 firstMatch = new MatchResult(position, 1);
+                // templateMat 已缩放为 capture 分辨率，宽高换算回 screen 分辨率
                 matchedBbox = java.util.Arrays.asList(
                         (int) position.x,
                         (int) position.y,
-                        templateMat.width(),
-                        templateMat.height());
+                        (int)(templateMat.width()  * invScale),
+                        (int)(templateMat.height() * invScale));
                 matched = true;
                 pollingController.onHit();
                 break;
@@ -200,6 +208,16 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             if (mat.empty()) {
                 mat.release();
                 return null;
+            }
+            // 缩放到 capture 分辨率，与 VirtualDisplay 采集尺寸一致
+            if (ScreenCaptureManager.CAPTURE_SCALE != 1.0f) {
+                Mat scaled = new Mat();
+                Imgproc.resize(mat, scaled, new Size(),
+                        ScreenCaptureManager.CAPTURE_SCALE,
+                        ScreenCaptureManager.CAPTURE_SCALE,
+                        Imgproc.INTER_LINEAR);
+                mat.release();
+                mat = scaled;
             }
             Template.putTaskSingleMatCache(projectName, taskName, templateName, mat);
             return mat;

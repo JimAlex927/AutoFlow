@@ -9,6 +9,7 @@ import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.auto.AutoAccessibilityService;
 import com.auto.master.capture.ScreenCapture;
+import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.utils.AdaptivePollingController;
 
 import org.opencv.core.Mat;
@@ -178,7 +179,10 @@ public class ColorSearchOperationHandler extends OperationHandler {
                 if (diff > tolerance) continue;
 
                 matchedPixels++;
-                int px = offsetX + x + col, py = offsetY + y + row;
+                // col/row 是 capture 坐标，换算到 screen 坐标后加 screen 偏移
+                float invScale = 1.0f / ScreenCaptureManager.CAPTURE_SCALE;
+                int px = offsetX + (int)((x + col) * invScale);
+                int py = offsetY + (int)((y + row) * invScale);
                 if (px < minX) minX = px;
                 if (py < minY) minY = py;
                 if (px > maxX) maxX = px;
