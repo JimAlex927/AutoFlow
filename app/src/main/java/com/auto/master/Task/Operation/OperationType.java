@@ -30,6 +30,13 @@ public enum OperationType {
     private final int code;
     private final String displayName;
     private final String iconKey;
+    private static final java.util.Map<Integer, OperationType> LOOKUP = new java.util.HashMap<>();
+
+    static {
+        for (OperationType type : values()) {
+            LOOKUP.put(type.code, type);
+        }
+    }
 
     OperationType(int code, String displayName, String iconKey) {
         this.code = code;
@@ -50,12 +57,7 @@ public enum OperationType {
     }
 
     public static OperationType fromCode(int code) {
-        for (OperationType type : values()) {
-            if (type.code == code) {
-                return type;
-            }
-        }
-        return null;
+        return LOOKUP.get(code);
     }
 
     public static OperationType fromCode(Integer code) {

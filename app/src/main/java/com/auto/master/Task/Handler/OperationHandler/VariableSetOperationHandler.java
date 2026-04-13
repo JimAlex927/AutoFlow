@@ -4,8 +4,6 @@ import android.text.TextUtils;
 
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
-import com.auto.master.Task.Operation.VariableSetOperation;
-
 import java.util.HashMap;
 
 public class VariableSetOperationHandler extends OperationHandler {
@@ -15,7 +13,7 @@ public class VariableSetOperationHandler extends OperationHandler {
 
     @Override
     public boolean handle(MetaOperation obj, OperationContext ctx) {
-        if (!(obj instanceof VariableSetOperation) || ctx == null) {
+        if (obj == null || ctx == null) {
             return false;
         }
         String varName = VariableRuntimeUtils.getString(obj.getInputMap(), MetaOperation.VAR_NAME, "").trim();

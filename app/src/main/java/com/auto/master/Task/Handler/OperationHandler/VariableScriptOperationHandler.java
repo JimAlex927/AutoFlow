@@ -2,7 +2,6 @@ package com.auto.master.Task.Handler.OperationHandler;
 
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
-import com.auto.master.Task.Operation.VariableScriptOperation;
 
 import android.text.TextUtils;
 import android.util.Log;
@@ -67,7 +66,7 @@ public class VariableScriptOperationHandler extends OperationHandler {
 
     @Override
     public boolean handle(MetaOperation obj, OperationContext ctx) {
-        if (!(obj instanceof VariableScriptOperation) || ctx == null) {
+        if (obj == null || ctx == null) {
             return false;
         }
         if (ctx.variables == null) {

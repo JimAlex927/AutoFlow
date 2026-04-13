@@ -22,7 +22,6 @@ import android.graphics.BitmapFactory;
 import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
-import android.graphics.RectF;
 import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -855,6 +854,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private OperationCrudHelper crudHelper;
     private DialogHelpers dialogHelpers;
     private OperationDialogFactory dialogFactory;
+    private CapturePickerHelper capturePickerHelper;
     private FileIOManager fileIOManager;
     
     // ── 拆分出的管理器 ──────────────────────────────────────────────────────
@@ -1812,7 +1812,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         
         // 让 EditText 获取焦点并弹出键盘
         edtJson.requestFocus();
-        new Handler(Looper.getMainLooper()).postDelayed(() -> {
+        postToUiDelayed(() -> {
             android.view.inputmethod.InputMethodManager imm = (android.view.inputmethod.InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
             if (imm != null) {
                 imm.showSoftInput(edtJson, android.view.inputmethod.InputMethodManager.SHOW_IMPLICIT);
@@ -2159,6 +2159,47 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         crudHelper = new OperationCrudHelper(this);
         dialogHelpers = new DialogHelpers(this);
         dialogFactory = new OperationDialogFactory(this, dialogHelpers, crudHelper);
+        capturePickerHelper = new CapturePickerHelper(new CapturePickerHelper.Host() {
+            @Override
+            public Context getContext() {
+                return FloatWindowService.this;
+            }
+
+            @Override
+            public WindowManager getWindowManager() {
+                return wm;
+            }
+
+            @Override
+            public Handler getUiHandler() {
+                return uiHandler;
+            }
+
+            @Override
+            public int dp(int value) {
+                return FloatWindowService.this.dp(value);
+            }
+
+            @Override
+            public void showToast(String message) {
+                Toast.makeText(FloatWindowService.this, message, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public Bitmap captureFreshScreenBitmap() {
+                return FloatWindowService.this.captureFreshScreenBitmap();
+            }
+
+            @Override
+            public View getProjectPanelView() {
+                return projectPanelView;
+            }
+
+            @Override
+            public Runnable hideViewsForCapture(View... viewsToHide) {
+                return FloatWindowService.this.hideViewsForCapture(viewsToHide);
+            }
+        });
         triggerDialogHelper = new TriggerDialogHelper(this, dialogHelpers, appLaunchTriggerManager);
         executionDialogHelper = new ExecutionDialogHelper(this, dialogHelpers);
         clipboardDialogHelper = new ClipboardDialogHelper(this, dialogHelpers, new ClipboardDialogHelper.ClipboardCallbacks() {
@@ -2186,10 +2227,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             bindNextOperationSuggestions(view, excludeId));
 
         dialogFactory.setPointPickerLauncher((callback, viewsToHide) ->
-            showScreenPointPicker((x, y) -> callback.onPointPicked(x, y), viewsToHide));
+            capturePickerHelper.showScreenPointPicker((x, y) -> callback.onPointPicked(x, y), viewsToHide));
 
         dialogFactory.setColorPointPickerLauncher((callback, viewsToHide) ->
-            showColorPointPicker((x, y, color) -> callback.onColorPointPicked(x, y, color), viewsToHide));
+            capturePickerHelper.showColorPointPicker((x, y, color) -> callback.onColorPointPicked(x, y, color), viewsToHide));
 
         dialogFactory.setOperationPickerLauncher(new OperationDialogFactory.OperationPickerLauncher() {
             @Override
@@ -3011,7 +3052,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
         // 快照搜索词，后台线程只读不写
         final String querySnap = currentSearchQuery;
-        android.os.Handler mainH = new android.os.Handler(android.os.Looper.getMainLooper());
+        android.os.Handler mainH = uiHandler;
 
         new Thread(() -> {
             File root = new File(getExternalFilesDir(null), "projects");
@@ -4741,7 +4782,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             runningPanelAdapter.setRunningPosition(runningPos);
         }
         if (currentOperationAdapter != null) {
-            new Handler(Looper.getMainLooper()).post(() -> currentOperationAdapter.setRunningPosition(operationId));
+            postToUi(() -> currentOperationAdapter.setRunningPosition(operationId));
         }
         updateRunningPanelProgress();
         maybeStartDelayProgress(opItem);
@@ -6106,8 +6147,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         svc.showGestureTrail(node);
         svc.replayGesture(node, success -> {
-            Handler main = new Handler(Looper.getMainLooper());
-            main.post(() -> {
+            postToUi(() -> {
                 Toast.makeText(this, success ? "回放完成" : "回放取消", Toast.LENGTH_SHORT).show();
                 updateGestureStatus(statusView, fileName);
             });
@@ -6232,8 +6272,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         final String finalGestureName = normalized;
         Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
 
-        Handler main = new Handler(Looper.getMainLooper());
-        main.postDelayed(() -> {
+        postToUiDelayed(() -> {
             try {
                 if (tvGestureStatus != null) {
                     tvGestureStatus.setText("状态：录制中，请在屏幕上完成手势");
@@ -6269,7 +6308,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         return;
                     }
 
-                    new Handler(Looper.getMainLooper()).postDelayed(() -> {
+                    postToUiDelayed(() -> {
                         try {
                             replaySvc.replayGesture(node, success -> {
                                 try {
@@ -6538,8 +6577,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
         registerTemplateCaptureDialogRefresh(dialogView, edtTemplateFile, restoreViews);
 
-        Handler main = new Handler(Looper.getMainLooper());
-        main.postDelayed(() -> {
+        postToUiDelayed(() -> {
             long startedAt = System.currentTimeMillis();
             boolean started = launchTemplateCapture(normalizedName);
             if (!started) {
@@ -6555,7 +6593,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                                                AutoCompleteTextView templateInput,
                                                long startedAt,
                                                Runnable onCaptureFinished) {
-        Handler main = new Handler(Looper.getMainLooper());
         final int[] retry = {0};
         final boolean[] cacheReloaded = {false};
         final boolean[] finished = {false};
@@ -6583,7 +6620,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 if (!ready && retry[0] < TEMPLATE_CAPTURE_PREVIEW_MAX_RETRIES) {
-                    main.postDelayed(this, 300);
+                    postToUiDelayed(this, 300);
                 } else if (!cacheReloaded[0]) {
                     refreshTemplateCachesForCurrentProject();
                 }
@@ -6596,7 +6633,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
             }
         };
-        main.postDelayed(poll, 350);
+        postToUiDelayed(poll, 350);
     }
 
     private String generateTemplateTimestampName() {
@@ -7325,14 +7362,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
     }
 
-    private interface OnPointPickedListener {
-        void onPointPicked(int x, int y);
-    }
-
-    private interface OnColorPointPickedListener {
-        void onColorPointPicked(int x, int y, int color);
-    }
-
     private void showTemplateLibraryDialog(AutoCompleteTextView templateInput, View ownerDialog) {
         List<TemplateLibraryAdapter.TemplateLibraryItem> items = getCurrentTaskTemplateLibraryItems();
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_template_library, null);
@@ -7517,55 +7546,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         return deleted;
     }
 
-    private WindowManager.LayoutParams buildFullscreenOverlayParams() {
-        return buildSelectionOverlayLayoutParams();
-    }
-
-    private WindowManager.LayoutParams buildSelectionOverlayLayoutParams() {
-        return buildSelectionOverlayLayoutParams(false);
-    }
-
-    private WindowManager.LayoutParams buildSelectionOverlayLayoutParams(boolean preferAccessibilityOverlay) {
-        int type;
-        if (preferAccessibilityOverlay && AutoAccessibilityService.get() != null) {
-            type = WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY;
-        } else {
-            type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                    : WindowManager.LayoutParams.TYPE_PHONE;
-        }
-        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.MATCH_PARENT,
-                WindowManager.LayoutParams.MATCH_PARENT,
-                type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR,
-                PixelFormat.TRANSLUCENT
-        );
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            lp.layoutInDisplayCutoutMode =
-                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
-        }
-        return lp;
-    }
-
-    private Context getPickerOverlayContext() {
-        AutoAccessibilityService service = AutoAccessibilityService.get();
-        return service != null ? service : this;
-    }
-
-    private WindowManager getPickerOverlayWindowManager() {
-        Context overlayContext = getPickerOverlayContext();
-        WindowManager overlayWm = (WindowManager) overlayContext.getSystemService(Context.WINDOW_SERVICE);
-        return overlayWm != null ? overlayWm : wm;
-    }
-
-    private WindowManager.LayoutParams buildPickerOverlayParams() {
-        return buildSelectionOverlayLayoutParams(true);
-    }
-
     @Nullable
     private Bitmap captureFreshScreenBitmap() {
         // 注意：此处不需要 Activity。真正取帧由 ScreenCaptureManager 的 MediaProjection 缓冲区提供，
@@ -7577,202 +7557,16 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         return ScreenCapture.captureLatestBitmap(null, 480L, 80L);
     }
 
-    private void showScreenPointPicker(OnPointPickedListener listener) {
-        showScreenPointPicker(listener, new View[0]);
+    private void postToUi(Runnable action) {
+        if (action != null) {
+            uiHandler.post(action);
+        }
     }
 
-    private void showScreenPointPicker(OnPointPickedListener listener, View... viewsToHide) {
-        List<View> hideTargets = new ArrayList<>();
-        hideTargets.add(projectPanelView);
-        if (viewsToHide != null) {
-            Collections.addAll(hideTargets, viewsToHide);
+    private void postToUiDelayed(Runnable action, long delayMs) {
+        if (action != null) {
+            uiHandler.postDelayed(action, delayMs);
         }
-        Runnable restoreViews = hideViewsForCapture(hideTargets.toArray(new View[0]));
-        Handler main = new Handler(Looper.getMainLooper());
-        main.postDelayed(() -> {
-            try {
-                Bitmap fullBitmap = captureFreshScreenBitmap();
-                if (fullBitmap == null || fullBitmap.isRecycled()) {
-                    restoreViews.run();
-                    Toast.makeText(this, "截图失败，无法取点", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-
-                WindowManager overlayWm = getPickerOverlayWindowManager();
-                Context overlayContext = getPickerOverlayContext();
-                View overlay = LayoutInflater.from(overlayContext).inflate(R.layout.dialog_pick_point_overlay, null);
-                WindowManager.LayoutParams lp = buildPickerOverlayParams();
-                com.auto.master.auto.ColorPointPickerView pickerView = overlay.findViewById(R.id.point_picker_view);
-                View floatingPanel = overlay.findViewById(R.id.pick_point_floating_panel);
-                TextView tvCoord = overlay.findViewById(R.id.tv_pick_point_coord);
-                pickerView.setOnSelectionChangedListener((x, y, color) -> {
-                    if (tvCoord != null) {
-                        tvCoord.setText("x=" + x + ", y=" + y);
-                    }
-                });
-                pickerView.setOnMagnifierLayoutChangedListener(rect ->
-                        updateFloatingPickerPanelPosition(floatingPanel, rect));
-                pickerView.setScreenshot(fullBitmap, true);
-
-                overlay.findViewById(R.id.btn_pick_point_cancel).setOnClickListener(v -> {
-                    pickerView.release();
-                    safeRemoveView(overlayWm, overlay);
-                    restoreViews.run();
-                });
-                overlay.findViewById(R.id.btn_pick_point_confirm).setOnClickListener(v -> {
-                    if (!pickerView.hasSelection()) {
-                        Toast.makeText(this, "请先移动到目标位置", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    if (listener != null) {
-                        listener.onPointPicked(pickerView.getSelectedX(), pickerView.getSelectedY());
-                    }
-                    pickerView.release();
-                    safeRemoveView(overlayWm, overlay);
-                    restoreViews.run();
-                });
-
-                try {
-                    overlayWm.addView(overlay, lp);
-                } catch (Throwable t) {
-                    pickerView.release();
-                    throw t;
-                }
-            } catch (Exception e) {
-                restoreViews.run();
-                Toast.makeText(this, "打开取点器失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-            }
-        }, 220);
-    }
-
-    private void showColorPointPicker(OnColorPointPickedListener listener, View... viewsToHide) {
-        List<View> hideTargets = new ArrayList<>();
-        hideTargets.add(projectPanelView);
-        if (viewsToHide != null) {
-            Collections.addAll(hideTargets, viewsToHide);
-        }
-        Runnable restoreViews = hideViewsForCapture(hideTargets.toArray(new View[0]));
-        Handler main = new Handler(Looper.getMainLooper());
-        main.postDelayed(() -> {
-            try {
-                Bitmap fullBitmap = captureFreshScreenBitmap();
-                if (fullBitmap == null || fullBitmap.isRecycled()) {
-                    restoreViews.run();
-                    Toast.makeText(this, "截图失败，无法取色", Toast.LENGTH_SHORT).show();
-                    return;
-                }
-
-                WindowManager overlayWm = getPickerOverlayWindowManager();
-                Context overlayContext = getPickerOverlayContext();
-                View overlay = LayoutInflater.from(overlayContext).inflate(R.layout.dialog_pick_color_overlay, null);
-                WindowManager.LayoutParams lp = buildPickerOverlayParams();
-                com.auto.master.auto.ColorPointPickerView pickerView = overlay.findViewById(R.id.color_picker_view);
-                View floatingPanel = overlay.findViewById(R.id.pick_color_floating_panel);
-                TextView tvColorValue = overlay.findViewById(R.id.tv_pick_color_value);
-                TextView tvCoord = overlay.findViewById(R.id.tv_pick_color_coord);
-                View preview = overlay.findViewById(R.id.view_pick_color_preview);
-                pickerView.setOnSelectionChangedListener((x, y, color) -> {
-                    if (tvColorValue != null) {
-                        tvColorValue.setText(String.format(Locale.getDefault(), "#%06X", 0xFFFFFF & color));
-                    }
-                    if (tvCoord != null) {
-                        tvCoord.setText("x=" + x + ", y=" + y);
-                    }
-                    if (preview != null) {
-                        preview.setBackgroundColor(color);
-                    }
-                });
-                pickerView.setOnMagnifierLayoutChangedListener(rect ->
-                        updateFloatingPickerPanelPosition(floatingPanel, rect));
-                pickerView.setScreenshot(fullBitmap, true);
-
-                overlay.findViewById(R.id.btn_pick_color_cancel).setOnClickListener(v -> {
-                    pickerView.release();
-                    safeRemoveView(overlayWm, overlay);
-                    restoreViews.run();
-                });
-                overlay.findViewById(R.id.btn_pick_color_confirm).setOnClickListener(v -> {
-                    if (!pickerView.hasSelection()) {
-                        Toast.makeText(this, "请先移动到目标像素", Toast.LENGTH_SHORT).show();
-                        return;
-                    }
-                    int x = pickerView.getSelectedX();
-                    int y = pickerView.getSelectedY();
-                    int color = pickerView.getSelectedColor();
-                    if (listener != null) {
-                        listener.onColorPointPicked(x, y, color);
-                    }
-                    pickerView.release();
-                    safeRemoveView(overlayWm, overlay);
-                    restoreViews.run();
-                });
-
-                try {
-                    overlayWm.addView(overlay, lp);
-                } catch (Throwable t) {
-                    pickerView.release();
-                    throw t;
-                }
-            } catch (Exception e) {
-                restoreViews.run();
-                Toast.makeText(this, "打开取色器失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
-            }
-        }, 220);
-    }
-
-    private void updateFloatingPickerPanelPosition(View panel, RectF magnifierBounds) {
-        if (panel == null || magnifierBounds == null) {
-            return;
-        }
-        panel.post(() -> {
-            if (!(panel.getLayoutParams() instanceof FrameLayout.LayoutParams)) {
-                return;
-            }
-            View parent = (View) panel.getParent();
-            if (parent == null) {
-                return;
-            }
-            int parentWidth = parent.getWidth();
-            int parentHeight = parent.getHeight();
-            if (parentWidth <= 0 || parentHeight <= 0) {
-                return;
-            }
-            if (panel.getWidth() <= 0 || panel.getHeight() <= 0) {
-                panel.measure(
-                        View.MeasureSpec.makeMeasureSpec(parentWidth, View.MeasureSpec.AT_MOST),
-                        View.MeasureSpec.makeMeasureSpec(parentHeight, View.MeasureSpec.AT_MOST)
-                );
-            }
-            int panelWidth = Math.max(panel.getWidth(), panel.getMeasuredWidth());
-            int panelHeight = Math.max(panel.getHeight(), panel.getMeasuredHeight());
-            int margin = dp(12);
-            int gap = dp(12);
-
-            int left;
-            int top;
-            if (magnifierBounds.right + gap + panelWidth <= parentWidth - margin) {
-                left = Math.round(magnifierBounds.right + gap);
-                top = Math.round(magnifierBounds.centerY() - panelHeight / 2f);
-            } else if (magnifierBounds.left - gap - panelWidth >= margin) {
-                left = Math.round(magnifierBounds.left - gap - panelWidth);
-                top = Math.round(magnifierBounds.centerY() - panelHeight / 2f);
-            } else if (magnifierBounds.bottom + gap + panelHeight <= parentHeight - margin) {
-                left = Math.round(magnifierBounds.centerX() - panelWidth / 2f);
-                top = Math.round(magnifierBounds.bottom + gap);
-            } else {
-                left = Math.round(magnifierBounds.centerX() - panelWidth / 2f);
-                top = Math.round(magnifierBounds.top - gap - panelHeight);
-            }
-
-            left = Math.max(margin, Math.min(left, parentWidth - panelWidth - margin));
-            top = Math.max(margin, Math.min(top, parentHeight - panelHeight - margin));
-
-            FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) panel.getLayoutParams();
-            layoutParams.gravity = Gravity.TOP | Gravity.START;
-            layoutParams.leftMargin = left;
-            layoutParams.topMargin = top;
-            panel.setLayoutParams(layoutParams);
-        });
     }
 
     private void setupAdvancedMatchSection(View dialogView, JSONObject operationObject, String excludeId) {
@@ -8184,8 +7978,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         Context ctx = svc;
         WindowManager wm = (WindowManager) ctx.getSystemService(Context.WINDOW_SERVICE);
         Runnable restoreViews = hideViewsForCapture(dialogView, projectPanelView);
-        Handler main = new Handler(Looper.getMainLooper());
-        main.postDelayed(() -> {
+        postToUiDelayed(() -> {
             try {
                 Bitmap fullBitmap = captureFreshScreenBitmap();
                 if (fullBitmap == null || fullBitmap.isRecycled()) {
@@ -8282,7 +8075,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         final boolean finalAccurateMode = accurateMode;
         new Thread(() -> {
             String text = recognizeOcrTextForRegion(bbox, finalTimeout, finalAccurateMode, engine);
-            new Handler(Looper.getMainLooper()).post(() -> {
+            postToUi(() -> {
                 if (TextUtils.isEmpty(text)) {
                     if (resultView != null) {
                         resultView.setText("测试结果：未识别到文本");
@@ -8388,7 +8181,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         CrashLogger.updateRunContext(currentRunningProject, taskName, currentRunningOperationId, currentRunningOperationName);
         
         // 在主线程刷新面板
-        new Handler(Looper.getMainLooper()).post(() -> {
+        postToUi(() -> {
             if (runningPanelAdapter != null) {
                 runningPanelAdapter.setOperations(runningOperations);
                 Log.d(TAG, "已刷新 runningPanelAdapter，数据条数: " + runningOperations.size());

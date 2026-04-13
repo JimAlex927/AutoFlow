@@ -1,5 +1,7 @@
 package com.auto.master.Task.Operation;
 
+import com.auto.master.Task.Handler.OperationHandler.OperationHandlerManager;
+
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonDeserializationContext;
@@ -113,7 +115,8 @@ public class OperationGsonHelper {
             }
 
             Integer type = extractType(typeElement);
-            MetaOperation operation = createOperationByType(type);
+            Map<String, Object> inputMap = extractInputMap(jsonObject, type);
+            MetaOperation operation = createOperationByType(type, typeElement, inputMap);
 
             // 设置通用字段
             if (jsonObject.has("id")) {
@@ -135,7 +138,6 @@ public class OperationGsonHelper {
 //            }
 
             // 处理 inputMap
-            Map<String, Object> inputMap = extractInputMap(jsonObject, type);
             operation.setInputMap(inputMap);
 
             return operation;
@@ -147,93 +149,46 @@ public class OperationGsonHelper {
                 if (primitive.isNumber()) {
                     return primitive.getAsInt();
                 } else if (primitive.isString()) {
-                    // 支持字符串类型的 type："1", "2" 等
-                    try {
-                        return Integer.parseInt(primitive.getAsString());
-                    } catch (NumberFormatException e) {
-                        // 如果是 "click", "delay" 等字符串，转换为对应的数字
-                        String typeStr = primitive.getAsString().toLowerCase();
-                        switch (typeStr) {
-                            case "click": return 1;
-                            case "delay":
-                            case "sleep": return 2;
-                            case "launch_app":
-                            case "app_launch": return 14;
-                            case "ocr": return 9;
-                            case "branch":
-                            case "if": return 10;
-                            case "var_set":
-                            case "variable_set": return 11;
-                            case "var_script":
-                            case "variable_script": return 11;
-                            case "var_math":
-                            case "variable_math": return 12;
-                            case "var_template":
-                            case "variable_template": return 13;
-                            case "switch":
-                            case "switch_branch": return 15;
-                            case "loop": return 16;
-                            case "color_match":
-                            case "color": return 18;
-                            case "color_search":
-                            case "find_color": return 19;
-                            case "http_request":
-                            case "http": return 20;
-                            case "dynamic_delay":
-                            case "dynamicdelay": return 21;
-                            default: return 1;
-                        }
-                    }
+                    Integer resolved = OperationHandlerManager.resolveTypeCode(primitive.getAsString());
+                    return resolved != null ? resolved : 1;
                 }
             }
             return 1; // 默认类型
         }
 
-        private MetaOperation createOperationByType(Integer type) {
-            switch (type) {
-                case 1:
-                    return new ClickOperation();
-                case 2:
-                    return new DelayOperation();
-                case 3:
-                    return new CropRegionOperation();
-                case 4:
-                    return new LoadImgToMatOperation();
-                case 5:
-                    return new GestureOperation();
-                case 6:
-                    return new MatchTemplateOperation();
-                case 7:
-                    return new MatchMapTemplateOperation();
-                case 8:
-                    return new JumpTaskOperation();
-                case 9:
-                    return new OcrOperation();
-                case 11:
+        private MetaOperation createOperationByType(Integer type, JsonElement typeElement, Map<String, Object> inputMap) {
+            if (type != null && type == OperationType.VARIABLE_SCRIPT.getCode()) {
+                String rawType = typeElement != null && typeElement.isJsonPrimitive()
+                        && typeElement.getAsJsonPrimitive().isString()
+                        ? typeElement.getAsString() : "";
+                Integer explicitAliasCode = OperationHandlerManager.resolveTypeCode(rawType);
+                if ("var_script".equalsIgnoreCase(rawType) || "variable_script".equalsIgnoreCase(rawType)) {
                     return new VariableScriptOperation();
-                case 12:
-                    return new VariableMathOperation();
-                case 13:
-                    return new VariableTemplateOperation();
-                case 14:
-                    return new AppLaunchOperation();
-                case 15:
-                    return new SwitchBranchOperation();
-                case 16:
-                    return new LoopOperation();
-                case 17:
-                    return new BackKeyOperation();
-                case 18:
-                    return new ColorMatchOperation();
-                case 19:
-                    return new ColorSearchOperation();
-                case 20:
-                    return new HttpRequestOperation();
-                case 21:
-                    return new DynamicDelayOperation();
+                }
+                if ("var_set".equalsIgnoreCase(rawType) || "variable_set".equalsIgnoreCase(rawType)) {
+                    return new VariableSetOperation();
+                }
+                if (explicitAliasCode != null && explicitAliasCode == OperationType.VARIABLE_SCRIPT.getCode()) {
+                    return hasScriptCode(inputMap) ? new VariableScriptOperation() : new VariableSetOperation();
+                }
+                return hasScriptCode(inputMap) ? new VariableScriptOperation() : new VariableSetOperation();
+            }
+            MetaOperation registeredOperation = OperationHandlerManager.createOperation(type);
+            if (registeredOperation != null) {
+                return registeredOperation;
+            }
+            switch (type) {
                 default:
                     return new ClickOperation();
             }
+        }
+
+        private boolean hasScriptCode(Map<String, Object> inputMap) {
+            if (inputMap == null) {
+                return false;
+            }
+            Object raw = inputMap.get(MetaOperation.VAR_SCRIPT_CODE);
+            return raw != null && !String.valueOf(raw).trim().isEmpty();
         }
 
         private Map<String, Object> extractInputMap(JsonObject jsonObject, Integer type) {
