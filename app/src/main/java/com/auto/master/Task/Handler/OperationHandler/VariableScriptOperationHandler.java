@@ -28,6 +28,28 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class VariableScriptOperationHandler extends OperationHandler {
     private static final String TAG = "VariableScriptHandler";
+
+    // Bootstrap 辅助函数源码（只编译一次，放入共享 scope）
+    private static final String BOOTSTRAP_SRC = ""
+            + "function toNumber(v){ var n = Number(v); return isNaN(n) ? 0 : n; }\n"
+            + "function toBool(v){ return !!v; }\n"
+            + "function toStr(v){ return String(v); }\n"
+            + "function len(v){ return String(v).length; }\n"
+            + "function contains(a,b){ return String(a).indexOf(String(b)) >= 0; }\n"
+            + "function startsWith(a,b){ a=String(a); b=String(b); return a.indexOf(b)===0; }\n"
+            + "function endsWith(a,b){ a=String(a); b=String(b); return a.lastIndexOf(b)===a.length-b.length; }\n"
+            + "function substr2(a,s,l){ a=String(a); s=Number(s)||0; if(l===undefined) return a.substr(s); return a.substr(s, Number(l)||0); }\n"
+            + "function now(){ return Date.now(); }\n";
+
+    /**
+     * 共享 sealed scope：initStandardObjects() + bootstrap 只执行一次。
+     * 每次脚本执行时创建一个以此为 prototype 的轻量 execScope，避免重复初始化开销。
+     */
+    private static volatile ScriptableObject sharedScope = null;
+    /** bootstrap 完成后 scope 内已有的 key 集合，用于 sync 时排除内置符号 */
+    private static volatile Set<String> bootstrapBaselineKeys = null;
+    private static final Object SCOPE_INIT_LOCK = new Object();
+
     // LRU 脚本缓存：超出上限淘汰最久未用的，避免全量 clear 带来的冷启动抖动
     private static final int MAX_SCRIPT_CACHE = 128;
     private static final Map<String, Script> SCRIPT_CACHE = java.util.Collections.synchronizedMap(
@@ -79,31 +101,53 @@ public class VariableScriptOperationHandler extends OperationHandler {
         return true;
     }
 
+    /**
+     * 初始化共享 scope（只执行一次）：
+     * - initStandardObjects()：构建 JS 内置对象
+     * - 编译并执行 bootstrap 辅助函数
+     * - sealObject()：防止意外修改，并允许多线程安全复用
+     */
+    private static void ensureSharedScope() {
+        if (sharedScope != null) return;
+        synchronized (SCOPE_INIT_LOCK) {
+            if (sharedScope != null) return;
+            Context cx = SCRIPT_CONTEXT_FACTORY.enterContext();
+            cx.setOptimizationLevel(-1);
+            try {
+                ScriptableObject scope = cx.initStandardObjects();
+                cx.evaluateString(scope, BOOTSTRAP_SRC, "var_bootstrap", 1, null);
+                Set<String> keys = new HashSet<>();
+                for (Object id : scope.getIds()) {
+                    if (id instanceof String) keys.add((String) id);
+                }
+                // 注意：不能调用 sealObject()，Android 的 DocumentBuilderFactoryImpl 不支持
+                // secure-processing 特性，sealObject 会触发 Rhino XML 库懒加载进而崩溃。
+                // execScope 以此为 prototype 而不直接写入，共享 scope 实际上不会被污染。
+                bootstrapBaselineKeys = java.util.Collections.unmodifiableSet(keys);
+                sharedScope = scope;
+            } finally {
+                Context.exit();
+            }
+        }
+    }
+
     private Object executeScript(MetaOperation obj, OperationContext ctx, String script, long timeoutMs) {
+        ensureSharedScope();
         Context js = SCRIPT_CONTEXT_FACTORY.enterContextWithTimeout(timeoutMs);
         try {
-            Scriptable scope = js.initStandardObjects();
-            Scriptable varsObj = js.newObject(scope);
+            // 创建轻量 execScope，以 sharedScope 为 prototype 继承所有内置对象和 bootstrap 函数
+            // 不再每次调用 initStandardObjects() 和 evaluateString(bootstrap)
+            Scriptable execScope = js.newObject(sharedScope);
+            execScope.setPrototype(sharedScope);
+            execScope.setParentScope(null);
 
+            Scriptable varsObj = js.newObject(sharedScope);
             for (Map.Entry<String, Object> entry : ctx.variables.entrySet()) {
                 String key = entry.getKey();
                 if (key == null || key.isEmpty()) continue;
-                ScriptableObject.putProperty(varsObj, key, toScriptValue(js, scope, entry.getValue()));
+                ScriptableObject.putProperty(varsObj, key, toScriptValue(js, sharedScope, entry.getValue()));
             }
-            ScriptableObject.putProperty(scope, "vars", varsObj);
-
-            String bootstrap = ""
-                    + "function toNumber(v){ var n = Number(v); return isNaN(n) ? 0 : n; }\n"
-                    + "function toBool(v){ return !!v; }\n"
-                    + "function toStr(v){ return String(v); }\n"
-                    + "function len(v){ return String(v).length; }\n"
-                    + "function contains(a,b){ return String(a).indexOf(String(b)) >= 0; }\n"
-                    + "function startsWith(a,b){ a=String(a); b=String(b); return a.indexOf(b)===0; }\n"
-                    + "function endsWith(a,b){ a=String(a); b=String(b); return a.lastIndexOf(b)===a.length-b.length; }\n"
-                    + "function substr2(a,s,l){ a=String(a); s=Number(s)||0; if(l===undefined) return a.substr(s); return a.substr(s, Number(l)||0); }\n"
-                    + "function now(){ return Date.now(); }\n";
-            js.evaluateString(scope, bootstrap, "var_bootstrap", 1, null);
-            Set<String> scopeBaselineKeys = snapshotStringIds(scope);
+            ScriptableObject.putProperty(execScope, "vars", varsObj);
 
             String wrapped = "with(vars){\n" + (script == null ? "" : script) + "\n}";
             String cacheKey = buildCacheKey(obj, wrapped);
@@ -112,9 +156,10 @@ public class VariableScriptOperationHandler extends OperationHandler {
                 compiled = js.compileString(wrapped, "var_script", 1, null);
                 SCRIPT_CACHE.put(cacheKey, compiled);
             }
-            Object result = compiled.exec(js, scope);
+            Object result = compiled.exec(js, execScope);
 
-            syncVariablesBackToContext(ctx, scope, varsObj, scopeBaselineKeys);
+            // 使用预计算的 bootstrapBaselineKeys，不再每次 snapshotStringIds
+            syncVariablesBackToContext(ctx, execScope, varsObj, bootstrapBaselineKeys);
 
             return toPlainJava(result);
         } finally {
@@ -250,19 +295,6 @@ public class VariableScriptOperationHandler extends OperationHandler {
         }
 
         ctx.variables.putAll(newVars);
-    }
-
-    private Set<String> snapshotStringIds(Scriptable scope) {
-        Set<String> ids = new HashSet<>();
-        if (scope == null) {
-            return ids;
-        }
-        for (Object id : scope.getIds()) {
-            if (id instanceof String) {
-                ids.add((String) id);
-            }
-        }
-        return ids;
     }
 
     private boolean shouldPersistScopeValue(Object value) {

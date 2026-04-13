@@ -44,6 +44,7 @@ public class OperationHandlerManager {
             case COLOR_MATCH:        return new ColorMatchOperationHandler();
             case COLOR_SEARCH:       return new ColorSearchOperationHandler();
             case HTTP_REQUEST:       return new HttpRequestOperationHandler();
+            case DYNAMIC_DELAY:      return new DynamicDelayOperationHandler();
             default:                 return null;
         }
     }

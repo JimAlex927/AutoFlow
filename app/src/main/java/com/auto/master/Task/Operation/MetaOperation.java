@@ -79,6 +79,9 @@ public abstract class MetaOperation {
     public static String SLEEP_DURATION = "SLEEP_DURATION";
     public static String DELAY_SHOW_COUNTDOWN = "DELAY_SHOW_COUNTDOWN";
 
+    // 动态延时参数
+    public static String DYNAMIC_DELAY_VAR_NAME = "DYNAMIC_DELAY_VAR_NAME";
+
     // JumpTask 相关参数
     public static String TARGET_TASK_ID = "TARGET_TASK_ID";
     public static String TARGET_OPERATION_ID = "TARGET_OPERATION_ID";

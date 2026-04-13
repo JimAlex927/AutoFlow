@@ -49,6 +49,8 @@
     <color name="op_click_bg">#E3F2FD</color>
     <color name="op_delay">#F57C00</color>
     <color name="op_delay_bg">#FFF3E0</color>
+    <color name="op_dynamic_delay">#7B1FA2</color>
+    <color name="op_dynamic_delay_bg">#F3E5F5</color>
     <color name="op_gesture">#8E24AA</color>
     <color name="op_gesture_bg">#F3E5F5</color>
     <color name="op_crop">#00897B</color>

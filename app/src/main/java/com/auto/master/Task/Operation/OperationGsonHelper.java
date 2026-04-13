@@ -179,6 +179,8 @@ public class OperationGsonHelper {
                             case "find_color": return 19;
                             case "http_request":
                             case "http": return 20;
+                            case "dynamic_delay":
+                            case "dynamicdelay": return 21;
                             default: return 1;
                         }
                     }
@@ -227,6 +229,8 @@ public class OperationGsonHelper {
                     return new ColorSearchOperation();
                 case 20:
                     return new HttpRequestOperation();
+                case 21:
+                    return new DynamicDelayOperation();
                 default:
                     return new ClickOperation();
             }

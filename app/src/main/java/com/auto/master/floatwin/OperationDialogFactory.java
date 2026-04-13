@@ -437,6 +437,171 @@ public class OperationDialogFactory {
         });
     }
 
+    // ==================== Dynamic Delay Operation ====================
+
+    public void showAddDynamicDelayDialog() {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_dynamic_delay, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(340, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 340, 0.82f, 0.92f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 340, 400, null);
+
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        EditText edtVarName = dialogView.findViewById(R.id.edt_var_name);
+        AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
+        CheckBox chkShowCountdown = dialogView.findViewById(R.id.chk_show_delay_countdown);
+
+        if (chkShowCountdown != null) {
+            chkShowCountdown.setChecked(true);
+        }
+
+        if (nextOpBinder != null) {
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+        }
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+            dialogHelpers.safeRemoveView(dialogView));
+
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择下一节点", null, edtNextOperation);
+            }
+        });
+
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+            dialogHelpers.safeRemoveView(dialogView));
+
+        dialogView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
+            String name = edtName.getText().toString().trim();
+            String varName = edtVarName.getText().toString().trim();
+            String nextOp = safeText(edtNextOperation);
+
+            if (TextUtils.isEmpty(name)) {
+                edtName.setError("请填写操作名称");
+                return;
+            }
+            if (TextUtils.isEmpty(varName)) {
+                edtVarName.setError("请填写变量名");
+                return;
+            }
+
+            try {
+                JSONObject operationObject = new JSONObject();
+                operationObject.put("id", idGenerator != null ? idGenerator.generateId() : "op_" + System.currentTimeMillis());
+                operationObject.put("name", name);
+                operationObject.put("type", 21);
+                operationObject.put("responseType", 1);
+
+                JSONObject inputMap = new JSONObject();
+                inputMap.put(MetaOperation.DYNAMIC_DELAY_VAR_NAME, varName);
+                inputMap.put(MetaOperation.DELAY_SHOW_COUNTDOWN,
+                        chkShowCountdown == null || chkShowCountdown.isChecked());
+                if (!TextUtils.isEmpty(nextOp)) {
+                    inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+                }
+                operationObject.put("inputMap", inputMap);
+
+                if (appendOperation(operationObject)) {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (addListener != null) {
+                        addListener.onOperationAdded();
+                    }
+                }
+            } catch (Exception e) {
+                host.showToast("构建动态延时操作失败: " + e.getMessage());
+            }
+        });
+    }
+
+    // ==================== Edit Dynamic Delay Operation ====================
+
+    public void showEditDynamicDelayDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_dynamic_delay, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(340, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 340, 0.82f, 0.92f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 340, 400, null);
+
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        EditText edtVarName = dialogView.findViewById(R.id.edt_var_name);
+        AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
+        CheckBox chkShowCountdown = dialogView.findViewById(R.id.chk_show_delay_countdown);
+
+        // 回填已有数据
+        try {
+            edtName.setText(operationObject.optString("name", ""));
+            JSONObject inputMap = operationObject.optJSONObject("inputMap");
+            if (inputMap != null) {
+                edtVarName.setText(inputMap.optString(MetaOperation.DYNAMIC_DELAY_VAR_NAME, ""));
+                setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                if (chkShowCountdown != null) {
+                    chkShowCountdown.setChecked(inputMap.optBoolean(MetaOperation.DELAY_SHOW_COUNTDOWN, true));
+                }
+            }
+        } catch (Exception e) {
+            host.showToast("加载操作数据失败: " + e.getMessage());
+        }
+
+        if (nextOpBinder != null) {
+            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+        }
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+            dialogHelpers.safeRemoveView(dialogView));
+
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+            }
+        });
+
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+            dialogHelpers.safeRemoveView(dialogView));
+
+        dialogView.findViewById(R.id.btn_confirm).setOnClickListener(v -> {
+            String name = edtName.getText().toString().trim();
+            String varName = edtVarName.getText().toString().trim();
+            String nextOp = safeText(edtNextOperation);
+
+            if (TextUtils.isEmpty(name)) {
+                edtName.setError("请填写操作名称");
+                return;
+            }
+            if (TextUtils.isEmpty(varName)) {
+                edtVarName.setError("请填写变量名");
+                return;
+            }
+
+            try {
+                JSONObject updatedOperation = new JSONObject();
+                updatedOperation.put("id", operationId);
+                updatedOperation.put("name", name);
+                updatedOperation.put("type", 21);
+                updatedOperation.put("responseType", 1);
+
+                JSONObject inputMap = new JSONObject();
+                inputMap.put(MetaOperation.DYNAMIC_DELAY_VAR_NAME, varName);
+                inputMap.put(MetaOperation.DELAY_SHOW_COUNTDOWN,
+                        chkShowCountdown == null || chkShowCountdown.isChecked());
+                if (!TextUtils.isEmpty(nextOp)) {
+                    inputMap.put(MetaOperation.NEXT_OPERATION_ID, nextOp);
+                }
+                updatedOperation.put("inputMap", inputMap);
+
+                if (operationUpdater != null) {
+                    if (operationUpdater.saveOperationJson(operationId, updatedOperation.toString(2))) {
+                        dialogHelpers.safeRemoveView(dialogView);
+                        if (updateListener != null) {
+                            updateListener.onOperationUpdated();
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                host.showToast("更新动态延时操作失败: " + e.getMessage());
+            }
+        });
+    }
+
     // ==================== Helper Methods ====================
 
     private boolean appendOperation(JSONObject operationObject) {

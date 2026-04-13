@@ -23,4 +23,13 @@ public class OperationContext {
     // 运行期变量池（跨节点共享）
     public Map<String, Object> variables = new HashMap<>();
 
+    /**
+     * 动态延时节点在 sleep 前通过此回调通知 Service 实际时长，
+     * Service 据此启动倒计时覆盖层。
+     */
+    public interface DelayCountdownNotifier {
+        void onDynamicDelayStarting(String operationId, long durationMs, boolean showCountdown);
+    }
+    public DelayCountdownNotifier delayCountdownNotifier;
+
 }

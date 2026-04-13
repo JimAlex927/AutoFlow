@@ -1765,6 +1765,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 dialogFactory.showEditHttpRequestDialog(selected.id, operationObject);
                 return;
             }
+            if (type == 21) {
+                dialogFactory.showEditDynamicDelayDialog(selected.id, operationObject);
+                return;
+            }
         } catch (Exception e) {
             Log.w(TAG, "解析 operation 失败，回退到 JSON 编辑", e);
         }
@@ -2287,6 +2291,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 Arrays.asList(
                         new AddOperationMenuAdapter.MenuItem("click", "点击", "执行点击或坐标点按", "点", R.color.op_click, true),
                         new AddOperationMenuAdapter.MenuItem("delay", "延时", "等待一段时间后继续", "延", R.color.op_delay, true),
+                        new AddOperationMenuAdapter.MenuItem("dynamic_delay", "动态延时", "由变量决定等待时长", "变", R.color.op_dynamic_delay, true),
                         new AddOperationMenuAdapter.MenuItem("gesture", "手势", "执行录制好的滑动或连点", "手", R.color.op_gesture, true),
                         new AddOperationMenuAdapter.MenuItem("back_key", "返回键", "触发系统返回动作", "返", R.color.op_back_key, true)
                 )));
@@ -2355,6 +2360,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "delay":
                 dialogFactory.showAddDelayDialog();
+                return;
+            case "dynamic_delay":
+                dialogFactory.showAddDynamicDelayDialog();
                 return;
             case "gesture":
                 dialogFactory.showAddGestureDialog();
@@ -3577,6 +3585,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     if (inputMap != null) {
                         delayMs = inputMap.optLong(MetaOperation.SLEEP_DURATION, 0L);
                         showCountdown = inputMap.optBoolean(MetaOperation.DELAY_SHOW_COUNTDOWN, false);
+                    }
+                } else if (typeInt == OperationType.DYNAMIC_DELAY.getCode()) {
+                    JSONObject inputMap = op.optJSONObject("inputMap");
+                    if (inputMap != null) {
+                        // 时长运行时才能确定，此处仅记录倒计时开关；实际 duration 由 Handler 回调注入
+                        showCountdown = inputMap.optBoolean(MetaOperation.DELAY_SHOW_COUNTDOWN, true);
                     }
                 }
                 operations.add(new OperationItem(name, id, typeName, i, delayMs, showCountdown));
@@ -6937,6 +6951,19 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             Log.d(TAG, "开始运行 operation: " + startOperation.getName() + " (" + startOperation.getId() + ")");
 
             ScriptRunner.setExecutionListener(this);
+
+            // 动态延时倒计时回调：Handler 在 sleep 前通知，Service 在主线程启动覆盖层
+            ctx.delayCountdownNotifier = (operationId, durationMs, showCountdown) -> {
+                if (!showCountdown || durationMs <= 0) return;
+                uiHandler.post(() -> {
+                    OperationItem opItem = findRunningItem(operationId);
+                    if (opItem != null) {
+                        opItem.delayDurationMs = durationMs;
+                        opItem.delayShowCountdown = true;
+                        maybeStartDelayProgress(opItem);
+                    }
+                });
+            };
 
             ScriptExecuteContext scriptExecuteContext = new ScriptExecuteContext();
             scriptExecuteContext.tobeHandledOperation = startOperation;
