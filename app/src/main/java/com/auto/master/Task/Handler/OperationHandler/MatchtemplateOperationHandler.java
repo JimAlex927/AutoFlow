@@ -1,107 +1,73 @@
 package com.auto.master.Task.Handler.OperationHandler;
 
-import android.app.Activity;
 import android.graphics.Bitmap;
-import android.graphics.Color;
-import android.os.Message;
+import android.graphics.BitmapFactory;
 import android.os.SystemClock;
 import android.util.Log;
 
-import com.auto.master.MainActivity;
-import com.auto.master.Task.Operation.DelayOperation;
-import com.auto.master.Task.Operation.LoadImgToMatOperation;
 import com.auto.master.Task.Operation.MatchTemplateOperation;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.Template.Template;
-import com.auto.master.auto.ActivityHolder;
 import com.auto.master.auto.AutoAccessibilityService;
-import com.auto.master.capture.ScreenCapture;
 import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.MatchResult;
 import com.auto.master.utils.OpenCVHelper;
 
+import org.json.JSONArray;
+import org.json.JSONObject;
+import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
-import org.opencv.imgproc.Imgproc;
 
+import java.io.File;
+import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-/**
- * 这是一个 click 的处理器
- * 它的作用就只是调用无障碍然后点击那个点
- */
 public class MatchtemplateOperationHandler extends OperationHandler {
 
-    public static Integer inited = 0;
+    private static final String TAG = "MatchTemplateOp";
+    private static final long MAX_PRE_DELAY_MS = 5000L;
 
     MatchtemplateOperationHandler() {
         this.setType(6);
     }
 
-
     @Override
     public boolean handle(MetaOperation obj, OperationContext ctx) {
         ctx.currentOperation = obj;
-        MatchTemplateOperation matchTemplateOperation = (MatchTemplateOperation) obj;
+        MatchTemplateOperation operation = (MatchTemplateOperation) obj;
 
         AutoAccessibilityService svc = AutoAccessibilityService.get();
-        if (svc == null) return false;
+        if (svc == null) {
+            return false;
+        }
 
+        Map<String, Object> inputMap = operation.getInputMap();
+        if (inputMap == null) {
+            return createResponse(ctx, obj, false, null, null, null);
+        }
 
-//      todo 这里 project、task也可能从 ctx拿  我考虑 如果从ctx拿 最好也预先往 inputmap里面写入 这样更兼容
-        Map<String, Object> inputMap = matchTemplateOperation.getInputMap();
         String projectName = getStringSafe(inputMap, MetaOperation.PROJECT, "fallback");
         String taskName = getStringSafe(inputMap, MetaOperation.TASK, "");
-        String saveFileName = getStringSafe(inputMap, MetaOperation.SAVEFILENAME, "gesture_" + System.currentTimeMillis() + ".json");
-//        String saveFileName = getStringSafe(inputMap, MetaOperation.MATCHSIMILARITY, );
-        Object o = inputMap.get(MetaOperation.MATCHSIMILARITY);
-        Double similarity = parseDouble(o, 0.8d);
-        Object o1 = inputMap.get(MetaOperation.MATCHTIMEOUT);
-        Double duration = parseDouble(o1, 5000d);
+        String templateName = getStringSafe(
+                inputMap,
+                MetaOperation.SAVEFILENAME,
+                "gesture_" + System.currentTimeMillis() + ".json");
+        double similarity = parseDouble(inputMap.get(MetaOperation.MATCHSIMILARITY), 0.8d);
+        double duration = parseDouble(inputMap.get(MetaOperation.MATCHTIMEOUT), 5000d);
         long preDelayMs = parseDelayMs(inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS));
 
-        Double scaleFactor = 1d;
-        Object o2 = inputMap.get(MetaOperation.MATCHSCALEFACTOR);
-        scaleFactor = parseDouble(o2, 1d);
-        Double matchMethod = 1d;
-        Object o3 = inputMap.get(MetaOperation.MATCHMETHOD);
-        matchMethod = parseDouble(o3, 1d);
-//        匹配方法
-        int method = matchMethod.intValue();
-
-        Boolean useGray = false;
-        Object o4 = inputMap.get(MetaOperation.MATCHUSEGRAY);
-        if (o4 instanceof Boolean) {
-            useGray = (Boolean) o4;
+        List<Integer> bbox = getOrLoadTemplateBbox(projectName, taskName, templateName);
+        Mat templateMat = getOrLoadTemplateMat(projectName, taskName, templateName);
+        if (templateMat == null || templateMat.empty()) {
+            Log.w(TAG, "模板加载失败: " + templateName);
+            return createResponse(ctx, obj, false, null, bbox, null);
         }
 
-        //调用结果  产生一个 response  放在 obj 或者 ctx里面
-        Integer responseType = obj.getResponseType();
-        // response =1 进行匹配 返回结果 是列表吧 而且是 region匹配
-//        if (responseType==null){
-        final Activity a = ActivityHolder.getTopActivity();
-
-        /*
-        加载模板
-         */
-        OpenCVHelper instance = OpenCVHelper.getInstance();
-        List<Integer> bbox = Template.getManifestSingleCache(projectName, taskName, saveFileName);
-        if (bbox == null) {
-//            重新加载下项目的资源文件到内存 这里用内置的 加载资源的operation做
-            LoadImgToMatOperation loadImgToMatOperation = new LoadImgToMatOperation();
-            loadImgToMatOperation.setId("tmp");
-            loadImgToMatOperation.setResponseType(1);
-            HashMap<String, Object> tmpInputMap = new HashMap<>();
-            tmpInputMap.put(MetaOperation.PROJECT, projectName);
-            loadImgToMatOperation.setInputMap(tmpInputMap);
-            new LoadImgToMatOperationHandler().handle(loadImgToMatOperation, new OperationContext());
-        }
-        bbox = Template.getManifestSingleCache(projectName, taskName, saveFileName);
-        Mat templateMat = Template.getTaskSingleMutCache(projectName, taskName, saveFileName);
         android.graphics.Rect captureRoi = null;
         if (bbox != null && bbox.size() >= 4) {
             captureRoi = new android.graphics.Rect(
@@ -111,101 +77,185 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                     bbox.get(1) + bbox.get(3));
         }
 
-        boolean matched = false;
-        List<MatchResult> matchResults = new ArrayList<>();
-        AdaptivePollingController pollingController = AdaptivePollingController.forTemplateMatch();
         if (preDelayMs > 0) {
             SystemClock.sleep(preDelayMs);
         }
-        // 这里的超时只统计“匹配过程”，不包含节点前延迟
-        long start = System.currentTimeMillis();
-        while (duration > System.currentTimeMillis() - start) {
-            long loopStartMs = SystemClock.uptimeMillis();
 
+        boolean matched = false;
+        MatchResult firstMatch = null;
+        List<Integer> matchedBbox = null;
+        AdaptivePollingController pollingController = AdaptivePollingController.forTemplateMatch();
+        long startedAt = System.currentTimeMillis();
+
+        while (duration > System.currentTimeMillis() - startedAt) {
+            long loopStartMs = SystemClock.uptimeMillis();
             Mat screenMat = pollingController.acquireFrame(captureRoi);
             if (screenMat == null || screenMat.empty()) {
                 pollingController.onMiss();
                 pollingController.sleepUntilNextIteration(loopStartMs);
                 continue;
             }
-//            匹配
             try {
-
-                Point pos = instance.fastSingleMatch(screenMat, templateMat, null, similarity);
-                if (pos.x < 0) {
+                Point position = OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity);
+                if (position == null || position.x < 0 || position.y < 0) {
                     pollingController.onMiss();
                     pollingController.sleepUntilNextIteration(loopStartMs);
                     continue;
                 }
                 if (captureRoi != null) {
-                    pos.x += captureRoi.left;
-                    pos.y += captureRoi.top;
+                    position.x += captureRoi.left;
+                    position.y += captureRoi.top;
                 }
-                matchResults.add(new MatchResult(pos, 1));
+                firstMatch = new MatchResult(position, 1);
+                matchedBbox = java.util.Arrays.asList(
+                        (int) position.x,
+                        (int) position.y,
+                        templateMat.width(),
+                        templateMat.height());
                 matched = true;
                 pollingController.onHit();
-//           否则就break
                 break;
             } catch (Exception e) {
-                Log.d("1", "handle: " + e);
+                Log.w(TAG, "模板匹配失败: " + e.getMessage());
                 pollingController.onMiss();
             }
             pollingController.sleepUntilNextIteration(loopStartMs);
         }
 
-        Map<String, Object> resMap = new HashMap<>();
-        if (responseType != null && responseType == 1) {
-//            分化类型是1，如果匹配到了，就点击，跳转下一个node
-//            没有匹配到，就跳转fallback，fallback 是  operation在inputmap中定义的
-            if (matched) {
-                resMap.put(MetaOperation.RESULT, matchResults.get(0));
-                Point p = matchResults.get(0).getLocation();
-                List<Integer> matchedBbox = java.util.Arrays.asList(
-                        (int) p.x,
-                        (int) p.y,
-                        templateMat.width(),
-                        templateMat.height());
-                resMap.put(MetaOperation.BBOX, matchedBbox);
-//                告诉handler有没有匹配到
-                resMap.put(MetaOperation.MATCHED, true);
-//                    先画区域
-                List<Integer> finalBbox = matchedBbox;
-                new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
-                    svc.showRectFeedback((int) p.x, (int) p.y, finalBbox.get(2), finalBbox.get(3), 500, 0x00000000, 0, 0x44CD0C0C);
-                });
-            } else {
-                String failPath = "/sdcard/Download/fail_" + System.currentTimeMillis() + ".png";
+        return createResponse(ctx, obj, matched, firstMatch, matched ? matchedBbox : bbox, svc);
+    }
 
-                resMap.put(MetaOperation.RESULT, null);
-                resMap.put(MetaOperation.BBOX, bbox);
-                resMap.put(MetaOperation.MATCHED, false);
+    private boolean createResponse(OperationContext ctx,
+                                   MetaOperation obj,
+                                   boolean matched,
+                                   MatchResult result,
+                                   List<Integer> bbox,
+                                   AutoAccessibilityService svc) {
+        Map<String, Object> response = new HashMap<>();
+        Integer responseType = obj.getResponseType();
+        if (responseType != null && responseType == 1) {
+            response.put(MetaOperation.RESULT, result);
+            response.put(MetaOperation.BBOX, bbox);
+            response.put(MetaOperation.MATCHED, matched);
+            if (matched && result != null && bbox != null && bbox.size() >= 4 && svc != null) {
+                Point point = result.getLocation();
+                List<Integer> finalBbox = bbox;
+                new android.os.Handler(android.os.Looper.getMainLooper()).post(() ->
+                        svc.showRectFeedback(
+                                (int) point.x,
+                                (int) point.y,
+                                finalBbox.get(2),
+                                finalBbox.get(3),
+                                500,
+                                0x00000000,
+                                0,
+                                0x44CD0C0C));
             }
         }
-
-        ctx.currentResponse = resMap;
+        ctx.currentResponse = response;
         ctx.lastOperation = obj;
         ctx.currentOperation = obj;
-        //      否则没有匹配到
-
-
         return true;
+    }
 
+    private Mat getOrLoadTemplateMat(String projectName, String taskName, String templateName) {
+        Mat cached = Template.getTaskSingleMutCache(projectName, taskName, templateName);
+        if (cached != null && !cached.empty()) {
+            return cached;
+        }
+
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) {
+            return null;
+        }
+        try {
+            File imgFile = new File(
+                    svc.getApplicationContext().getExternalFilesDir(null),
+                    "projects" + File.separator + projectName
+                            + File.separator + taskName
+                            + File.separator + "img"
+                            + File.separator + templateName);
+            if (!imgFile.exists()) {
+                return null;
+            }
+            Bitmap bitmap = BitmapFactory.decodeFile(imgFile.getAbsolutePath());
+            if (bitmap == null) {
+                return null;
+            }
+            Mat mat = new Mat();
+            boolean converted = false;
+            try {
+                Utils.bitmapToMat(bitmap, mat);
+                converted = true;
+            } finally {
+                bitmap.recycle();
+                if (!converted) {
+                    mat.release();
+                }
+            }
+            if (mat.empty()) {
+                mat.release();
+                return null;
+            }
+            Template.putTaskSingleMatCache(projectName, taskName, templateName, mat);
+            return mat;
+        } catch (Exception e) {
+            Log.e(TAG, "精准加载模板失败: " + e.getMessage());
+            return null;
+        }
+    }
+
+    private List<Integer> getOrLoadTemplateBbox(String projectName, String taskName, String templateName) {
+        List<Integer> cached = Template.getManifestSingleCache(projectName, taskName, templateName);
+        if (cached != null && cached.size() >= 4) {
+            return cached;
+        }
+
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) {
+            return null;
+        }
+        try {
+            File manifestFile = new File(
+                    svc.getApplicationContext().getExternalFilesDir(null),
+                    "projects" + File.separator + projectName
+                            + File.separator + taskName
+                            + File.separator + "img"
+                            + File.separator + "manifest.json");
+            if (!manifestFile.exists()) {
+                return null;
+            }
+            String content = new String(Files.readAllBytes(manifestFile.toPath()));
+            JSONArray array = new JSONObject(content).optJSONArray(templateName);
+            if (array == null || array.length() < 4) {
+                return null;
+            }
+            List<Integer> bbox = new ArrayList<>(4);
+            for (int i = 0; i < 4; i++) {
+                bbox.add(array.getInt(i));
+            }
+            Template.putTaskSingleManifestCache(projectName, taskName, templateName, bbox);
+            return bbox;
+        } catch (Exception e) {
+            Log.w(TAG, "读取模板 bbox 失败: " + e.getMessage());
+            return null;
+        }
     }
 
     private String getStringSafe(Map<String, Object> map, String key, String def) {
-        Object v = map.get(key);
-        return (v instanceof String) ? (String) v : def;
+        Object value = map.get(key);
+        return value instanceof String ? (String) value : def;
     }
 
     private long parseDelayMs(Object raw) {
         if (raw instanceof Number) {
-            long v = ((Number) raw).longValue();
-            return Math.max(0, Math.min(v, 5000));
+            long value = ((Number) raw).longValue();
+            return Math.max(0L, Math.min(value, MAX_PRE_DELAY_MS));
         }
         if (raw instanceof String) {
             try {
-                long v = Long.parseLong(((String) raw).trim());
-                return Math.max(0, Math.min(v, 5000));
+                long value = Long.parseLong(((String) raw).trim());
+                return Math.max(0L, Math.min(value, MAX_PRE_DELAY_MS));
             } catch (Exception ignored) {
             }
         }
@@ -224,6 +274,4 @@ public class MatchtemplateOperationHandler extends OperationHandler {
         }
         return def;
     }
-
-
 }
