@@ -63,6 +63,8 @@ public class MatchtemplateOperationHandler extends OperationHandler {
         double similarity = parseDouble(inputMap.get(MetaOperation.MATCHSIMILARITY), 0.8d);
         double duration = parseDouble(inputMap.get(MetaOperation.MATCHTIMEOUT), 5000d);
         long preDelayMs = parseDelayMs(inputMap.get(MetaOperation.MATCH_PRE_DELAY_MS));
+        double scaleFactor = parseDouble(inputMap.get(MetaOperation.MATCHSCALEFACTOR), 1.0d);
+        scaleFactor = Math.max(0.1d, Math.min(1.0d, scaleFactor));
 
         List<Integer> bbox = getOrLoadTemplateBbox(projectName, taskName, templateName);
         Mat templateMat = getOrLoadTemplateMat(projectName, taskName, templateName);
@@ -103,7 +105,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                 continue;
             }
             try {
-                Point position = OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity);
+                Point position = OpenCVHelper.getInstance().fastSingleMatch(screenMat, templateMat, null, similarity, scaleFactor);
                 if (position == null || position.x < 0 || position.y < 0) {
                     pollingController.onMiss();
                     pollingController.sleepUntilNextIteration(loopStartMs);

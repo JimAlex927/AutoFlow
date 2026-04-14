@@ -102,7 +102,7 @@ public class ScreenCaptureManager {
      */
     private static final int MAX_POLLS_PER_SECOND = 4;
     private static final int MAX_CONSECUTIVE_FRAME_ERRORS = 7;
-    private static final long MAX_STALE_FRAME_AGE_MS = 300L;
+    private static final long MAX_STALE_FRAME_AGE_MS = 500L;
     private static final long FRAME_HEALTH_CHECK_INTERVAL_MS = 1200L;
     private static final int BORDER_HEALTH_CHECK_WARMUP_PASSES = 3;
     private int consecutiveFrameFailures = 0;

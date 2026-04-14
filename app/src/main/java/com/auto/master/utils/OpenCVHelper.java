@@ -573,6 +573,81 @@ public class OpenCVHelper {
         }
     }
 
+    /**
+     * 带 scaleFactor 的快速单次模板匹配。
+     * scaleFactor ∈ (0, 1) 时对搜索图和模板同步缩放后匹配，结果坐标换算回原空间。
+     * scaleFactor >= 1.0 时直接委托给无缩放版本。
+     */
+    public Point fastSingleMatch(Mat screenMat, Mat templateMat, Rect roi, double threshold, double scaleFactor) {
+        if (scaleFactor <= 0.0 || scaleFactor >= 1.0) {
+            return fastSingleMatch(screenMat, templateMat, roi, threshold);
+        }
+        // scaleFactor ∈ (0, 1): 缩放后匹配，结果坐标还原
+        Mat roiSubmat      = null;
+        Mat scaledSearch   = null;
+        Mat scaledTemplate = null;
+        Mat graySearch     = null;
+        Mat grayTemplate   = null;
+        Mat result = sResultMat.get();
+        if (result == null) { result = new Mat(); sResultMat.set(result); }
+        Point roiOffset = new Point(0, 0);
+
+        try {
+            if (screenMat == null || screenMat.empty() || templateMat == null || templateMat.empty()) {
+                return new Point(-1, -1);
+            }
+
+            Mat searchSource = screenMat;
+            if (roi != null && roi.width > 0 && roi.height > 0) {
+                int x = Math.max(0, roi.x);
+                int y = Math.max(0, roi.y);
+                int w = Math.min(roi.width,  screenMat.cols() - x);
+                int h = Math.min(roi.height, screenMat.rows() - y);
+                if (w <= 0 || h <= 0) return new Point(-1, -1);
+                roiSubmat    = new Mat(screenMat, new Rect(x, y, w, h));
+                searchSource = roiSubmat;
+                roiOffset    = new Point(x, y);
+            }
+
+            scaledSearch   = new Mat();
+            scaledTemplate = new Mat();
+            Imgproc.resize(searchSource, scaledSearch,   new Size(), scaleFactor, scaleFactor, Imgproc.INTER_LINEAR);
+            Imgproc.resize(templateMat,  scaledTemplate, new Size(), scaleFactor, scaleFactor, Imgproc.INTER_LINEAR);
+
+            if (scaledSearch.empty() || scaledTemplate.empty()
+                    || scaledTemplate.cols() > scaledSearch.cols()
+                    || scaledTemplate.rows() > scaledSearch.rows()) {
+                return new Point(-1, -1);
+            }
+
+            int sCode = scaledSearch.channels()   == 3 ? Imgproc.COLOR_BGR2GRAY : Imgproc.COLOR_RGBA2GRAY;
+            int tCode = scaledTemplate.channels() == 3 ? Imgproc.COLOR_BGR2GRAY : Imgproc.COLOR_RGBA2GRAY;
+            graySearch   = new Mat();
+            grayTemplate = new Mat();
+            Imgproc.cvtColor(scaledSearch,   graySearch,   sCode);
+            Imgproc.cvtColor(scaledTemplate, grayTemplate, tCode);
+
+            Imgproc.matchTemplate(graySearch, grayTemplate, result, TM_CCOEFF_NORMED);
+            Core.MinMaxLocResult minMax = Core.minMaxLoc(result);
+            if (minMax.maxVal < threshold) return new Point(-1, -1);
+
+            double inv = 1.0 / scaleFactor;
+            return new Point(minMax.maxLoc.x * inv + roiOffset.x,
+                             minMax.maxLoc.y * inv + roiOffset.y);
+
+        } catch (Throwable t) {
+            Log.e(TAG, "fastSingleMatch(scale)异常", t);
+            return new Point(-1, -1);
+        } finally {
+            if (roiSubmat      != null) roiSubmat.release();
+            if (scaledSearch   != null) scaledSearch.release();
+            if (scaledTemplate != null) scaledTemplate.release();
+            if (graySearch     != null) graySearch.release();
+            if (grayTemplate   != null) grayTemplate.release();
+            // result 来自 ThreadLocal，不 release
+        }
+    }
+
 
     /**
      * 模板匹配，支持指定搜索区域（ROI）提速
