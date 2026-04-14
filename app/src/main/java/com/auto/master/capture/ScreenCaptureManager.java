@@ -118,8 +118,10 @@ public class ScreenCaptureManager {
     // 3000ms：手势/短延时通常 <2s，留足余量避免频繁暂停/恢复。
     private static final long IDLE_PAUSE_THRESHOLD_MS = 3000L;
     private static final long FULL_CLEANUP_IDLE_THRESHOLD_MS = 45_000L;
+    private static final long RESUME_GRACE_WINDOW_MS = 800L;
     private volatile boolean displayPaused = false;
     private volatile long lastPollMs = 0;
+    private volatile long lastResumeAttemptMs = 0L;
     private final Runnable idleCheckRunnable = new Runnable() {
         @Override
         public void run() {
@@ -314,11 +316,10 @@ public class ScreenCaptureManager {
         long now = System.currentTimeMillis();
         lastPollMs = now;
 
-        // 如果 VirtualDisplay 被暂停，立即恢复
+        // 如果 VirtualDisplay 被暂停，优先原地恢复 surface，避免整套重建。
         if (displayPaused && virtualDisplay != null && imageReader != null) {
-            displayPaused = false;
-            scheduleVirtualDisplayReset("resume_from_idle");
-            return false; // 本次 poll 等待 VirtualDisplay 重建
+            resumeVirtualDisplaySurface("resume_from_idle");
+            return false; // 给恢复后的 producer 一点时间出首帧
         }
 
         // 软限频
@@ -332,7 +333,9 @@ public class ScreenCaptureManager {
         try {
             image = imageReader.acquireLatestImage();
             if (image == null) {
-                recordFrameFailure("acquireLatestImage_null");
+                if (!isInResumeGraceWindow(now)) {
+                    recordFrameFailure("acquireLatestImage_null");
+                }
                 return false;
             }
 
@@ -479,8 +482,7 @@ public class ScreenCaptureManager {
         lastPollMs = now;
 
         if (displayPaused && virtualDisplay != null && imageReader != null) {
-            displayPaused = false;
-            scheduleVirtualDisplayReset("resume_from_idle_roi");
+            resumeVirtualDisplaySurface("resume_from_idle_roi");
             return false;
         }
 
@@ -494,7 +496,9 @@ public class ScreenCaptureManager {
         try {
             image = imageReader.acquireLatestImage();
             if (image == null) {
-                recordFrameFailure("acquireLatestImage_null_roi");
+                if (!isInResumeGraceWindow(now)) {
+                    recordFrameFailure("acquireLatestImage_null_roi");
+                }
                 return false;
             }
             if (image.getWidth() != captureWidth || image.getHeight() != captureHeight) {
@@ -611,6 +615,7 @@ public class ScreenCaptureManager {
         updateScreenMetrics(appContext);
         lastRotation = getCurrentPhysicalRotation(appContext);
         displayPaused = false;
+        lastResumeAttemptMs = 0L;
         consecutiveFrameFailures = 0;
         lastFrameHealthCheckMs = 0L;
         pendingBorderHealthChecks = BORDER_HEALTH_CHECK_WARMUP_PASSES;
@@ -686,6 +691,7 @@ public class ScreenCaptureManager {
     public void cleanup() {
         isRunning.set(false);
         displayPaused = false;
+        lastResumeAttemptMs = 0L;
         resetScheduled = false;
         consecutiveFrameFailures = 0;
         lastSuccessfulFrameMs = 0L;
@@ -747,6 +753,35 @@ public class ScreenCaptureManager {
 
     private boolean shouldCheckTransparentBorders() {
         return pendingBorderHealthChecks > 0 || consecutiveFrameFailures > 0 || lastSuccessfulFrameMs <= 0L;
+    }
+
+    private boolean resumeVirtualDisplaySurface(String reason) {
+        if (!displayPaused || virtualDisplay == null || imageReader == null) {
+            return false;
+        }
+        try {
+            Surface surface = imageReader.getSurface();
+            if (surface == null || !surface.isValid()) {
+                throw new IllegalStateException("imageReader surface invalid");
+            }
+            virtualDisplay.setSurface(surface);
+            displayPaused = false;
+            lastResumeAttemptMs = System.currentTimeMillis();
+            lastPollMs = lastResumeAttemptMs;
+            consecutiveFrameFailures = 0;
+            pendingBorderHealthChecks = BORDER_HEALTH_CHECK_WARMUP_PASSES;
+            Log.d(TAG, "VirtualDisplay resumed in-place: " + reason);
+            return true;
+        } catch (Throwable t) {
+            displayPaused = false;
+            Log.w(TAG, "resume surface failed, fallback to reset: " + reason, t);
+            scheduleVirtualDisplayReset(reason + "_surface_resume_failed");
+            return false;
+        }
+    }
+
+    private boolean isInResumeGraceWindow(long nowMs) {
+        return lastResumeAttemptMs > 0L && (nowMs - lastResumeAttemptMs) < RESUME_GRACE_WINDOW_MS;
     }
 
     // ===== 轻量黑帧检测：可关掉换极限性能 =====
