@@ -140,6 +140,12 @@ public abstract class MetaOperation {
     public static String COLOR_VALUE = "COLOR_VALUE";
     public static String COLOR_SEARCH_MIN_PIXELS = "COLOR_SEARCH_MIN_PIXELS";
 
+    // 采集倍率节点参数
+    public static String CAPTURE_SCALE_VALUE = "CAPTURE_SCALE_VALUE";
+
+    // 模板保存目标子目录（如 "scale_100"），为空时由当前 CAPTURE_SCALE 决定
+    public static String TARGET_SCALE_DIR = "TARGET_SCALE_DIR";
+
     // HTTP 请求参数
     public static String HTTP_URL = "HTTP_URL";
     public static String HTTP_METHOD = "HTTP_METHOD";

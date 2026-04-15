@@ -20,6 +20,7 @@ import android.util.Log;
 import android.view.Surface;
 import android.view.WindowManager;
 
+import com.auto.master.Template.Template;
 import com.auto.master.auto.AutoAccessibilityService;
 
 import org.opencv.core.CvType;
@@ -63,11 +64,11 @@ public class ScreenCaptureManager {
     private ImageReader imageReader;
 
     // ===== 采集缩放比（降分辨率采集，减少 GPU 管线和内存带宽开销）=====
-    // 注意：部分设备 MediaProjection 实现会将 VirtualDisplay 尺寸对齐到 16/32 的倍数，
-    // 若 captureWidth/captureHeight 不是 16 的倍数，会导致 size mismatch → 无限 reset → 无帧。
-    // 0.5f 在 1080x2340 等分辨率上会产生 1170（非16的倍数）而报错，故暂时设为 1.0f。
-    // 待后续用 "对齐到16的倍数 + size 自适应更新" 方案再重新启用半分辨率。
-    public static final float CAPTURE_SCALE = 1.0f;
+    // volatile non-final：支持运行时通过 setCaptureScale() 动态修改。
+    // 修改时会自动对齐到 16 的倍数（scale<1.0）或 2 的倍数（scale=1.0），
+    // 避免部分设备 MediaProjection size mismatch 问题。
+    // 持久化：通过 CaptureScaleHelper 存储到 SharedPreferences。
+    public static volatile float CAPTURE_SCALE = 0.5f;
 
     // ===== 屏幕参数 =====
     private int screenWidth, screenHeight, screenDpi;
@@ -180,11 +181,51 @@ public class ScreenCaptureManager {
         projectionManager = (MediaProjectionManager) activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
         displayManager = (DisplayManager) activity.getSystemService(Context.DISPLAY_SERVICE);
 
+        // 从持久化存储恢复上次保存的倍率
+//        CAPTURE_SCALE = CaptureScaleHelper.loadScale(appContext);
+
+        CAPTURE_SCALE = 0.25f;
+
         updateScreenMetrics(activity);
         lastRotation = getCurrentPhysicalRotation(activity);
 
         Log.i(TAG, "init ok rot=" + rotationToString(lastRotation)
-                + " size=" + screenWidth + "x" + screenHeight + " dpi=" + screenDpi);
+                + " size=" + screenWidth + "x" + screenHeight + " dpi=" + screenDpi
+                + " captureScale=" + CAPTURE_SCALE
+                + " captureSize=" + captureWidth + "x" + captureHeight);
+    }
+
+    /**
+     * 动态设置采集缩放倍率。
+     * <p>
+     * 调用后会：
+     * 1. 持久化到 SharedPreferences
+     * 2. 清空所有模板 Mat 缓存（旧倍率的模板不再有效）
+     * 3. 若当前采集正在运行，则在采集线程重建 VirtualDisplay
+     * <p>
+     * 调用者在此方法返回后应等待约 1-2 秒，等 VD 稳定后再执行依赖截图的操作。
+     *
+     * @param requestedScale 目标倍率（建议范围 0.25~1.0）
+     */
+    public void setCaptureScale(float requestedScale) {
+        requestedScale = Math.max(0.25f, Math.min(1.0f, requestedScale));
+
+        float old = CAPTURE_SCALE;
+        CAPTURE_SCALE = requestedScale;
+
+        if (appContext != null) {
+            CaptureScaleHelper.saveScale(appContext, requestedScale);
+        }
+
+        // 清空模板缓存（旧倍率模板不适用于新倍率）
+        Template.clearAllCache();
+
+        Log.i(TAG, "setCaptureScale: " + old + " → " + requestedScale);
+
+        // 若采集正在运行，异步重建 VirtualDisplay
+        if (isRunning.get() && captureHandler != null) {
+            captureHandler.post(this::resetVirtualDisplay);
+        }
     }
 
     public boolean startCapture(int resultCode, Intent data) {
@@ -825,9 +866,13 @@ public class ScreenCaptureManager {
         screenWidth = metrics.widthPixels;
         screenHeight = metrics.heightPixels;
         screenDpi = metrics.densityDpi;
-        // 计算采集分辨率（偶数对齐，避免编解码对齐问题）
-        captureWidth  = (int)(screenWidth  * CAPTURE_SCALE) & ~1;
-        captureHeight = (int)(screenHeight * CAPTURE_SCALE) & ~1;
+        // 计算采集分辨率：
+        // scale=1.0 → 对齐到偶数（原有行为）
+        // scale<1.0 → 向下对齐到 16 的倍数，规避部分设备 MediaProjection size mismatch 问题
+        captureWidth  = CaptureScaleHelper.alignCaptureDimension(
+                (int)(screenWidth  * CAPTURE_SCALE), CAPTURE_SCALE);
+        captureHeight = CaptureScaleHelper.alignCaptureDimension(
+                (int)(screenHeight * CAPTURE_SCALE), CAPTURE_SCALE);
     }
 
     private int getCurrentPhysicalRotation(Context context) {

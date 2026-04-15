@@ -70,6 +70,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -122,7 +123,9 @@ import com.auto.master.auto.GestureOverlayView;
 import com.auto.master.auto.SelectionOverlayView;
 import com.auto.master.auto.ScriptExecuteContext;
 import com.auto.master.auto.ScriptRunner;
+import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCapture;
+import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.ocr.OcrEngine;
 import com.auto.master.importer.ProjectImportPickerActivity;
 import com.auto.master.importer.ScriptPackageManager;
@@ -4014,70 +4017,103 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         applyTemplateLibraryDialogViewport(dialogLp);
         wm.addView(dialogView, dialogLp);
 
-        TextView tvTitle = dialogView.findViewById(R.id.tv_library_title);
-        TextView btnAdd = dialogView.findViewById(R.id.btn_library_add);
-        RecyclerView rv = dialogView.findViewById(R.id.rv_library);
-        EditText edtSearch = dialogView.findViewById(R.id.edt_library_search);
-        TextView btnBatch = dialogView.findViewById(R.id.btn_library_batch);
-        TextView btnDelete = dialogView.findViewById(R.id.btn_library_delete);
-        View selectActions = dialogView.findViewById(R.id.ly_library_select_actions);
+        TextView tvTitle       = dialogView.findViewById(R.id.tv_library_title);
+        TextView btnAdd        = dialogView.findViewById(R.id.btn_library_add);
+        RecyclerView rv        = dialogView.findViewById(R.id.rv_library);
+        EditText edtSearch     = dialogView.findViewById(R.id.edt_library_search);
+        TextView btnBatch      = dialogView.findViewById(R.id.btn_library_batch);
+        TextView btnDelete     = dialogView.findViewById(R.id.btn_library_delete);
+        View manageActions     = dialogView.findViewById(R.id.ly_library_manage_actions);
+        View selectActions     = dialogView.findViewById(R.id.ly_library_select_actions);
+        LinearLayout lyBreadcrumb  = dialogView.findViewById(R.id.ly_breadcrumb);
+        TextView btnBack           = dialogView.findViewById(R.id.btn_breadcrumb_back);
+        TextView tvBreadcrumb      = dialogView.findViewById(R.id.tv_breadcrumb_path);
 
-        if (tvTitle != null) {
-            tvTitle.setText("模板库");
-        }
-        if (btnAdd != null) {
-            btnAdd.setVisibility(View.VISIBLE);
-        }
-        if (selectActions != null) {
-            selectActions.setVisibility(View.GONE);
-        }
+        if (tvTitle != null) tvTitle.setText("模板库");
+        if (selectActions != null) selectActions.setVisibility(View.GONE);
 
         rv.setLayoutManager(new GridLayoutManager(this, 3));
         final boolean[] batchMode = {false};
         final TemplateLibraryAdapter[] adapterRef = new TemplateLibraryAdapter[1];
-        final Runnable[] refreshLibrary = new Runnable[1];
+        // currentBrowseDir[0] = null → 根目录（显示文件夹列表）
+        //                      = "scale_100" → 显示该 scale 目录下的模板
+        final String[] currentBrowseDir = {null};
+        final Runnable[] navigateRef = {null};
 
         TemplateLibraryAdapter adapter = new TemplateLibraryAdapter(
-                getCurrentTaskTemplateLibraryItems(),
-                item -> showTaskTemplateItemActionDialog(taskDir, item, dialogView, refreshLibrary[0]),
+                getCurrentTaskTemplateFolderItems(),
                 item -> {
-                    if (item == null || TextUtils.isEmpty(item.fileName)) {
-                        return;
+                    if (item == null) return;
+                    if (item.isFolder) {
+                        // 进入文件夹
+                        currentBrowseDir[0] = item.scaleDirName;
+                        if (navigateRef[0] != null) navigateRef[0].run();
+                    } else {
+                        showTaskTemplateItemActionDialog(taskDir, item, dialogView, navigateRef[0]);
                     }
+                },
+                item -> {
+                    if (item == null || item.isFolder || TextUtils.isEmpty(item.fileName)) return;
                     currentTaskDir = taskDir;
-                    int deleted = deleteTemplateFiles(Collections.singleton(item.fileName));
+                    int deleted = deleteTemplateFileInScaleDir(item.fileName, item.scaleDirName);
                     if (deleted <= 0) {
                         Toast.makeText(this, "模板仍被引用或删除失败", Toast.LENGTH_SHORT).show();
                         return;
                     }
                     Toast.makeText(this, "已删除模板 " + item.fileName, Toast.LENGTH_SHORT).show();
                     refreshTemplateCachesForCurrentProject();
-                    if (refreshLibrary[0] != null) {
-                        refreshLibrary[0].run();
-                    }
+                    if (navigateRef[0] != null) navigateRef[0].run();
                 });
         adapterRef[0] = adapter;
-        adapter.setDeleteActionEnabled(true);
         rv.setAdapter(adapter);
 
-        refreshLibrary[0] = () -> {
+        // navigate() — 根据 currentBrowseDir[0] 更新 UI
+        navigateRef[0] = () -> {
             currentTaskDir = taskDir;
-            if (adapterRef[0] != null) {
-                adapterRef[0].replaceData(getCurrentTaskTemplateLibraryItems());
-                if (adapterRef[0].getItemCount() == 0) {
-                    batchMode[0] = false;
-                    adapterRef[0].setBatchMode(false);
-                }
+            String dir = currentBrowseDir[0];
+            if (dir == null) {
+                // 根目录：显示文件夹列表
+                adapterRef[0].replaceData(getCurrentTaskTemplateFolderItems());
+                adapterRef[0].setDeleteActionEnabled(false);
+                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
+                if (btnAdd != null) btnAdd.setVisibility(View.GONE);
+                if (manageActions != null) manageActions.setVisibility(View.VISIBLE);
+                btnBatch.setVisibility(View.GONE);
+                btnDelete.setVisibility(View.GONE);
+                batchMode[0] = false;
+                adapterRef[0].setBatchMode(false);
+            } else {
+                // 文件夹内：显示模板列表
+                adapterRef[0].replaceData(getCurrentTaskTemplateLibraryItemsInDir(dir));
+                adapterRef[0].setDeleteActionEnabled(true);
+                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.VISIBLE);
+                if (tvBreadcrumb != null) tvBreadcrumb.setText("模板库 / " + dir);
+                if (btnAdd != null) btnAdd.setVisibility(View.VISIBLE);
+                if (manageActions != null) manageActions.setVisibility(View.VISIBLE);
+                btnBatch.setVisibility(View.VISIBLE);
+                btnDelete.setVisibility(View.VISIBLE);
                 btnDelete.setText("删除(" + adapterRef[0].getSelectedCount() + ")");
                 btnBatch.setText(batchMode[0] ? "完成" : "批量");
             }
         };
         adapter.setSelectionChangedListener(count -> btnDelete.setText("删除(" + count + ")"));
-        refreshLibrary[0].run();
+        navigateRef[0].run();  // 初始显示文件夹列表
+
+        // ← 返回按钮
+        if (btnBack != null) {
+            btnBack.setOnClickListener(v -> {
+                currentBrowseDir[0] = null;
+                batchMode[0] = false;
+                adapterRef[0].setBatchMode(false);
+                navigateRef[0].run();
+            });
+        }
 
         dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
+
         if (btnAdd != null) {
             btnAdd.setOnClickListener(v -> {
+                String targetDir = currentBrowseDir[0];
                 safeRemoveView(dialogView);
                 showNameInputDialog(
                         "新增模板",
@@ -4085,7 +4121,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         generateTemplateTimestampName(),
                         name -> {
                             currentTaskDir = taskDir;
-                            launchTemplateCaptureAfterUiSettled(name);
+                            // 新增时保存到当前浏览的 scale 目录（可为 null，由 CAPTURE_SCALE 决定）
+                            launchTemplateCaptureAfterUiSettledInScaleDir(name, targetDir);
                         });
             });
         }
@@ -4097,34 +4134,30 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         });
         btnDelete.setOnClickListener(v -> {
             currentTaskDir = taskDir;
-            Set<String> selected = adapter.getSelectedFileNames();
-            if (selected.isEmpty()) {
+            List<TemplateLibraryAdapter.TemplateLibraryItem> selectedItems = adapter.getSelectedItems();
+            if (selectedItems.isEmpty()) {
                 Toast.makeText(this, "请先选择图片", Toast.LENGTH_SHORT).show();
                 return;
             }
-            int deleted = deleteTemplateFiles(selected);
-            int skipped = selected.size() - deleted;
+            int deleted = 0;
+            for (TemplateLibraryAdapter.TemplateLibraryItem sel : selectedItems) {
+                deleted += deleteTemplateFileInScaleDir(sel.fileName, sel.scaleDirName);
+            }
+            int skipped = selectedItems.size() - deleted;
             if (skipped > 0) {
                 Toast.makeText(this, "已删 " + deleted + " 张，" + skipped + " 张仍被节点引用", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(this, "已删除 " + deleted + " 张图片", Toast.LENGTH_SHORT).show();
             }
             refreshTemplateCachesForCurrentProject();
-            refreshLibrary[0].run();
+            navigateRef[0].run();
         });
         edtSearch.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 adapter.updateFilter(s == null ? "" : s.toString());
             }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-            }
+            @Override public void afterTextChanged(Editable s) {}
         });
     }
 
@@ -4139,12 +4172,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         android.view.ContextThemeWrapper ctx =
                 new android.view.ContextThemeWrapper(this, R.style.Theme_AtomMaster);
         android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
-                .setTitle(item.fileName)
+                .setTitle(item.getDisplayName())
                 .setItems(actions, (d, which) -> {
                     currentTaskDir = taskDir;
                     if (which == 0) {
+                        // 替换截图：保存到与原模板相同的 scale 子目录，直接覆盖
                         safeRemoveView(managerDialog);
-                        launchTemplateCaptureAfterUiSettled(item.fileName);
+                        launchTemplateCaptureAfterUiSettledInScaleDir(item.fileName, item.scaleDirName);
                         return;
                     }
                     if (which == 1) {
@@ -4158,7 +4192,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                                 item.fileName,
                                 newName -> {
                                     currentTaskDir = taskDir;
-                                    if (renameTemplateFile(taskDir, item.fileName, normalizeTemplateFileName(newName))) {
+                                    if (renameTemplateFileInScaleDir(taskDir, item.fileName,
+                                            normalizeTemplateFileName(newName), item.scaleDirName)) {
                                         Toast.makeText(this, "模板已重命名", Toast.LENGTH_SHORT).show();
                                         refreshTemplateCachesForCurrentProject();
                                         if (onChanged != null) {
@@ -4170,9 +4205,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                                 });
                         return;
                     }
-                    int deleted = deleteTemplateFiles(Collections.singleton(item.fileName));
+                    // 删除：只删除该 scale 子目录中的此文件
+                    int deleted = deleteTemplateFileInScaleDir(item.fileName, item.scaleDirName);
                     if (deleted > 0) {
-                        Toast.makeText(this, "已删除模板 " + item.fileName, Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, "已删除模板 " + item.getDisplayName(), Toast.LENGTH_SHORT).show();
                         refreshTemplateCachesForCurrentProject();
                         if (onChanged != null) {
                             onChanged.run();
@@ -4192,12 +4228,22 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void launchTemplateCaptureAfterUiSettled(String templateFileName) {
+        launchTemplateCaptureAfterUiSettledInScaleDir(templateFileName, null);
+    }
+
+    /**
+     * 与 launchTemplateCaptureAfterUiSettled 相同，但将截图保存到指定的 scale 子目录（用于"替换截图"）。
+     * @param scaleDirName 目标 scale 子目录，如 "scale_100"；null 表示由当前 CAPTURE_SCALE 决定
+     */
+    private void launchTemplateCaptureAfterUiSettledInScaleDir(String templateFileName,
+                                                                @Nullable String scaleDirName) {
         String normalizedName = normalizeTemplateFileName(templateFileName);
         if (TextUtils.isEmpty(normalizedName)) {
             Toast.makeText(this, "请先输入模板文件名", Toast.LENGTH_SHORT).show();
             return;
         }
-        uiHandler.postDelayed(() -> launchTemplateCapture(normalizedName), CAPTURE_UI_SETTLE_DELAY_MS);
+        uiHandler.postDelayed(() -> launchTemplateCaptureInScaleDir(normalizedName, scaleDirName),
+                CAPTURE_UI_SETTLE_DELAY_MS);
     }
 
     private void refreshTemplateSelectionAfterCapture(View dialogView,
@@ -4253,6 +4299,86 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         CropRegionOperationHandler.setTemplateCaptureEventListener(listener);
     }
 
+    /**
+     * 只删除指定 scale 子目录中的该模板文件（不跨目录），并同步更新 manifest.json。
+     * @param scaleDirName "scale_100" 等；null 表示删除 flat imgDir 中的文件（legacy）
+     */
+    private int deleteTemplateFileInScaleDir(String fileName, @Nullable String scaleDirName) {
+        if (currentTaskDir == null || TextUtils.isEmpty(fileName)) return 0;
+        int deleted = 0;
+        try {
+            Map<String, Integer> usageMap = getTemplateUsageCountMap();
+            if (usageMap.containsKey(fileName) && usageMap.get(fileName) > 0) {
+                return 0; // still referenced by a node
+            }
+            File imgDir = new File(currentTaskDir, "img");
+            File targetDir = TextUtils.isEmpty(scaleDirName)
+                    ? imgDir
+                    : new File(imgDir, scaleDirName);
+            File file = new File(targetDir, fileName);
+            if (file.exists() && file.isFile() && file.delete()) {
+                deleted++;
+            }
+            // Remove from manifest (shared, screen coords)
+            File manifestFile = new File(imgDir, "manifest.json");
+            if (deleted > 0 && manifestFile.exists()
+                    && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                String content = new String(Files.readAllBytes(manifestFile.toPath()),
+                        StandardCharsets.UTF_8);
+                if (!TextUtils.isEmpty(content.trim())) {
+                    JSONObject manifest = new JSONObject(content);
+                    if (manifest.has(fileName)) {
+                        manifest.remove(fileName);
+                        try (FileWriter writer = new FileWriter(manifestFile)) {
+                            writer.write(manifest.toString(2));
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "删除模板文件失败", e);
+        }
+        return deleted;
+    }
+
+    /**
+     * 只在指定 scale 子目录中重命名模板文件，并同步更新 manifest.json。
+     */
+    private boolean renameTemplateFileInScaleDir(File taskDir, String oldName, String newName,
+                                                  @Nullable String scaleDirName) {
+        if (taskDir == null || TextUtils.isEmpty(oldName) || TextUtils.isEmpty(newName)) return false;
+        if (TextUtils.equals(oldName, newName)) return true;
+        try {
+            File imgDir = new File(taskDir, "img");
+            File targetDir = TextUtils.isEmpty(scaleDirName) ? imgDir : new File(imgDir, scaleDirName);
+            File oldFile = new File(targetDir, oldName);
+            File newFile = new File(targetDir, newName);
+            if (!oldFile.exists() || newFile.exists()) return false;
+            if (!oldFile.renameTo(newFile)) return false;
+            // Update manifest
+            File manifestFile = new File(imgDir, "manifest.json");
+            if (manifestFile.exists() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                String content = new String(Files.readAllBytes(manifestFile.toPath()),
+                        StandardCharsets.UTF_8);
+                if (!TextUtils.isEmpty(content.trim())) {
+                    JSONObject manifest = new JSONObject(content);
+                    if (manifest.has(oldName)) {
+                        Object bbox = manifest.get(oldName);
+                        manifest.remove(oldName);
+                        manifest.put(newName, bbox);
+                        try (FileWriter writer = new FileWriter(manifestFile)) {
+                            writer.write(manifest.toString(2));
+                        }
+                    }
+                }
+            }
+            return true;
+        } catch (Exception e) {
+            Log.w(TAG, "重命名模板失败", e);
+            return false;
+        }
+    }
+
     private boolean renameTemplateFile(File taskDir, String oldName, String newName) {
         if (taskDir == null || TextUtils.isEmpty(oldName) || TextUtils.isEmpty(newName)) {
             return false;
@@ -4262,15 +4388,32 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         try {
             File imgDir = new File(taskDir, "img");
-            File oldFile = new File(imgDir, oldName);
-            File newFile = new File(imgDir, newName);
-            if (!oldFile.exists() || newFile.exists()) {
-                return false;
+            boolean renamedAny = false;
+
+            // Rename in flat dir (legacy scale=1.0)
+            File oldFlat = new File(imgDir, oldName);
+            File newFlat = new File(imgDir, newName);
+            if (oldFlat.exists() && !newFlat.exists()) {
+                renamedAny = oldFlat.renameTo(newFlat);
             }
-            if (!oldFile.renameTo(newFile)) {
+
+            // Rename in all scale subdirs
+            for (float scale : CaptureScaleHelper.SUPPORTED_SCALES) {
+                File scaleDir = new File(imgDir, CaptureScaleHelper.getScaleDirName(scale));
+                File oldScaleFile = new File(scaleDir, oldName);
+                File newScaleFile = new File(scaleDir, newName);
+                if (oldScaleFile.exists() && !newScaleFile.exists()) {
+                    if (oldScaleFile.renameTo(newScaleFile)) {
+                        renamedAny = true;
+                    }
+                }
+            }
+
+            if (!renamedAny) {
                 return false;
             }
 
+            // Update manifest.json (shared, screen coords)
             File manifestFile = new File(imgDir, "manifest.json");
             if (manifestFile.exists() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
@@ -5139,8 +5282,20 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
 
             int deleted = 0;
-            File[] files = imgDir.listFiles();
-            if (files != null) {
+
+            // Clean flat dir (legacy) + all scale subdirs
+            List<File> dirsToClean = new ArrayList<>();
+            dirsToClean.add(imgDir);
+            for (float scale : CaptureScaleHelper.SUPPORTED_SCALES) {
+                File scaleDir = new File(imgDir, CaptureScaleHelper.getScaleDirName(scale));
+                if (scaleDir.isDirectory()) {
+                    dirsToClean.add(scaleDir);
+                }
+            }
+
+            for (File dir : dirsToClean) {
+                File[] files = dir.listFiles();
+                if (files == null) continue;
                 for (File file : files) {
                     if (!file.isFile()) {
                         continue;
@@ -5813,22 +5968,31 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             return files;
         }
         File imgDir = new File(currentTaskDir, "img");
-        File[] imgFiles = imgDir.listFiles(f -> {
-            if (!f.isFile()) {
-                return false;
-            }
+        // Collect template names from all scale subdirs + flat dir (deduplicated by name)
+        Set<String> seen = new LinkedHashSet<>();
+        collectTemplateNamesFromDir(imgDir, seen);
+        for (float scale : CaptureScaleHelper.SUPPORTED_SCALES) {
+            File scaleDir = new File(imgDir, CaptureScaleHelper.getScaleDirName(scale));
+            collectTemplateNamesFromDir(scaleDir, seen);
+        }
+        files.addAll(seen);
+        return files;
+    }
+
+    private void collectTemplateNamesFromDir(File dir, Set<String> out) {
+        if (dir == null || !dir.isDirectory()) return;
+        File[] imgFiles = dir.listFiles(f -> {
+            if (!f.isFile()) return false;
             String name = f.getName().toLowerCase(Locale.ROOT);
             return !"manifest.json".equals(name)
-                    && (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".webp"));
+                    && (name.endsWith(".png") || name.endsWith(".jpg")
+                        || name.endsWith(".jpeg") || name.endsWith(".webp"));
         });
-        if (imgFiles == null) {
-            return files;
-        }
+        if (imgFiles == null) return;
         java.util.Arrays.sort(imgFiles, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
-        for (File file : imgFiles) {
-            files.add(file.getName());
+        for (File f : imgFiles) {
+            out.add(f.getName());
         }
-        return files;
     }
 
     private void incrementTemplateUsage(Map<String, Integer> usage, String fileName) {
@@ -5887,6 +6051,80 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         return usage;
     }
 
+    /**
+     * 第一层：返回当前 task 下所有存在的 scale 子目录（文件夹条目），供模板库首屏展示。
+     * isFolder=true，usageCount 存放该目录下的模板数量。
+     */
+    private List<TemplateLibraryAdapter.TemplateLibraryItem> getCurrentTaskTemplateFolderItems() {
+        List<TemplateLibraryAdapter.TemplateLibraryItem> items = new ArrayList<>();
+        if (currentTaskDir == null) return items;
+        File imgDir = new File(currentTaskDir, "img");
+
+        for (float scale : CaptureScaleHelper.SUPPORTED_SCALES) {
+            String dirName = CaptureScaleHelper.getScaleDirName(scale);
+            File scaleDir = new File(imgDir, dirName);
+            if (!scaleDir.isDirectory()) continue;
+            File[] files = scaleDir.listFiles(f -> {
+                if (!f.isFile()) return false;
+                String n = f.getName().toLowerCase(Locale.ROOT);
+                return n.endsWith(".png") || n.endsWith(".jpg")
+                        || n.endsWith(".jpeg") || n.endsWith(".webp");
+            });
+            int count = files == null ? 0 : files.length;
+            // 空目录也显示，便于用户感知当前倍率
+            TemplateLibraryAdapter.TemplateLibraryItem folder =
+                    new TemplateLibraryAdapter.TemplateLibraryItem(dirName, dirName, null, count);
+            folder.isFolder = true;
+            items.add(folder);
+        }
+
+        // legacy 平铺目录（scale=1.0 旧版文件）
+        File[] flatFiles = imgDir.listFiles(f -> {
+            if (!f.isFile()) return false;
+            String n = f.getName().toLowerCase(Locale.ROOT);
+            return !"manifest.json".equals(n)
+                    && (n.endsWith(".png") || n.endsWith(".jpg")
+                        || n.endsWith(".jpeg") || n.endsWith(".webp"));
+        });
+        if (flatFiles != null && flatFiles.length > 0) {
+            TemplateLibraryAdapter.TemplateLibraryItem legacy =
+                    new TemplateLibraryAdapter.TemplateLibraryItem(
+                            "legacy (旧版)", null, null, flatFiles.length);
+            legacy.isFolder = true;
+            items.add(legacy);
+        }
+        return items;
+    }
+
+    /**
+     * 第二层：返回指定 scale 子目录下的所有模板文件。
+     * @param scaleDirName "scale_100" 等；null 或空字符串表示 legacy 平铺目录
+     */
+    private List<TemplateLibraryAdapter.TemplateLibraryItem> getCurrentTaskTemplateLibraryItemsInDir(
+            @Nullable String scaleDirName) {
+        List<TemplateLibraryAdapter.TemplateLibraryItem> items = new ArrayList<>();
+        if (currentTaskDir == null) return items;
+        Map<String, Integer> usageMap = getTemplateUsageCountMap();
+        File imgDir = new File(currentTaskDir, "img");
+        File dir = TextUtils.isEmpty(scaleDirName) ? imgDir : new File(imgDir, scaleDirName);
+        if (!dir.isDirectory()) return items;
+        File[] files = dir.listFiles(f -> {
+            if (!f.isFile()) return false;
+            String n = f.getName().toLowerCase(Locale.ROOT);
+            return !"manifest.json".equals(n)
+                    && (n.endsWith(".png") || n.endsWith(".jpg")
+                        || n.endsWith(".jpeg") || n.endsWith(".webp"));
+        });
+        if (files == null) return items;
+        java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+        for (File f : files) {
+            int usageCount = usageMap.containsKey(f.getName()) ? usageMap.get(f.getName()) : 0;
+            items.add(new TemplateLibraryAdapter.TemplateLibraryItem(
+                    f.getName(), scaleDirName, f, usageCount));
+        }
+        return items;
+    }
+
     private List<TemplateLibraryAdapter.TemplateLibraryItem> getCurrentTaskTemplateLibraryItems() {
         List<TemplateLibraryAdapter.TemplateLibraryItem> items = new ArrayList<>();
         if (currentTaskDir == null) {
@@ -5894,23 +6132,61 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         Map<String, Integer> usageMap = getTemplateUsageCountMap();
         File imgDir = new File(currentTaskDir, "img");
-        File[] imgFiles = imgDir.listFiles(f -> {
-            if (!f.isFile()) {
-                return false;
+
+        // Show one item per (scaleDirName, fileName) pair so the user sees
+        // which scale dir each template belongs to. Items are grouped by scale.
+        for (float scale : CaptureScaleHelper.SUPPORTED_SCALES) {
+            String dirName = CaptureScaleHelper.getScaleDirName(scale);
+            File scaleDir = new File(imgDir, dirName);
+            if (!scaleDir.isDirectory()) continue;
+            File[] files = scaleDir.listFiles(f -> {
+                if (!f.isFile()) return false;
+                String n = f.getName().toLowerCase(Locale.ROOT);
+                return n.endsWith(".png") || n.endsWith(".jpg")
+                        || n.endsWith(".jpeg") || n.endsWith(".webp");
+            });
+            if (files == null) continue;
+            java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+            for (File f : files) {
+                int usageCount = usageMap.containsKey(f.getName()) ? usageMap.get(f.getName()) : 0;
+                items.add(new TemplateLibraryAdapter.TemplateLibraryItem(
+                        f.getName(), dirName, f, usageCount));
             }
-            String name = f.getName().toLowerCase(Locale.ROOT);
-            return !"manifest.json".equals(name)
-                    && (name.endsWith(".png") || name.endsWith(".jpg") || name.endsWith(".jpeg") || name.endsWith(".webp"));
+        }
+
+        // Legacy flat dir (scale=1.0 created before scale-aware storage)
+        File[] flatFiles = imgDir.listFiles(f -> {
+            if (!f.isFile()) return false;
+            String n = f.getName().toLowerCase(Locale.ROOT);
+            return !"manifest.json".equals(n)
+                    && (n.endsWith(".png") || n.endsWith(".jpg")
+                        || n.endsWith(".jpeg") || n.endsWith(".webp"));
         });
-        if (imgFiles == null) {
-            return items;
+        if (flatFiles != null) {
+            java.util.Arrays.sort(flatFiles, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
+            for (File f : flatFiles) {
+                int usageCount = usageMap.containsKey(f.getName()) ? usageMap.get(f.getName()) : 0;
+                // scaleDirName = null for legacy flat files
+                items.add(new TemplateLibraryAdapter.TemplateLibraryItem(
+                        f.getName(), null, f, usageCount));
+            }
         }
-        java.util.Arrays.sort(imgFiles, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
-        for (File file : imgFiles) {
-            int usageCount = usageMap.containsKey(file.getName()) ? usageMap.get(file.getName()) : 0;
-            items.add(new TemplateLibraryAdapter.TemplateLibraryItem(file.getName(), file, usageCount));
-        }
+
         return items;
+    }
+
+    /** Searches all scale subdirs + flat dir to find the first existing file with the given name. */
+    @Nullable
+    private File findTemplateInAnyScaleDir(File imgDir, String name) {
+        // flat dir
+        File flat = new File(imgDir, name);
+        if (flat.exists()) return flat;
+        // scale subdirs
+        for (float scale : CaptureScaleHelper.SUPPORTED_SCALES) {
+            File f = new File(new File(imgDir, CaptureScaleHelper.getScaleDirName(scale)), name);
+            if (f.exists()) return f;
+        }
+        return null;
     }
 
     private List<String> getMatchMethodOptions() {
@@ -5969,11 +6245,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         String finalName = templateName.endsWith(".png") ? templateName : templateName + ".png";
         File imgDir = new File(currentTaskDir, "img");
-        File file = new File(imgDir, finalName);
-        if (file.exists()) {
-            return file;
-        }
-        return null;
+        // scale-aware lookup: checks scale_{key}/ subdir first, falls back to flat path for scale=1.0
+        return CaptureScaleHelper.resolveTemplateFile(imgDir, finalName, ScreenCaptureManager.CAPTURE_SCALE);
     }
 
     private void updateTemplatePreview(ImageView ivPreview, TextView tvTip, String templateName) {
@@ -6441,8 +6714,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             java.util.List<String> currentSelected,
             OperationDialogFactory.MatchMapHelper.OnMultiSelectConfirmed callback) {
 
-        List<com.auto.master.floatwin.adapter.TemplateLibraryAdapter.TemplateLibraryItem> items =
-                getCurrentTaskTemplateLibraryItems();
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_template_library, null);
         WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(350, true);
         applyTemplateLibraryDialogViewport(dialogLp);
@@ -6456,27 +6727,76 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         View selectActions = dialogView.findViewById(R.id.ly_library_select_actions);
         TextView btnCancel = dialogView.findViewById(R.id.btn_library_cancel);
         TextView btnConfirm = dialogView.findViewById(R.id.btn_library_confirm);
+        LinearLayout lyBreadcrumb = dialogView.findViewById(R.id.ly_breadcrumb);
+        TextView btnBack = dialogView.findViewById(R.id.btn_breadcrumb_back);
+        TextView tvBreadcrumb = dialogView.findViewById(R.id.tv_breadcrumb_path);
+
         if (manageActions != null) manageActions.setVisibility(View.GONE);
-        if (selectActions != null) selectActions.setVisibility(View.VISIBLE);
+        if (selectActions != null) selectActions.setVisibility(View.GONE);
 
         rv.setLayoutManager(new androidx.recyclerview.widget.GridLayoutManager(this, 3));
-        // 传 null listener —— 点击单项不触发回调，由批量选择控制
-        com.auto.master.floatwin.adapter.TemplateLibraryAdapter adapter =
-                new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(items, null);
-        rv.setAdapter(adapter);
 
-        // 直接进入批量选择模式，并预选当前已选项
-        adapter.setBatchMode(true);
-        if (currentSelected != null) {
-            for (String name : currentSelected) adapter.selectItem(name);
-        }
+        final com.auto.master.floatwin.adapter.TemplateLibraryAdapter[] adapterRef = {null};
+        final String[] currentBrowseDir = {null}; // null=根目录(文件夹列表)，否则=scale目录名
+        final Runnable[] navigateRef = {null};
 
         Runnable updateConfirmBtn = () -> {
-            int cnt = adapter.getSelectedCount();
+            if (adapterRef[0] == null || btnConfirm == null) return;
+            int cnt = adapterRef[0].getSelectedCount();
             btnConfirm.setText(cnt == 0 ? "确定" : "确定(" + cnt + ")");
         };
-        adapter.setSelectionChangedListener(count -> updateConfirmBtn.run());
-        updateConfirmBtn.run();
+
+        navigateRef[0] = () -> {
+            String dir = currentBrowseDir[0];
+            String searchQuery = edtSearch != null && edtSearch.getText() != null
+                    ? edtSearch.getText().toString() : "";
+            if (dir == null) {
+                // 根目录：显示文件夹列表，隐藏选择按钮
+                List<com.auto.master.floatwin.adapter.TemplateLibraryAdapter.TemplateLibraryItem> folderItems =
+                        getCurrentTaskTemplateFolderItems();
+                com.auto.master.floatwin.adapter.TemplateLibraryAdapter folderAdapter =
+                        new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(folderItems, item -> {
+                            if (item.isFolder) {
+                                currentBrowseDir[0] = item.fileName;
+                                navigateRef[0].run();
+                            }
+                        });
+                adapterRef[0] = folderAdapter;
+                rv.setAdapter(folderAdapter);
+                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
+                if (selectActions != null) selectActions.setVisibility(View.GONE);
+            } else {
+                // 子目录：显示模板列表，进入批量选择模式
+                List<com.auto.master.floatwin.adapter.TemplateLibraryAdapter.TemplateLibraryItem> templateItems =
+                        getCurrentTaskTemplateLibraryItemsInDir(dir);
+                // 传 null listener —— 点击单项由批量选择控制
+                com.auto.master.floatwin.adapter.TemplateLibraryAdapter templateAdapter =
+                        new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(templateItems, null);
+                adapterRef[0] = templateAdapter;
+                rv.setAdapter(templateAdapter);
+                templateAdapter.setBatchMode(true);
+                // 预选当前已选中的模板（按文件名匹配）
+                if (currentSelected != null) {
+                    for (String name : currentSelected) templateAdapter.selectItem(name);
+                }
+                templateAdapter.setSelectionChangedListener(count -> updateConfirmBtn.run());
+                updateConfirmBtn.run();
+                if (!searchQuery.isEmpty()) templateAdapter.updateFilter(searchQuery);
+                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.VISIBLE);
+                if (tvBreadcrumb != null) tvBreadcrumb.setText("模板库 / " + dir);
+                if (selectActions != null) selectActions.setVisibility(View.VISIBLE);
+            }
+        };
+
+        navigateRef[0].run();
+
+        if (btnBack != null) {
+            btnBack.setOnClickListener(v -> {
+                currentBrowseDir[0] = null;
+                if (edtSearch != null) edtSearch.setText("");
+                navigateRef[0].run();
+            });
+        }
 
         dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
         if (btnCancel != null) {
@@ -6485,7 +6805,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
         if (btnConfirm != null) {
             btnConfirm.setOnClickListener(v -> {
-                java.util.List<String> selected = new java.util.ArrayList<>(adapter.getSelectedFileNames());
+                java.util.List<String> selected = adapterRef[0] != null
+                        ? new java.util.ArrayList<>(adapterRef[0].getSelectedFileNames())
+                        : new java.util.ArrayList<>();
                 safeRemoveView(dialogView);
                 if (callback != null) callback.onConfirmed(selected);
             });
@@ -6495,7 +6817,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             edtSearch.addTextChangedListener(new android.text.TextWatcher() {
                 @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
                 @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    adapter.updateFilter(s == null ? "" : s.toString());
+                    if (adapterRef[0] != null) adapterRef[0].updateFilter(s == null ? "" : s.toString());
                 }
                 @Override public void afterTextChanged(android.text.Editable s) {}
             });
@@ -6504,8 +6826,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     /** 从模板 manifest 导入 bbox：弹出单选模板库，选中后将 manifest 中的 bbox 写入 edtBbox。 */
     private void importBboxFromTemplate(View mainDialogView, EditText edtBbox) {
-        List<com.auto.master.floatwin.adapter.TemplateLibraryAdapter.TemplateLibraryItem> items =
-                getCurrentTaskTemplateLibraryItems();
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_template_library, null);
         WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(350, true);
         applyTemplateLibraryDialogViewport(dialogLp);
@@ -6517,21 +6837,69 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         EditText edtSearch = dialogView.findViewById(R.id.edt_library_search);
         View manageActions = dialogView.findViewById(R.id.ly_library_manage_actions);
         View selectActions = dialogView.findViewById(R.id.ly_library_select_actions);
+        LinearLayout lyBreadcrumb = dialogView.findViewById(R.id.ly_breadcrumb);
+        TextView btnBack = dialogView.findViewById(R.id.btn_breadcrumb_back);
+        TextView tvBreadcrumb = dialogView.findViewById(R.id.tv_breadcrumb_path);
+
         if (manageActions != null) manageActions.setVisibility(View.GONE);
         if (selectActions != null) selectActions.setVisibility(View.GONE);
 
         rv.setLayoutManager(new androidx.recyclerview.widget.GridLayoutManager(this, 3));
-        com.auto.master.floatwin.adapter.TemplateLibraryAdapter adapter =
-                new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(items, item -> {
-                    List<Integer> bbox = getBboxFromTemplate(item.fileName);
-                    if (bbox != null && bbox.size() >= 4) {
-                        edtBbox.setText(bbox.get(0) + "," + bbox.get(1) + "," + bbox.get(2) + "," + bbox.get(3));
-                    } else {
-                        Toast.makeText(this, "模板 " + item.fileName + " 无区域记录", Toast.LENGTH_SHORT).show();
-                    }
-                    safeRemoveView(dialogView);
-                });
-        rv.setAdapter(adapter);
+
+        final com.auto.master.floatwin.adapter.TemplateLibraryAdapter[] adapterRef = {null};
+        final String[] currentBrowseDir = {null};
+        final Runnable[] navigateRef = {null};
+
+        navigateRef[0] = () -> {
+            String dir = currentBrowseDir[0];
+            String searchQuery = edtSearch != null && edtSearch.getText() != null
+                    ? edtSearch.getText().toString() : "";
+            if (dir == null) {
+                // 根目录：显示文件夹列表
+                List<com.auto.master.floatwin.adapter.TemplateLibraryAdapter.TemplateLibraryItem> folderItems =
+                        getCurrentTaskTemplateFolderItems();
+                com.auto.master.floatwin.adapter.TemplateLibraryAdapter folderAdapter =
+                        new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(folderItems, item -> {
+                            if (item.isFolder) {
+                                currentBrowseDir[0] = item.fileName;
+                                if (edtSearch != null) edtSearch.setText("");
+                                navigateRef[0].run();
+                            }
+                        });
+                adapterRef[0] = folderAdapter;
+                rv.setAdapter(folderAdapter);
+                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
+            } else {
+                // 子目录：显示模板列表，单击直接导入 bbox
+                List<com.auto.master.floatwin.adapter.TemplateLibraryAdapter.TemplateLibraryItem> templateItems =
+                        getCurrentTaskTemplateLibraryItemsInDir(dir);
+                com.auto.master.floatwin.adapter.TemplateLibraryAdapter templateAdapter =
+                        new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(templateItems, item -> {
+                            List<Integer> bbox = getBboxFromTemplate(item.fileName);
+                            if (bbox != null && bbox.size() >= 4) {
+                                edtBbox.setText(bbox.get(0) + "," + bbox.get(1) + "," + bbox.get(2) + "," + bbox.get(3));
+                            } else {
+                                Toast.makeText(this, "模板 " + item.fileName + " 无区域记录", Toast.LENGTH_SHORT).show();
+                            }
+                            safeRemoveView(dialogView);
+                        });
+                adapterRef[0] = templateAdapter;
+                rv.setAdapter(templateAdapter);
+                if (!searchQuery.isEmpty()) templateAdapter.updateFilter(searchQuery);
+                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.VISIBLE);
+                if (tvBreadcrumb != null) tvBreadcrumb.setText("模板库 / " + dir);
+            }
+        };
+
+        navigateRef[0].run();
+
+        if (btnBack != null) {
+            btnBack.setOnClickListener(v -> {
+                currentBrowseDir[0] = null;
+                if (edtSearch != null) edtSearch.setText("");
+                navigateRef[0].run();
+            });
+        }
 
         dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
 
@@ -6539,7 +6907,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             edtSearch.addTextChangedListener(new android.text.TextWatcher() {
                 @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
                 @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    adapter.updateFilter(s == null ? "" : s.toString());
+                    if (adapterRef[0] != null) adapterRef[0].updateFilter(s == null ? "" : s.toString());
                 }
                 @Override public void afterTextChanged(android.text.Editable s) {}
             });
@@ -7085,8 +7453,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     Object nameObj = op.getInputMap() == null ? null : op.getInputMap().get(MetaOperation.SAVEFILENAME);
                     String fileName = nameObj == null ? "" : String.valueOf(nameObj).trim();
                     if (!TextUtils.isEmpty(fileName)) {
-                        File imgFile = new File(new File(currentTaskDir, "img"), fileName);
-                        if (!imgFile.exists()) {
+                        // scale-aware check: template may live in a scale subdir
+                        if (resolveTaskTemplateFile(fileName) == null) {
                             missingTemplateCount++;
                         }
                     }
@@ -7363,139 +7731,151 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void showTemplateLibraryDialog(AutoCompleteTextView templateInput, View ownerDialog) {
-        List<TemplateLibraryAdapter.TemplateLibraryItem> items = getCurrentTaskTemplateLibraryItems();
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_template_library, null);
         WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(350, true);
         applyTemplateLibraryDialogViewport(dialogLp);
         wm.addView(dialogView, dialogLp);
 
-        TextView tvTitle = dialogView.findViewById(R.id.tv_library_title);
-        TextView btnAdd = dialogView.findViewById(R.id.btn_library_add);
-        RecyclerView rv = dialogView.findViewById(R.id.rv_library);
-        EditText edtSearch = dialogView.findViewById(R.id.edt_library_search);
-        TextView btnBatch = dialogView.findViewById(R.id.btn_library_batch);
-        TextView btnDelete = dialogView.findViewById(R.id.btn_library_delete);
-        View selectActions = dialogView.findViewById(R.id.ly_library_select_actions);
-        if (tvTitle != null) {
-            tvTitle.setText("选择模板图片");
-        }
-        if (btnAdd != null) {
-            btnAdd.setVisibility(View.GONE);
-        }
+        TextView tvTitle       = dialogView.findViewById(R.id.tv_library_title);
+        TextView btnAdd        = dialogView.findViewById(R.id.btn_library_add);
+        RecyclerView rv        = dialogView.findViewById(R.id.rv_library);
+        EditText edtSearch     = dialogView.findViewById(R.id.edt_library_search);
+        TextView btnBatch      = dialogView.findViewById(R.id.btn_library_batch);
+        TextView btnDelete     = dialogView.findViewById(R.id.btn_library_delete);
+        View manageActions     = dialogView.findViewById(R.id.ly_library_manage_actions);
+        View selectActions     = dialogView.findViewById(R.id.ly_library_select_actions);
+        LinearLayout lyBreadcrumb = dialogView.findViewById(R.id.ly_breadcrumb);
+        TextView btnBack          = dialogView.findViewById(R.id.btn_breadcrumb_back);
+        TextView tvBreadcrumb     = dialogView.findViewById(R.id.tv_breadcrumb_path);
+
+        if (tvTitle != null) tvTitle.setText("选择模板图片");
+        if (btnAdd != null) btnAdd.setVisibility(View.GONE);
+        if (selectActions != null) selectActions.setVisibility(View.GONE);
+
         rv.setLayoutManager(new GridLayoutManager(this, 3));
         final boolean[] batchMode = {false};
-        final Runnable[] updateBatchUi = new Runnable[1];
         final TemplateLibraryAdapter[] adapterRef = new TemplateLibraryAdapter[1];
-        TemplateLibraryAdapter adapter = new TemplateLibraryAdapter(items, item -> {
-            templateInput.setText(item.fileName, false);
-            refreshTemplateOptions(templateInput);
-            updateTemplatePreview(ownerDialog.findViewById(R.id.iv_template_preview),
-                    ownerDialog.findViewById(R.id.tv_template_preview_tip),
-                    item.fileName);
-            renderRecentTemplateStrip(ownerDialog, templateInput);
-            safeRemoveView(dialogView);
-        }, item -> {
-            if (item == null || TextUtils.isEmpty(item.fileName)) {
-                return;
-            }
-            if (item.usageCount > 0) {
-                Toast.makeText(this, "模板仍被节点引用，暂时不能删除", Toast.LENGTH_SHORT).show();
-                return;
-            }
+        final String[] currentBrowseDir = {null};
+        final Runnable[] navigateRef = {null};
 
-            Set<String> target = new HashSet<>();
-            target.add(item.fileName);
-            int deleted = deleteTemplateFiles(target);
-            if (deleted <= 0) {
-                Toast.makeText(this, "删除失败，请稍后重试", Toast.LENGTH_SHORT).show();
-                return;
-            }
-
-            String currentTemplate = templateInput.getText() == null ? "" : templateInput.getText().toString().trim();
-            if (item.fileName.equals(currentTemplate)) {
-                templateInput.setText("", false);
-            }
-
-            Toast.makeText(this, "已删除模板 " + item.fileName, Toast.LENGTH_SHORT).show();
-            if (adapterRef[0] == null) {
-                return;
-            }
-            adapterRef[0].replaceData(getCurrentTaskTemplateLibraryItems());
-            refreshTemplateOptions(templateInput);
-            renderRecentTemplateStrip(ownerDialog, templateInput);
-            updateTemplatePreview(ownerDialog.findViewById(R.id.iv_template_preview),
-                    ownerDialog.findViewById(R.id.tv_template_preview_tip),
-                    templateInput.getText() == null ? "" : templateInput.getText().toString().trim());
-            refreshTemplateCachesForCurrentProject();
-            if (adapterRef[0].getItemCount() == 0) {
-                batchMode[0] = false;
-                adapterRef[0].setBatchMode(false);
-            }
-            if (updateBatchUi[0] != null) {
-                updateBatchUi[0].run();
-            }
-        });
+        TemplateLibraryAdapter adapter = new TemplateLibraryAdapter(
+                getCurrentTaskTemplateFolderItems(),
+                item -> {
+                    if (item == null) return;
+                    if (item.isFolder) {
+                        currentBrowseDir[0] = item.scaleDirName;
+                        if (navigateRef[0] != null) navigateRef[0].run();
+                    } else {
+                        // 选中模板：填入输入框并关闭
+                        templateInput.setText(item.fileName, false);
+                        refreshTemplateOptions(templateInput);
+                        updateTemplatePreview(ownerDialog.findViewById(R.id.iv_template_preview),
+                                ownerDialog.findViewById(R.id.tv_template_preview_tip), item.fileName);
+                        renderRecentTemplateStrip(ownerDialog, templateInput);
+                        safeRemoveView(dialogView);
+                    }
+                },
+                item -> {
+                    if (item == null || item.isFolder || TextUtils.isEmpty(item.fileName)) return;
+                    if (item.usageCount > 0) {
+                        Toast.makeText(this, "模板仍被节点引用，暂时不能删除", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    int deleted = deleteTemplateFileInScaleDir(item.fileName, item.scaleDirName);
+                    if (deleted <= 0) {
+                        Toast.makeText(this, "删除失败，请稍后重试", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    String cur = templateInput.getText() == null ? "" : templateInput.getText().toString().trim();
+                    if (item.fileName.equals(cur)) templateInput.setText("", false);
+                    Toast.makeText(this, "已删除模板 " + item.fileName, Toast.LENGTH_SHORT).show();
+                    refreshTemplateCachesForCurrentProject();
+                    if (navigateRef[0] != null) navigateRef[0].run();
+                    refreshTemplateOptions(templateInput);
+                    renderRecentTemplateStrip(ownerDialog, templateInput);
+                    updateTemplatePreview(ownerDialog.findViewById(R.id.iv_template_preview),
+                            ownerDialog.findViewById(R.id.tv_template_preview_tip),
+                            templateInput.getText() == null ? "" : templateInput.getText().toString().trim());
+                });
         adapterRef[0] = adapter;
-        adapter.setDeleteActionEnabled(true);
+        adapter.setDeleteActionEnabled(false);
         rv.setAdapter(adapter);
 
-        updateBatchUi[0] = () -> {
-            int count = adapter.getSelectedCount();
-            btnDelete.setText("删除(" + count + ")");
+        Runnable updateBatchUi = () -> {
+            btnDelete.setText("删除(" + adapter.getSelectedCount() + ")");
             btnBatch.setText(batchMode[0] ? "完成" : "批量");
         };
-        adapter.setSelectionChangedListener(count -> updateBatchUi[0].run());
-        updateBatchUi[0].run();
+        adapter.setSelectionChangedListener(count -> updateBatchUi.run());
 
-        if (selectActions != null) {
-            selectActions.setVisibility(View.GONE);
+        navigateRef[0] = () -> {
+            String dir = currentBrowseDir[0];
+            if (dir == null) {
+                adapterRef[0].replaceData(getCurrentTaskTemplateFolderItems());
+                adapterRef[0].setDeleteActionEnabled(false);
+                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
+                if (manageActions != null) manageActions.setVisibility(View.VISIBLE);
+                btnBatch.setVisibility(View.GONE);
+                btnDelete.setVisibility(View.GONE);
+                batchMode[0] = false;
+                adapterRef[0].setBatchMode(false);
+            } else {
+                adapterRef[0].replaceData(getCurrentTaskTemplateLibraryItemsInDir(dir));
+                adapterRef[0].setDeleteActionEnabled(true);
+                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.VISIBLE);
+                if (tvBreadcrumb != null) tvBreadcrumb.setText("模板库 / " + dir);
+                if (manageActions != null) manageActions.setVisibility(View.VISIBLE);
+                btnBatch.setVisibility(View.VISIBLE);
+                btnDelete.setVisibility(View.VISIBLE);
+                updateBatchUi.run();
+            }
+        };
+        navigateRef[0].run();
+
+        if (btnBack != null) {
+            btnBack.setOnClickListener(v -> {
+                currentBrowseDir[0] = null;
+                batchMode[0] = false;
+                adapterRef[0].setBatchMode(false);
+                navigateRef[0].run();
+            });
         }
         dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
         btnBatch.setOnClickListener(v -> {
             batchMode[0] = !batchMode[0];
             adapter.setBatchMode(batchMode[0]);
-            updateBatchUi[0].run();
+            updateBatchUi.run();
         });
         btnDelete.setOnClickListener(v -> {
-            Set<String> selected = adapter.getSelectedFileNames();
-            if (selected.isEmpty()) {
+            List<TemplateLibraryAdapter.TemplateLibraryItem> selectedItems = adapter.getSelectedItems();
+            if (selectedItems.isEmpty()) {
                 Toast.makeText(this, "请先选择图片", Toast.LENGTH_SHORT).show();
                 return;
             }
-            int deleted = deleteTemplateFiles(selected);
-            int skipped = selected.size() - deleted;
+            int deleted = 0;
+            for (TemplateLibraryAdapter.TemplateLibraryItem sel : selectedItems) {
+                deleted += deleteTemplateFileInScaleDir(sel.fileName, sel.scaleDirName);
+            }
+            int skipped = selectedItems.size() - deleted;
             if (skipped > 0) {
                 Toast.makeText(this, "已删 " + deleted + " 张，" + skipped + " 张仍被节点引用", Toast.LENGTH_SHORT).show();
             } else {
                 Toast.makeText(this, "已删除 " + deleted + " 张图片", Toast.LENGTH_SHORT).show();
             }
-            List<TemplateLibraryAdapter.TemplateLibraryItem> refreshed = getCurrentTaskTemplateLibraryItems();
-            adapter.replaceData(refreshed);
+            refreshTemplateCachesForCurrentProject();
+            navigateRef[0].run();
             refreshTemplateOptions(templateInput);
             renderRecentTemplateStrip(ownerDialog, templateInput);
             updateTemplatePreview(ownerDialog.findViewById(R.id.iv_template_preview),
                     ownerDialog.findViewById(R.id.tv_template_preview_tip),
                     templateInput.getText() == null ? "" : templateInput.getText().toString().trim());
-            refreshTemplateCachesForCurrentProject();
-            if (adapter.getItemCount() == 0) {
-                batchMode[0] = false;
-                adapter.setBatchMode(false);
-            }
-            updateBatchUi[0].run();
+            updateBatchUi.run();
         });
         edtSearch.addTextChangedListener(new TextWatcher() {
-            @Override
-            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
-            }
-
-            @Override
-            public void onTextChanged(CharSequence s, int start, int before, int count) {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
                 adapter.updateFilter(s == null ? "" : s.toString());
             }
-
-            @Override
-            public void afterTextChanged(Editable s) {
-            }
+            @Override public void afterTextChanged(Editable s) {}
         });
     }
 
@@ -7515,9 +7895,18 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 if (usageCount > 0) {
                     continue;
                 }
-                File file = new File(imgDir, name);
-                if (file.exists() && file.isFile() && file.delete()) {
+                // Delete from flat dir (legacy scale=1.0)
+                File flat = new File(imgDir, name);
+                if (flat.exists() && flat.isFile() && flat.delete()) {
                     deleted++;
+                }
+                // Delete from all scale subdirs
+                for (float scale : CaptureScaleHelper.SUPPORTED_SCALES) {
+                    File scaleFile = new File(
+                            new File(imgDir, CaptureScaleHelper.getScaleDirName(scale)), name);
+                    if (scaleFile.exists() && scaleFile.isFile() && scaleFile.delete()) {
+                        deleted++;
+                    }
                 }
             }
 
@@ -7701,6 +8090,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private boolean launchTemplateCapture(String templateFileName) {
+        return launchTemplateCaptureInScaleDir(templateFileName, null);
+    }
+
+    /**
+     * 启动框选截图并保存模板。
+     * @param scaleDirName 目标 scale 子目录（如 "scale_100"），null 表示由当前 CAPTURE_SCALE 决定
+     */
+    private boolean launchTemplateCaptureInScaleDir(String templateFileName,
+                                                     @Nullable String scaleDirName) {
         if (currentProjectDir == null || currentTaskDir == null) {
             Toast.makeText(this, "当前 Project/Task 无效", Toast.LENGTH_SHORT).show();
             return false;
@@ -7718,6 +8116,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         inputMap.put(MetaOperation.PROJECT, currentProjectDir.getName());
         inputMap.put(MetaOperation.TASK, currentTaskDir.getName());
         inputMap.put(MetaOperation.SAVEFILENAME, finalName);
+        if (!TextUtils.isEmpty(scaleDirName)) {
+            // 替换截图时指定目标目录，确保覆盖同 scale 下的旧模板
+            inputMap.put(MetaOperation.TARGET_SCALE_DIR, scaleDirName);
+        }
         cropOperation.setInputMap(inputMap);
 
         OperationHandler handler = OperationHandlerManager.getOperationHandler(3);

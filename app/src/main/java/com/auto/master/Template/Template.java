@@ -310,6 +310,20 @@ public class Template {
     }
     
     /**
+     * 清除指定模板的 mat 缓存（替换截图后调用，确保下次匹配加载新图片）。
+     */
+    public static synchronized void clearTaskSingleMatCache(String projectName, String taskName, String key) {
+        String cacheKey = projectName + "_" + taskName;
+        Map<String, Mat> projectTaskMatMap = matCache.get(cacheKey);
+        if (projectTaskMatMap == null) return;
+        Mat old = projectTaskMatMap.remove(key);
+        if (old != null && !old.empty()) {
+            old.release();
+            totalCachedMats--;
+        }
+    }
+
+    /**
      * 获取缓存统计信息
      */
     public static synchronized String getCacheStats() {

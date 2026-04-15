@@ -51,7 +51,41 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:hint="搜索文件名"
-        android:layout_marginBottom="8dp"/>
+        android:layout_marginBottom="6dp"/>
+
+    <!-- 二级目录面包屑（进入 scale 子目录后显示） -->
+    <LinearLayout
+        android:id="@+id/ly_breadcrumb"
+        android:layout_width="match_parent"
+        android:layout_height="32dp"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="6dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/btn_breadcrumb_back"
+            android:layout_width="wrap_content"
+            android:layout_height="28dp"
+            android:paddingStart="10dp"
+            android:paddingEnd="10dp"
+            android:gravity="center"
+            android:text="← 返回"
+            android:textSize="12sp"
+            android:textColor="#315dbf"
+            android:background="@drawable/item_operation_compact_bg" />
+
+        <TextView
+            android:id="@+id/tv_breadcrumb_path"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="8dp"
+            android:textSize="13sp"
+            android:textColor="#4e5f74"
+            android:singleLine="true"
+            android:ellipsize="start" />
+    </LinearLayout>
 
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/rv_library"

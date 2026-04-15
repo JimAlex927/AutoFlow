@@ -10,6 +10,7 @@ import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.Template.Template;
 import com.auto.master.auto.AutoAccessibilityService;
+import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.MatchResult;
@@ -20,8 +21,6 @@ import org.json.JSONObject;
 import org.opencv.android.Utils;
 import org.opencv.core.Mat;
 import org.opencv.core.Point;
-import org.opencv.core.Size;
-import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
 import java.nio.file.Files;
@@ -183,15 +182,21 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             return null;
         }
         try {
-            File imgFile = new File(
+            File imgDir = new File(
                     svc.getApplicationContext().getExternalFilesDir(null),
                     "projects" + File.separator + projectName
                             + File.separator + taskName
-                            + File.separator + "img"
-                            + File.separator + templateName);
-            if (!imgFile.exists()) {
+                            + File.separator + "img");
+
+            // scale-aware 路径：先查 scale_{key}/ 子目录，scale=1.0 时回退到平级目录
+            File imgFile = CaptureScaleHelper.resolveTemplateFile(
+                    imgDir, templateName, ScreenCaptureManager.CAPTURE_SCALE);
+            if (imgFile == null) {
+                Log.w(TAG, "模板在当前倍率(" + ScreenCaptureManager.CAPTURE_SCALE
+                        + ")下不存在，请在相同倍率下重新制作: " + templateName);
                 return null;
             }
+
             Bitmap bitmap = BitmapFactory.decodeFile(imgFile.getAbsolutePath());
             if (bitmap == null) {
                 return null;
@@ -211,16 +216,8 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                 mat.release();
                 return null;
             }
-            // 缩放到 capture 分辨率，与 VirtualDisplay 采集尺寸一致
-            if (ScreenCaptureManager.CAPTURE_SCALE != 1.0f) {
-                Mat scaled = new Mat();
-                Imgproc.resize(mat, scaled, new Size(),
-                        ScreenCaptureManager.CAPTURE_SCALE,
-                        ScreenCaptureManager.CAPTURE_SCALE,
-                        Imgproc.INTER_LINEAR);
-                mat.release();
-                mat = scaled;
-            }
+            // 注意：不再做 resize。模板已在制作时以当前 CAPTURE_SCALE 保存，
+            // 直接与同倍率截图进行匹配，保持最高匹配精度。
             Template.putTaskSingleMatCache(projectName, taskName, templateName, mat);
             return mat;
         } catch (Exception e) {

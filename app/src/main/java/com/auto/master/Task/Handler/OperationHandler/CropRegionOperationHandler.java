@@ -41,7 +41,9 @@ import com.auto.master.auto.ActivityHolder;
 import com.auto.master.auto.AutoAccessibilityService;
 import com.auto.master.auto.ColorPointPickerView;
 import com.auto.master.auto.SelectionOverlayView;
+import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCapture;
+import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.utils.OpenCVHelper;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
@@ -157,7 +159,14 @@ public class CropRegionOperationHandler extends OperationHandler {
             }
         }
     }
-    private void saveImg(Bitmap cropped,Context a,String projectName,String taskName,String saveFileName,List<Integer> stdBbox){
+    private void saveImg(Bitmap cropped, Context a, String projectName, String taskName,
+                         String saveFileName, List<Integer> stdBbox) {
+        saveImg(cropped, a, projectName, taskName, saveFileName, stdBbox, null);
+    }
+
+    private void saveImg(Bitmap cropped, Context a, String projectName, String taskName,
+                         String saveFileName, List<Integer> stdBbox,
+                         @Nullable String targetScaleDir) {
         File projectDir_ = new File(a.getExternalFilesDir(null),"projects");
         File projectDir = new File(projectDir_,projectName);
         File taskDir = new File(projectDir,taskName);
@@ -165,7 +174,24 @@ public class CropRegionOperationHandler extends OperationHandler {
         if (!imgDir.exists()){
             imgDir.mkdirs();
         }
-        File croppedImgFile = new File(imgDir,saveFileName);
+
+        // scale-aware：优先使用调用方传入的 targetScaleDir（替换截图时保持与旧文件同目录），
+        // 否则由当前 CAPTURE_SCALE 决定
+        File scaleDir;
+        if (!android.text.TextUtils.isEmpty(targetScaleDir)) {
+            scaleDir = new File(imgDir, targetScaleDir);
+            if (!scaleDir.exists()) scaleDir.mkdirs();
+        } else {
+            scaleDir = CaptureScaleHelper.getOrCreateScaleImgDir(imgDir, ScreenCaptureManager.CAPTURE_SCALE);
+        }
+
+        File croppedImgFile = new File(scaleDir, saveFileName);
+
+        // 替换旧文件前清除 BitmapManager 的缩略图缓存，确保 UI 刷新后显示新截图
+        com.auto.master.utils.BitmapManager.getInstance().removeBitmap(croppedImgFile.getAbsolutePath());
+        // 同时清除 Template mat 缓存，确保下次匹配使用新模板
+        Template.clearTaskSingleMatCache(projectName, taskName, saveFileName);
+
         try (FileOutputStream fileOutputStream = new FileOutputStream(croppedImgFile, false)) {
             boolean success = cropped.compress(Bitmap.CompressFormat.PNG, 100, fileOutputStream);
             fileOutputStream.flush();
@@ -173,22 +199,19 @@ public class CropRegionOperationHandler extends OperationHandler {
                 Log.d(TAG, "保存模板成功: " + croppedImgFile.getAbsolutePath());
                 toastOnMain("保存模板成功: " + croppedImgFile.getName());
             }
-            // todo 需要保存 manifest.json 文件
             Map<String,List<Integer>> manifest  = new HashMap<>();
             manifest.put(saveFileName,stdBbox);
-            //首先先加载这个已经存在的 文件
             File oldManifest = new File(imgDir, "manifest.json");
             if (oldManifest.exists()){
                 String jsonContent = readFileToString(oldManifest);
                 Type type = new TypeToken<Map<String, List<Integer>>>() {}.getType();
                 Map<String, List<Integer>> existingManifest = new Gson().fromJson(jsonContent, type);
-                // 将现有内容合并到新的 manifest 中
                 if (existingManifest != null) {
                     manifest.putAll(existingManifest);
                     manifest.put(saveFileName,stdBbox);
                     Log.d(TAG, "成功加载现有 manifest.json，包含 " + manifest.size() + " 个条目");
                 }
-            }else {
+            } else {
                 Log.d(TAG, "manifest.json 不存在，将创建新文件");
             }
             saveManifestToFile(manifest, oldManifest);
@@ -564,32 +587,54 @@ public class CropRegionOperationHandler extends OperationHandler {
                                       Context context,
                                       String projectName,
                                       String taskName,
-                                      String saveFileName) {
+                                      String saveFileName,
+                                      @Nullable String targetScaleDir) {
         if (sourceBitmap == null || sourceBitmap.isRecycled() || rect == null) {
             toastOnMain("保存失败：模板区域无效");
             return;
         }
-        Rect safeRect = new Rect(rect);
-        safeRect.left = Math.max(0, Math.min(safeRect.left, sourceBitmap.getWidth() - 1));
-        safeRect.top = Math.max(0, Math.min(safeRect.top, sourceBitmap.getHeight() - 1));
-        safeRect.right = Math.max(safeRect.left + 1, Math.min(safeRect.right, sourceBitmap.getWidth()));
-        safeRect.bottom = Math.max(safeRect.top + 1, Math.min(safeRect.bottom, sourceBitmap.getHeight()));
-        if (safeRect.width() <= 1 || safeRect.height() <= 1) {
+
+        // rect 是 SelectionOverlayView 返回的屏幕坐标（view 坐标系）。
+        // sourceBitmap 是 capture 分辨率下的截图（可能是 540×1168 等缩小版）。
+        // 需要将屏幕坐标转换为 bitmap 坐标后才能正确裁剪。
+        float captureScale = ScreenCaptureManager.CAPTURE_SCALE;
+
+        // 将屏幕坐标转换为 bitmap（capture-scale）坐标用于裁剪。
+        // 必须与 ScreenCaptureManager.sanitizeRoi() 使用相同的截断（floor）方式，
+        // 否则模板尺寸与 screenMat ROI 尺寸会差 1px，导致模板无法匹配。
+        int bitmapLeft   = (int)(rect.left   * captureScale);
+        int bitmapTop    = (int)(rect.top     * captureScale);
+        int bitmapRight  = (int)(rect.right   * captureScale);
+        int bitmapBottom = (int)(rect.bottom  * captureScale);
+
+        // 夹紧到 bitmap 边界
+        bitmapLeft   = Math.max(0, Math.min(bitmapLeft,   sourceBitmap.getWidth() - 1));
+        bitmapTop    = Math.max(0, Math.min(bitmapTop,    sourceBitmap.getHeight() - 1));
+        bitmapRight  = Math.max(bitmapLeft + 1, Math.min(bitmapRight,  sourceBitmap.getWidth()));
+        bitmapBottom = Math.max(bitmapTop + 1,  Math.min(bitmapBottom, sourceBitmap.getHeight()));
+
+        if (bitmapRight - bitmapLeft <= 1 || bitmapBottom - bitmapTop <= 1) {
             toastOnMain("选区太小");
             return;
         }
+
+        // manifest.json 中始终存储屏幕坐标（scale-neutral），
+        // 运行时由 ScreenCaptureManager.sanitizeRoi 统一转换到 capture 坐标
+        Rect safeScreenRect = new Rect(rect);
+
         Bitmap cropped = null;
         try {
             cropped = Bitmap.createBitmap(sourceBitmap,
-                    safeRect.left, safeRect.top, safeRect.width(), safeRect.height());
+                    bitmapLeft, bitmapTop,
+                    bitmapRight - bitmapLeft, bitmapBottom - bitmapTop);
             List<Integer> bbox = Arrays.asList(
-                    safeRect.left,
-                    safeRect.top,
-                    safeRect.width(),
-                    safeRect.height()
+                    safeScreenRect.left,
+                    safeScreenRect.top,
+                    safeScreenRect.width(),
+                    safeScreenRect.height()
             );
-            saveImg(cropped, context, projectName, taskName, saveFileName, bbox);
-            notifyTemplateSaved(projectName, taskName, saveFileName, safeRect);
+            saveImg(cropped, context, projectName, taskName, saveFileName, bbox, targetScaleDir);
+            notifyTemplateSaved(projectName, taskName, saveFileName, safeScreenRect);
         } finally {
             recycleBitmap(cropped);
         }
@@ -639,6 +684,11 @@ public class CropRegionOperationHandler extends OperationHandler {
         } else {
             saveFileName = "fallback.png";
         }
+
+        // 替换截图时传入的目标 scale 子目录（如 "scale_100"），null 表示由当前 CAPTURE_SCALE 决定
+        Object targetScaleDirObj = inputMap.get(MetaOperation.TARGET_SCALE_DIR);
+        String targetScaleDir = targetScaleDirObj instanceof String
+                ? (String) targetScaleDirObj : null;
 
         final Activity a = ActivityHolder.getTopActivity();
 
@@ -743,12 +793,12 @@ public class CropRegionOperationHandler extends OperationHandler {
                     safeRemove(wm, overlay);
                     promptTemplateSaveMode(ctx1, coarseRect,
                             () -> {
-                                saveTemplateFromRect(finalFull, coarseRect, ctx1, projectName, taskName, saveFileName);
+                                saveTemplateFromRect(finalFull, coarseRect, ctx1, projectName, taskName, saveFileName, targetScaleDir);
                                 recycleBitmap(finalFull);
                             },
                             () -> showTemplateRefinePointPicker(ctx1, wm, finalFull, coarseRect,
                                     finalRect -> {
-                                        saveTemplateFromRect(finalFull, finalRect, ctx1, projectName, taskName, saveFileName);
+                                        saveTemplateFromRect(finalFull, finalRect, ctx1, projectName, taskName, saveFileName, targetScaleDir);
                                         recycleBitmap(finalFull);
                                     },
                                     () -> {
@@ -777,7 +827,7 @@ public class CropRegionOperationHandler extends OperationHandler {
                 safeRemove(wm, overlay);
                 showTemplateRefinePointPicker(ctx1, wm, finalFull, coarseRect,
                         finalRect -> {
-                            saveTemplateFromRect(finalFull, finalRect, ctx1, projectName, taskName, saveFileName);
+                            saveTemplateFromRect(finalFull, finalRect, ctx1, projectName, taskName, saveFileName, targetScaleDir);
                             recycleBitmap(finalFull);
                         },
                         () -> {

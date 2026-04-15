@@ -12,7 +12,11 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
+
+import com.auto.master.capture.CaptureScaleHelper;
+import com.auto.master.capture.ScreenCaptureManager;
 
 import java.io.File;
 import java.io.FileOutputStream;
@@ -46,14 +50,32 @@ public class CropCaptureActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT
         ));
 
-        // 底部栏（输入框 + 取消/确定）
+        // 底部栏（倍率提示 + 输入框 + 取消/确定）
         LinearLayout bar = new LinearLayout(this);
-        bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setPadding(dp(12), dp(10), dp(12), dp(10));
-        bar.setGravity(Gravity.CENTER_VERTICAL);
+        bar.setOrientation(LinearLayout.VERTICAL);
+        bar.setPadding(dp(12), dp(6), dp(12), dp(10));
         bar.setBackgroundColor(0xCC000000);
 
-        EditText nameInput = new EditText(this);
+        // 当前采集倍率提示
+        TextView tvScale = new TextView(this);
+        float currentScale = ScreenCaptureManager.CAPTURE_SCALE;
+        tvScale.setText("当前采集倍率: " + CaptureScaleHelper.getScaleDirName(currentScale)
+                + "  (模板将保存至 templates/" + CaptureScaleHelper.getScaleDirName(currentScale) + "/)");
+        tvScale.setTextColor(0xFFFFCC00);
+        tvScale.setTextSize(11f);
+        tvScale.setPadding(0, 0, 0, dp(4));
+        bar.addView(tvScale, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        LinearLayout inputRow = new LinearLayout(this);
+        inputRow.setOrientation(LinearLayout.HORIZONTAL);
+        inputRow.setGravity(Gravity.CENTER_VERTICAL);
+        bar.addView(inputRow, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        EditText nameInput = new EditText(inputRow.getContext());
         nameInput.setText(defaultName);
         nameInput.setSingleLine(true);
         nameInput.setHint("图片名");
@@ -65,7 +87,7 @@ public class CropCaptureActivity extends Activity {
         LinearLayout.LayoutParams nameLp = new LinearLayout.LayoutParams(
                 0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f
         );
-        bar.addView(nameInput, nameLp);
+        inputRow.addView(nameInput, nameLp);
 
         Button btnCancel = new Button(this);
         btnCancel.setText("取消");
@@ -79,8 +101,8 @@ public class CropCaptureActivity extends Activity {
         );
         btnLp.leftMargin = dp(10);
 
-        bar.addView(btnCancel, btnLp);
-        bar.addView(btnOk, btnLp);
+        inputRow.addView(btnCancel, btnLp);
+        inputRow.addView(btnOk, btnLp);
 
         FrameLayout.LayoutParams barLp = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
@@ -113,7 +135,10 @@ public class CropCaptureActivity extends Activity {
             try {
                 Bitmap cropped = Bitmap.createBitmap(bmp, r.left, r.top, r.width(), r.height());
 
-                File dir = new File(getExternalFilesDir(null), "templates");
+                // Save to scale-aware subdir: templates/scale_{key}/
+                float saveScale = ScreenCaptureManager.CAPTURE_SCALE;
+                File baseDir = new File(getExternalFilesDir(null), "templates");
+                File dir = new File(baseDir, CaptureScaleHelper.getScaleDirName(saveScale));
                 dir.mkdirs();
 
                 // 自动补 .png

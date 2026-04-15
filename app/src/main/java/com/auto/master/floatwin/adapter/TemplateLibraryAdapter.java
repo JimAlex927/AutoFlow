@@ -42,13 +42,36 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
 
     public static class TemplateLibraryItem {
         public String fileName;
+        /** Scale subdir this template lives in, e.g. "scale_100". Null for legacy flat-dir files. */
+        public String scaleDirName;
         public File file;
+        /** For folder items: number of templates in the folder. For template items: node reference count. */
         public int usageCount;
+        /** True if this item represents a scale directory (folder), not a template file. */
+        public boolean isFolder;
 
         public TemplateLibraryItem(String fileName, File file, int usageCount) {
+            this(fileName, null, file, usageCount);
+        }
+
+        public TemplateLibraryItem(String fileName, String scaleDirName, File file, int usageCount) {
             this.fileName = fileName;
+            this.scaleDirName = scaleDirName;
             this.file = file;
             this.usageCount = usageCount;
+            this.isFolder = false;
+        }
+
+        /** Unique key combining scale dir + filename, used for identity. */
+        public String getKey() {
+            return android.text.TextUtils.isEmpty(scaleDirName)
+                    ? fileName
+                    : scaleDirName + "/" + fileName;
+        }
+
+        /** Display label: bare filename for template items, dir name for folder items. */
+        public String getDisplayName() {
+            return fileName;
         }
     }
 
@@ -106,8 +129,15 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
         return selectedNames.size();
     }
 
+    /** Returns bare filenames (e.g. "foo.png") of selected items, deduplicated. */
     public Set<String> getSelectedFileNames() {
-        return new HashSet<>(selectedNames);
+        Set<String> names = new HashSet<>();
+        for (TemplateLibraryItem item : allItems) {
+            if (selectedNames.contains(item.getKey())) {
+                names.add(item.fileName);
+            }
+        }
+        return names;
     }
 
     public void selectItem(String fileName) {
@@ -119,6 +149,17 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
                 notifyItemChanged(position);
             }
         }
+    }
+
+    /** Returns the selected items (each has fileName + scaleDirName). */
+    public List<TemplateLibraryItem> getSelectedItems() {
+        List<TemplateLibraryItem> result = new ArrayList<>();
+        for (TemplateLibraryItem item : allItems) {
+            if (selectedNames.contains(item.getKey())) {
+                result.add(item);
+            }
+        }
+        return result;
     }
 
     public void setSelectionChangedListener(OnSelectionChangedListener listener) {
@@ -156,7 +197,26 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         TemplateLibraryItem item = shownItems.get(position);
-        holder.tvName.setText(item.fileName);
+
+        if (item.isFolder) {
+            // ---- 文件夹条目 ----
+            holder.ivImage.setImageBitmap(null);
+            holder.ivImage.setBackgroundColor(0xFF2A5298); // 蓝色背景代表文件夹
+            holder.tvName.setText(item.fileName);
+            holder.tvMeta.setText(item.usageCount + " 个模板");
+            holder.tvMeta.setTextColor(0xFF4e5f74);
+            holder.checkBox.setVisibility(View.GONE);
+            holder.btnDelete.setVisibility(View.GONE);
+            holder.itemView.setOnClickListener(v -> {
+                if (listener != null) listener.onPick(item);
+            });
+            holder.checkBox.setOnClickListener(null);
+            return;
+        }
+
+        // ---- 普通模板条目 ----
+        holder.ivImage.setBackgroundColor(0);
+        holder.tvName.setText(item.getDisplayName());
         if (item.usageCount > 0) {
             holder.tvMeta.setText("引用节点: " + item.usageCount + " (受保护)");
             holder.tvMeta.setTextColor(0xFFB23B3B);
@@ -168,7 +228,7 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
                 ? null
                 : bitmapManager.loadThumbnail(item.file.getAbsolutePath(), 160, 120));
         holder.checkBox.setVisibility(batchMode ? View.VISIBLE : View.GONE);
-        holder.checkBox.setChecked(selectedNames.contains(item.fileName));
+        holder.checkBox.setChecked(selectedNames.contains(item.getKey()));
         holder.checkBox.setClickable(false);
         holder.checkBox.setFocusable(false);
         holder.btnDelete.setVisibility(deleteActionEnabled && !batchMode ? View.VISIBLE : View.GONE);
@@ -192,12 +252,13 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
         if (item == null || TextUtils.isEmpty(item.fileName)) {
             return;
         }
-        if (selectedNames.contains(item.fileName)) {
-            selectedNames.remove(item.fileName);
+        String key = item.getKey();
+        if (selectedNames.contains(key)) {
+            selectedNames.remove(key);
         } else {
-            selectedNames.add(item.fileName);
+            selectedNames.add(key);
         }
-        boolean checked = selectedNames.contains(item.fileName);
+        boolean checked = selectedNames.contains(key);
         if (target != null) {
             target.updateChecked(checked);
         }
@@ -257,16 +318,14 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
         public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
             TemplateLibraryItem oldItem = oldItems.get(oldItemPosition);
             TemplateLibraryItem newItem = newItems.get(newItemPosition);
-            String oldPath = oldItem.file == null ? oldItem.fileName : oldItem.file.getAbsolutePath();
-            String newPath = newItem.file == null ? newItem.fileName : newItem.file.getAbsolutePath();
-            return TextUtils.equals(oldPath, newPath);
+            return TextUtils.equals(oldItem.getKey(), newItem.getKey());
         }
 
         @Override
         public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
             TemplateLibraryItem oldItem = oldItems.get(oldItemPosition);
             TemplateLibraryItem newItem = newItems.get(newItemPosition);
-            return TextUtils.equals(oldItem.fileName, newItem.fileName)
+            return TextUtils.equals(oldItem.getKey(), newItem.getKey())
                     && oldItem.usageCount == newItem.usageCount;
         }
     }
