@@ -48,15 +48,4 @@ public class ConditionBranchResponseHandler extends DefaultResponseHandler {
         scriptExecuteContext.tobeHandledOperation = task.getOperationMap().get(nextId);
     }
 
-    private Task resolveTaskByOperationId(Map<String, Task> taskMap, String operationId) {
-        if (taskMap == null || operationId == null) {
-            return null;
-        }
-        for (Task t : taskMap.values()) {
-            if (t != null && t.getOperationMap() != null && t.getOperationMap().containsKey(operationId)) {
-                return t;
-            }
-        }
-        return null;
-    }
 }

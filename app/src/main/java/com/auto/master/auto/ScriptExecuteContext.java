@@ -3,7 +3,8 @@ package com.auto.master.auto;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
 
-import java.util.Stack;
+import java.util.ArrayDeque;
+import java.util.Deque;
 
 public class ScriptExecuteContext {
 
@@ -25,8 +26,9 @@ public class ScriptExecuteContext {
     public volatile boolean stopped = false;
 
     // 返回栈：用于 Task 跳转后返回原 Task
-    // 栈中保存的是跳转操作本身，子 Task 执行完后恢复它，让它决定下一步
-    public Stack<MetaOperation> returnStack = new Stack<>();
+    // 使用 ArrayDeque 代替 Stack（Stack 继承 Vector，每次操作都加锁；
+    // returnStack 只在单一脚本执行线程访问，不需要同步）
+    public Deque<MetaOperation> returnStack = new ArrayDeque<>();
 
     // 标记是否刚从子 Task 返回（用于 JumpTaskOperation 判断）
     public volatile boolean justReturnedFromSubTask = false;

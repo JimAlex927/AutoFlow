@@ -1,11 +1,7 @@
 package com.auto.master.Task.Handler.OperationHandler;
 
-import static org.opencv.android.NativeCameraView.TAG;
-
 import android.app.Activity;
 import android.content.Context;
-import android.os.Handler;
-import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 
@@ -33,10 +29,9 @@ import java.util.Map;
  */
 public class GestureOperationHandler extends OperationHandler {
 
+    private static final String TAG = "GestureOperationHandler";
     // Gson 实例是线程安全的，静态复用避免每次反射初始化
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
-    // 复用主线程 Handler，避免每次 handle() 重新构造
-    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
 
     GestureOperationHandler() {
         this.setType(5);
@@ -117,7 +112,7 @@ public class GestureOperationHandler extends OperationHandler {
 
         if (obj.getResponseType() == 1) {
             // 录制模式
-            MAIN_HANDLER.post(() -> {
+            getMainHandler().post(() -> {
                 Activity topActivity = ActivityHolder.getTopActivity();
                 if (topActivity == null || topActivity.isFinishing()) {
                     Log.w(TAG, "沒有可用的 Activity，無法開始手勢錄製");
@@ -125,7 +120,7 @@ public class GestureOperationHandler extends OperationHandler {
                 }
 
                 svc.startGestureRecording(externalNode -> {
-                    MAIN_HANDLER.postDelayed(() -> {
+                    getMainHandler().postDelayed(() -> {
                         svc.replayGesture(externalNode, null);
                         saveGestureData(externalNode, topActivity, projectName, taskName, gestureTemplateId);
                         if (!TextUtils.equals(gestureTemplateId, saveFileName)) {
@@ -165,7 +160,7 @@ public class GestureOperationHandler extends OperationHandler {
             final boolean[] callbackInvoked = new boolean[]{false};
 
             // 先显示手势轨迹
-            MAIN_HANDLER.post(() -> svc.showGestureTrail(finalGestureNode));
+            getMainHandler().post(() -> svc.showGestureTrail(finalGestureNode));
             
             // 在同步块内调用 replayGesture，确保 wait 在 notify 之前
             synchronized (lock) {

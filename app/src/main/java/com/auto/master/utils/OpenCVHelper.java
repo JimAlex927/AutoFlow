@@ -62,6 +62,11 @@ public class OpenCVHelper {
     // 复用灰度搜索图 Mat：fastSingleMatch 热路径灰度转换时避免每次分配
     private static final ThreadLocal<Mat> sGraySearchMat = new ThreadLocal<>();
 
+    // scaleFactor 路径专用中间 Mat，避免每帧分配 scaled 和 gray 临时对象
+    private static final ThreadLocal<Mat> sScaledSearchMat   = new ThreadLocal<>();
+    private static final ThreadLocal<Mat> sScaledTemplateMat = new ThreadLocal<>();
+    private static final ThreadLocal<Mat> sGrayTemplateMat   = new ThreadLocal<>();
+
     // NMS 循环复用 Scalar，避免热路径每次 new 对象
     private static final Scalar SCALAR_ZERO = new Scalar(0);
     private static final Scalar SCALAR_SUPPRESS_POS = new Scalar(1e10);
@@ -583,13 +588,18 @@ public class OpenCVHelper {
             return fastSingleMatch(screenMat, templateMat, roi, threshold);
         }
         // scaleFactor ∈ (0, 1): 缩放后匹配，结果坐标还原
-        Mat roiSubmat      = null;
-        Mat scaledSearch   = null;
-        Mat scaledTemplate = null;
-        Mat graySearch     = null;
-        Mat grayTemplate   = null;
+        // 中间 Mat 均复用 ThreadLocal，避免每次轮询都在 native heap 分配/释放
+        Mat roiSubmat = null;
         Mat result = sResultMat.get();
         if (result == null) { result = new Mat(); sResultMat.set(result); }
+        Mat scaledSearch = sScaledSearchMat.get();
+        if (scaledSearch == null) { scaledSearch = new Mat(); sScaledSearchMat.set(scaledSearch); }
+        Mat scaledTemplate = sScaledTemplateMat.get();
+        if (scaledTemplate == null) { scaledTemplate = new Mat(); sScaledTemplateMat.set(scaledTemplate); }
+        Mat graySearch = sGraySearchMat.get();
+        if (graySearch == null) { graySearch = new Mat(); sGraySearchMat.set(graySearch); }
+        Mat grayTemplate = sGrayTemplateMat.get();
+        if (grayTemplate == null) { grayTemplate = new Mat(); sGrayTemplateMat.set(grayTemplate); }
         Point roiOffset = new Point(0, 0);
 
         try {
@@ -609,8 +619,7 @@ public class OpenCVHelper {
                 roiOffset    = new Point(x, y);
             }
 
-            scaledSearch   = new Mat();
-            scaledTemplate = new Mat();
+            // resize 写入 ThreadLocal Mat（内部按需重新分配 native 内存，同尺寸时复用）
             Imgproc.resize(searchSource, scaledSearch,   new Size(), scaleFactor, scaleFactor, Imgproc.INTER_LINEAR);
             Imgproc.resize(templateMat,  scaledTemplate, new Size(), scaleFactor, scaleFactor, Imgproc.INTER_LINEAR);
 
@@ -622,8 +631,6 @@ public class OpenCVHelper {
 
             int sCode = scaledSearch.channels()   == 3 ? Imgproc.COLOR_BGR2GRAY : Imgproc.COLOR_RGBA2GRAY;
             int tCode = scaledTemplate.channels() == 3 ? Imgproc.COLOR_BGR2GRAY : Imgproc.COLOR_RGBA2GRAY;
-            graySearch   = new Mat();
-            grayTemplate = new Mat();
             Imgproc.cvtColor(scaledSearch,   graySearch,   sCode);
             Imgproc.cvtColor(scaledTemplate, grayTemplate, tCode);
 
@@ -639,12 +646,9 @@ public class OpenCVHelper {
             Log.e(TAG, "fastSingleMatch(scale)异常", t);
             return new Point(-1, -1);
         } finally {
-            if (roiSubmat      != null) roiSubmat.release();
-            if (scaledSearch   != null) scaledSearch.release();
-            if (scaledTemplate != null) scaledTemplate.release();
-            if (graySearch     != null) graySearch.release();
-            if (grayTemplate   != null) grayTemplate.release();
-            // result 来自 ThreadLocal，不 release
+            // 所有中间 Mat 均来自 ThreadLocal，不 release（留下次复用）
+            // 唯一需要释放的是 ROI submat 引用
+            if (roiSubmat != null) roiSubmat.release();
         }
     }
 
@@ -691,15 +695,17 @@ public class OpenCVHelper {
             searchMat = screenMat;
         }
 
-        // 缩放
-        Mat scaledSearch = new Mat();
-        Mat scaledTemplate = new Mat();
+        // 缩放（scaled=false 时不分配新 Mat，直接引用，避免 new Mat 后覆盖变量导致泄漏）
         boolean scaled = (scaleFactor < 1.0 && scaleFactor > 0.1);
+        Mat scaledSearch;
+        Mat scaledTemplate;
         if (scaled) {
-            Imgproc.resize(searchMat, scaledSearch, new Size(), scaleFactor, scaleFactor, Imgproc.INTER_LINEAR);
+            scaledSearch   = new Mat();
+            scaledTemplate = new Mat();
+            Imgproc.resize(searchMat,   scaledSearch,   new Size(), scaleFactor, scaleFactor, Imgproc.INTER_LINEAR);
             Imgproc.resize(templateMat, scaledTemplate, new Size(), scaleFactor, scaleFactor, Imgproc.INTER_LINEAR);
         } else {
-            scaledSearch = searchMat;
+            scaledSearch   = searchMat;
             scaledTemplate = templateMat;
         }
 

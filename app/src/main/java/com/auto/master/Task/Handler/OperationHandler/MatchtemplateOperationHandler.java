@@ -110,21 +110,22 @@ public class MatchtemplateOperationHandler extends OperationHandler {
                     pollingController.sleepUntilNextIteration(loopStartMs);
                     continue;
                 }
-                // capture 坐标 → screen 坐标
-                float invScale = 1.0f / ScreenCaptureManager.CAPTURE_SCALE;
-                position.x = (int)(position.x * invScale);
-                position.y = (int)(position.y * invScale);
+                ScreenCaptureManager captureManager = ScreenCaptureManager.getInstance();
+                float invScaleX = captureManager.getActualInvScaleX();
+                float invScaleY = captureManager.getActualInvScaleY();
+                Point screenPosition = new Point(
+                        Math.round(position.x * invScaleX),
+                        Math.round(position.y * invScaleY));
                 if (captureRoi != null) {
-                    position.x += captureRoi.left;
-                    position.y += captureRoi.top;
+                    screenPosition.x += captureRoi.left;
+                    screenPosition.y += captureRoi.top;
                 }
-                firstMatch = new MatchResult(position, 1);
-                // templateMat 已缩放为 capture 分辨率，宽高换算回 screen 分辨率
+                firstMatch = new MatchResult(screenPosition, 1);
                 matchedBbox = java.util.Arrays.asList(
-                        (int) position.x,
-                        (int) position.y,
-                        (int)(templateMat.width()  * invScale),
-                        (int)(templateMat.height() * invScale));
+                        (int) screenPosition.x,
+                        (int) screenPosition.y,
+                        Math.round(templateMat.width() * invScaleX),
+                        Math.round(templateMat.height() * invScaleY));
                 matched = true;
                 pollingController.onHit();
                 break;

@@ -107,8 +107,13 @@ final class VariableRuntimeUtils {
         if (template == null) {
             return "";
         }
+        // Fast-path: no placeholder marker → return as-is
+        if (template.indexOf("${") < 0) {
+            return template;
+        }
         if (variables == null || variables.isEmpty()) {
-            return template.replaceAll("\\$\\{[A-Za-z0-9_]+\\}", "");
+            // Reuse static pattern instead of recompiling via String.replaceAll
+            return TEMPLATE_PATTERN.matcher(template).replaceAll("");
         }
         Matcher matcher = TEMPLATE_PATTERN.matcher(template);
         StringBuffer buffer = new StringBuffer();

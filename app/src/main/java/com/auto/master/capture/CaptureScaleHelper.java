@@ -71,7 +71,7 @@ public final class CaptureScaleHelper {
 
     public static float loadScale(Context context) {
         return context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-                      .getFloat(PREF_KEY, 1.0f);
+                      .getFloat(PREF_KEY, 0.5f);
     }
 
     // ─────────────────────────────────────────────────────────────────────────

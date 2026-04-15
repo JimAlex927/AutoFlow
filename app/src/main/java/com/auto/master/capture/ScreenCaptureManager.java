@@ -101,7 +101,7 @@ public class ScreenCaptureManager {
     /**
      * 1s 4个frames = 1000/4 = 250ms，降低采集频率减少发热
      */
-    private static final int MAX_POLLS_PER_SECOND = 4;
+    private static final int MAX_POLLS_PER_SECOND = 8;
     private static final int MAX_CONSECUTIVE_FRAME_ERRORS = 7;
     private static final long MAX_STALE_FRAME_AGE_MS = 500L;
     private static final long FRAME_HEALTH_CHECK_INTERVAL_MS = 1200L;
@@ -183,9 +183,7 @@ public class ScreenCaptureManager {
 
         // 从持久化存储恢复上次保存的倍率
 //        CAPTURE_SCALE = CaptureScaleHelper.loadScale(appContext);
-
         CAPTURE_SCALE = 0.4f;
-
         updateScreenMetrics(activity);
         lastRotation = getCurrentPhysicalRotation(activity);
 
@@ -889,22 +887,123 @@ public class ScreenCaptureManager {
         }
     }
 
+    // ─────────────────────────────────────────────────────────────────────────
+    //  实际轴向缩放系数（修正 16-byte 对齐后 captureSize ≠ screenSize × CAPTURE_SCALE 引起的坐标误差）
+    // ─────────────────────────────────────────────────────────────────────────
+
+    /**
+     * 实际 screen→capture 的 X 轴缩小倍率。
+     * 等价于 captureWidth/screenWidth，而非直接用 CAPTURE_SCALE。
+     */
+    public float getActualScaleX() {
+        return (screenWidth > 0 && captureWidth > 0)
+                ? (float) captureWidth / screenWidth
+                : CAPTURE_SCALE;
+    }
+
+    /**
+     * 实际 screen→capture 的 Y 轴缩小倍率。
+     */
+    public float getActualScaleY() {
+        return (screenHeight > 0 && captureHeight > 0)
+                ? (float) captureHeight / screenHeight
+                : CAPTURE_SCALE;
+    }
+
+    /**
+     * 实际 capture→screen 的 X 轴放大倍率。
+     */
+    public float getActualInvScaleX() {
+        return (screenWidth > 0 && captureWidth > 0)
+                ? (float) screenWidth / captureWidth
+                : (CAPTURE_SCALE > 0 ? 1.0f / CAPTURE_SCALE : 1.0f);
+    }
+
+    /**
+     * 实际 capture→screen 的 Y 轴放大倍率。
+     */
+    public float getActualInvScaleY() {
+        return (screenHeight > 0 && captureHeight > 0)
+                ? (float) screenHeight / captureHeight
+                : (CAPTURE_SCALE > 0 ? 1.0f / CAPTURE_SCALE : 1.0f);
+    }
+
     /**
      * 将 screen 坐标系的 ROI 转换为 capture 坐标系，并夹紧到 capture 分辨率。
      * handlers 传入的 roi 始终使用 screen 坐标；ScreenCaptureManager 内部统一用 capture 坐标。
+     * 使用实际轴向缩放系数而非 CAPTURE_SCALE，消除 16-byte 对齐引入的坐标系统性误差。
      */
-    private Rect sanitizeRoi(Rect roi) {
+    public int screenToCaptureX(int screenX) {
+        return scaleEdgeFloor(screenX, screenWidth, captureWidth);
+    }
+
+    public int screenToCaptureY(int screenY) {
+        return scaleEdgeFloor(screenY, screenHeight, captureHeight);
+    }
+
+    /**
+     * 将 capture 边界映射回 screen 边界，并保证再次经过 screenToCaptureX/Y 后仍落回同一 capture 边界。
+     */
+    public int captureToScreenX(int captureX) {
+        return scaleEdgeCeil(captureX, captureWidth, screenWidth);
+    }
+
+    public int captureToScreenY(int captureY) {
+        return scaleEdgeCeil(captureY, captureHeight, screenHeight);
+    }
+
+    public Rect toCaptureRect(Rect roi) {
         if (roi == null) {
             return null;
         }
-        int left   = Math.max(0, (int)(roi.left   * CAPTURE_SCALE));
-        int top    = Math.max(0, (int)(roi.top    * CAPTURE_SCALE));
-        int right  = Math.min(captureWidth,  (int)(roi.right  * CAPTURE_SCALE));
-        int bottom = Math.min(captureHeight, (int)(roi.bottom * CAPTURE_SCALE));
+        int left = screenToCaptureX(roi.left);
+        int top = screenToCaptureY(roi.top);
+        int right = screenToCaptureX(roi.right);
+        int bottom = screenToCaptureY(roi.bottom);
         if (right <= left || bottom <= top) {
             return null;
         }
         return new Rect(left, top, right, bottom);
+    }
+
+    public Rect toScreenRect(Rect captureRect) {
+        if (captureRect == null) {
+            return null;
+        }
+        int left = captureToScreenX(captureRect.left);
+        int top = captureToScreenY(captureRect.top);
+        int right = captureToScreenX(captureRect.right);
+        int bottom = captureToScreenY(captureRect.bottom);
+        if (right <= left || bottom <= top) {
+            return null;
+        }
+        return new Rect(left, top, right, bottom);
+    }
+
+    private Rect sanitizeRoi(Rect roi) {
+        return toCaptureRect(roi);
+    }
+
+    private static int scaleEdgeFloor(int edge, int sourceSize, int targetSize) {
+        if (sourceSize <= 0 || targetSize <= 0) {
+            return 0;
+        }
+        long clamped = Math.max(0L, Math.min((long) edge, (long) sourceSize));
+        return (int) ((clamped * targetSize) / sourceSize);
+    }
+
+    private static int scaleEdgeCeil(int edge, int sourceSize, int targetSize) {
+        if (sourceSize <= 0 || targetSize <= 0) {
+            return 0;
+        }
+        long clamped = Math.max(0L, Math.min((long) edge, (long) sourceSize));
+        if (clamped <= 0L) {
+            return 0;
+        }
+        if (clamped >= sourceSize) {
+            return targetSize;
+        }
+        return (int) (((clamped * targetSize) + sourceSize - 1L) / sourceSize);
     }
 
     private boolean isFullScreenRoi(Rect roi) {

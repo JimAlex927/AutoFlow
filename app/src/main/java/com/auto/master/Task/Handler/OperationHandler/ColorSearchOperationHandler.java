@@ -164,12 +164,14 @@ public class ColorSearchOperationHandler extends OperationHandler {
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
         int maxX = -1, maxY = -1;
 
-        // 用与 sanitizeRoi 相同的截断方式计算 capture 起点，
-        // 再从 capture 坐标折回 screen，消除浮点截断引起的系统性偏移。
-        float scale = ScreenCaptureManager.CAPTURE_SCALE;
-        float invScale = scale > 0f ? 1.0f / scale : 1.0f;
-        int capOriginX = (int)(offsetX * scale);   // 与 sanitizeRoi 的 left 计算一致
-        int capOriginY = (int)(offsetY * scale);   // 与 sanitizeRoi 的 top 计算一致
+        // 使用实际轴向缩放系数（修正 16-byte 对齐后 captureSize ≠ screenSize × CAPTURE_SCALE）
+        ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
+        float scaleX   = mgr.getActualScaleX();
+        float scaleY   = mgr.getActualScaleY();
+        float invScaleX = scaleX > 0f ? 1.0f / scaleX : 1.0f;
+        float invScaleY = scaleY > 0f ? 1.0f / scaleY : 1.0f;
+        int capOriginX = (int)(offsetX * scaleX);   // 与 sanitizeRoi 的 left 计算一致
+        int capOriginY = (int)(offsetY * scaleY);   // 与 sanitizeRoi 的 top 计算一致
 
         for (int row = 0; row < h; row++) {
             int rowBase = row * w * ch;
@@ -188,8 +190,8 @@ public class ColorSearchOperationHandler extends OperationHandler {
                 matchedPixels++;
                 // (x+col, y+row) 是相对于 submat 的 capture 偏移，
                 // 加上 capture 起点后除以 scale 得到绝对 screen 坐标。
-                int px = (int)((capOriginX + x + col) * invScale);
-                int py = (int)((capOriginY + y + row) * invScale);
+                int px = (int)((capOriginX + x + col) * invScaleX);
+                int py = (int)((capOriginY + y + row) * invScaleY);
                 if (px < minX) minX = px;
                 if (py < minY) minY = py;
                 if (px > maxX) maxX = px;
@@ -207,17 +209,6 @@ public class ColorSearchOperationHandler extends OperationHandler {
         }
         return new SearchResult(matched, matchedPixels, matchedBbox);
     }
-    private int computeMaxChannelDiff(int expected, int actual) {
-        int dr = Math.abs(Color.red(expected) - Color.red(actual));
-        int dg = Math.abs(Color.green(expected) - Color.green(actual));
-        int db = Math.abs(Color.blue(expected) - Color.blue(actual));
-        return Math.max(dr, Math.max(dg, db));
-    }
-
-    private int clampColor(int value) {
-        return Math.max(0, Math.min(255, value));
-    }
-
     private List<Integer> parseBbox(Object raw) {
         if (!(raw instanceof List)) {
             return null;

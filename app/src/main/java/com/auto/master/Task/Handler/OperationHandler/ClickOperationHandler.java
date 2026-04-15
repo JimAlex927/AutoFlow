@@ -1,9 +1,5 @@
 package com.auto.master.Task.Handler.OperationHandler;
 
-import static org.opencv.android.NativeCameraView.TAG;
-
-import android.os.Handler;
-import android.os.Looper;
 import android.util.Log;
 
 import com.auto.master.Task.Operation.ClickOperation;
@@ -27,7 +23,6 @@ public class ClickOperationHandler extends OperationHandler {
     private static final long FAST_DISPATCH_TIMEOUT_MS = 250L;
     private static final long FAST_SETTLE_MS = 32L;
     private static final long STRICT_WAIT_TIMEOUT_MS = 3000L;
-    private static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
     // 静态缓存：避免 extractNumbers() 每次调用都重新编译正则
     private static final Pattern COORD_PATTERN = Pattern.compile("(-?\\d+)\\D+(-?\\d+)");
 
@@ -71,11 +66,11 @@ public class ClickOperationHandler extends OperationHandler {
                 int num2 = Integer.parseInt(matcher.group(2));
                 return new int[]{num1, num2};
             } catch (NumberFormatException e) {
-                System.err.println("click target parse failed: " + e.getMessage());
+                Log.w(CLICK_TAG, "click target parse failed: " + e.getMessage());
                 return null;
             }
         } else {
-            System.err.println("click target format invalid, expected forms like 100,200 or (100,200)");
+            Log.w(CLICK_TAG, "click target format invalid, expected forms like 100,200 or (100,200)");
             return null;
         }
     }
@@ -97,16 +92,16 @@ public class ClickOperationHandler extends OperationHandler {
         ClickResult result = new ClickResult();
         ClickConfig config = resolveClickConfig(inputMap);
 
-        MAIN_HANDLER.post(() -> {
+        getMainHandler().post(() -> {
             svc.showClickFeedback((int) p.x, (int) p.y, 280);
             boolean accepted = svc.click((int) p.x, (int) p.y,
                     () -> {
                         notifyCompletion(result, true);
-                        Log.d(TAG, "click completed");
+                        Log.d(CLICK_TAG, "click completed");
                     },
                     () -> {
                         notifyCompletion(result, false);
-                        Log.w(TAG, "click cancelled");
+                        Log.w(CLICK_TAG, "click cancelled");
                     }
             );
             notifyDispatch(result, accepted);

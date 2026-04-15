@@ -1,8 +1,6 @@
 package com.auto.master.Task.Handler.ResponseHandler;
 
 
-import static org.opencv.android.NativeCameraView.TAG;
-
 import android.os.SystemClock;
 import android.util.Log;
 
@@ -23,10 +21,12 @@ import org.apache.commons.lang3.StringUtils;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Random;
+import java.util.concurrent.ThreadLocalRandom;
 
 //@TYPE = 1   用于 模板匹配专用
 public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHandler {
+
+    private static final String TAG = "MatchTemplateDynJump";
 
     public MatchTemplateDynamicJumpResponseHandler() {
         this.type = 1;
@@ -64,10 +64,9 @@ public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHand
             width = Math.max(1, width);  // 最小宽度为1
             height = Math.max(1, height); // 最小高度为1
 
-            // 生成随机坐标
-            Random random = new Random();
-            int randomX = x + random.nextInt(width);   // x ~ x+width-1
-            int randomY = y + random.nextInt(height);  // y ~ y+height-1
+            // 生成随机坐标（ThreadLocalRandom 无竞争，无需每次构造 Random 对象）
+            int randomX = x + ThreadLocalRandom.current().nextInt(width);   // x ~ x+width-1
+            int randomY = y + ThreadLocalRandom.current().nextInt(height);  // y ~ y+height-1
 
             // 返回结果
             List<Integer> randomPoint = new ArrayList<>();
@@ -157,7 +156,7 @@ public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHand
                             target = new Point(bbox.get(0), bbox.get(1));
                         }
                         //        先画区域
-                        new android.os.Handler(android.os.Looper.getMainLooper()).post(() -> {
+                        MAIN_HANDLER.post(() -> {
                             svc.showClickFeedback((int) target.x, (int) target.y, 280);
                         });
                         try {
@@ -245,18 +244,6 @@ public class MatchTemplateDynamicJumpResponseHandler extends DefaultResponseHand
         }
         // 非 Map 响应直接终止，避免沿用旧节点造成假死
 
-    }
-
-    private Task resolveTaskByOperationId(Map<String, Task> taskMap, String operationId) {
-        if (taskMap == null || operationId == null) {
-            return null;
-        }
-        for (Task t : taskMap.values()) {
-            if (t != null && t.getOperationMap() != null && t.getOperationMap().containsKey(operationId)) {
-                return t;
-            }
-        }
-        return null;
     }
 
     private long parseDelayMs(Object raw) {

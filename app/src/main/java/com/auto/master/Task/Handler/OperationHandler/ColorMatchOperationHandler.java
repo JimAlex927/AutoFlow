@@ -53,7 +53,10 @@ public class ColorMatchOperationHandler extends OperationHandler {
 
         boolean matched = false;
         List<Integer> matchedPoint = null;
-        List<Map<String, Object>> pointResults = new ArrayList<>();
+        // 在轮询循环外预分配结果数组，避免每次迭代在内层循环调用 toMap() 分配 HashMap。
+        // toMap() 只在循环退出后调用一次，将最后一次评估结果转为响应 Map。
+        final int ruleCount = rules.size();
+        PointMatchResult[] lastResults = new PointMatchResult[ruleCount];
         // Always use the full frame — single-point ROIs collapse at scale<1.0 causing
         // sanitizeRoi() to return null while captureRoi is still non-null, which makes
         // evaluate() subtract the wrong offset and read pixel (0,0) instead of the target.
@@ -72,16 +75,16 @@ public class ColorMatchOperationHandler extends OperationHandler {
                 continue;
             }
 
-            pointResults.clear();
             int matchedCount = 0;
             List<Integer> firstMatchedPoint = null;
-            for (PointRule rule : rules) {
+            for (int i = 0; i < ruleCount; i++) {
+                PointRule rule = rules.get(i);
                 PointMatchResult result = evaluate(screenMat, rule);
-                pointResults.add(result.toMap());
+                lastResults[i] = result;  // 保存本轮结果，用于循环结束后构建响应
                 if (result.matched) {
                     matchedCount++;
                     if (firstMatchedPoint == null) {
-                        firstMatchedPoint = new ArrayList<>();
+                        firstMatchedPoint = new ArrayList<>(2);
                         firstMatchedPoint.add(rule.x);
                         firstMatchedPoint.add(rule.y);
                     }
@@ -90,7 +93,7 @@ public class ColorMatchOperationHandler extends OperationHandler {
                 }
             }
 
-            if ((anyMode && matchedCount > 0) || (!anyMode && matchedCount == rules.size())) {
+            if ((anyMode && matchedCount > 0) || (!anyMode && matchedCount == ruleCount)) {
                 matched = true;
                 matchedPoint = firstMatchedPoint;
                 pollingController.onHit();
@@ -98,6 +101,12 @@ public class ColorMatchOperationHandler extends OperationHandler {
             }
             pollingController.onMiss();
             pollingController.sleepUntilNextIteration(loopStartMs);
+        }
+
+        // 循环结束后一次性构建 pointResults（避免在热路径中反复 new HashMap）
+        List<Map<String, Object>> pointResults = new ArrayList<>(ruleCount);
+        for (PointMatchResult r : lastResults) {
+            if (r != null) pointResults.add(r.toMap());
         }
 
         if (matchedPoint != null) {
@@ -131,9 +140,10 @@ public class ColorMatchOperationHandler extends OperationHandler {
 
     private PointMatchResult evaluate(Mat screenMat, PointRule rule) {
         // rule.x/y are screen coordinates; screenMat is the full capture-scale frame.
-        // Convert directly: screen → capture, no ROI offset subtraction needed.
-        int localX = (int)(rule.x * ScreenCaptureManager.CAPTURE_SCALE);
-        int localY = (int)(rule.y * ScreenCaptureManager.CAPTURE_SCALE);
+        // Use actual per-axis scale (corrects 16-byte alignment offset vs CAPTURE_SCALE).
+        ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
+        int localX = (int)(rule.x * mgr.getActualScaleX());
+        int localY = (int)(rule.y * mgr.getActualScaleY());
         if (localX < 0 || localY < 0 || localX >= screenMat.cols() || localY >= screenMat.rows()) {
             return new PointMatchResult(rule, false, 255, Color.TRANSPARENT);
         }

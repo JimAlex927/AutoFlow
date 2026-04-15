@@ -40,11 +40,13 @@ public class Template {
     private static final Map<String, Map<String, GestureOverlayView.GestureNode>> gestureCache = new LinkedHashMap<>();
     private static final Map<String, Long> taskSnapshotCache = new HashMap<>();
     
-    // 缓存大小统计
-    private static volatile int totalCachedMats = 0;
+    // 缓存大小统计（仅在 synchronized 块内访问，volatile 冗余）
+    private static int totalCachedMats = 0;
 
     private static Map<String, Mat> newTaskMatCache() {
-        return new LinkedHashMap<String, Mat>(16, 0.75f, true);
+        // accessOrder=false（插入序）：内层 map 没有 removeEldestEntry，
+        // 用 accessOrder=true 只会在每次 get() 时无谓地重排链表节点。
+        return new LinkedHashMap<>(16, 0.75f, false);
     }
 
     /**
@@ -171,7 +173,8 @@ public class Template {
 
     }
 
-    public static synchronized String taskCacheKey(String projectName, String taskName) {
+    // 不需要 synchronized：纯字符串拼接，无共享状态修改
+    public static String taskCacheKey(String projectName, String taskName) {
         return projectName + "_" + taskName;
     }
 

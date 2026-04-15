@@ -8,9 +8,13 @@ import com.auto.master.Task.Operation.OperationContext;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
 public class LoopOperationHandler extends OperationHandler {
+
+    // 编译后的正则表达式缓存，避免每次循环迭代重新编译 Pattern（Pattern.compile 有锁和反射开销）
+    private static final ConcurrentHashMap<String, Pattern> PATTERN_CACHE = new ConcurrentHashMap<>(8);
 
     LoopOperationHandler() {
         this.setType(16);
@@ -72,8 +76,10 @@ public class LoopOperationHandler extends OperationHandler {
             case "contains": return a.contains(b);
             case "neq":      return !a.equals(b);
             case "regex":
-                try { return Pattern.compile(b, Pattern.DOTALL).matcher(a).find(); }
-                catch (Exception e) { return false; }
+                try {
+                    Pattern pat = PATTERN_CACHE.computeIfAbsent(b, k -> Pattern.compile(k, Pattern.DOTALL));
+                    return pat.matcher(a).find();
+                } catch (Exception e) { return false; }
             default:         return a.equals(b);
         }
     }

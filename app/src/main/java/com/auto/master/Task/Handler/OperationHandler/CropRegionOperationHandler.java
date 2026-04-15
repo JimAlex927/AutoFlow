@@ -3,8 +3,6 @@ package com.auto.master.Task.Handler.OperationHandler;
 import static com.auto.master.auto.ScriptRunner.normalizeRect;
 import static com.auto.master.auto.ScriptRunner.safeRemove;
 import static com.auto.master.auto.ScriptRunner.toastOnMain;
-import static org.opencv.android.NativeCameraView.TAG;
-
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Context;
@@ -15,8 +13,6 @@ import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.os.Build;
-import android.os.Handler;
-import android.os.Looper;
 import android.os.SystemClock;
 import android.util.Log;
 import android.view.Gravity;
@@ -71,7 +67,10 @@ import java.util.Map;
  */
 public class CropRegionOperationHandler extends OperationHandler {
 
+    private static final String TAG = "CropRegionOpHandler";
     public static Integer inited = 0;
+    // 静态复用，Gson 线程安全，避免 saveManifestToFile/saveImg 每次 new 触发反射初始化
+    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     @Nullable
     private static volatile TemplateCaptureEventListener templateCaptureEventListener;
 
@@ -135,8 +134,7 @@ public class CropRegionOperationHandler extends OperationHandler {
             }
 
             // 使用 Gson 格式化输出（美化 JSON）
-            Gson gson = new GsonBuilder().setPrettyPrinting().create();
-            String jsonContent = gson.toJson(manifest);
+            String jsonContent = GSON.toJson(manifest);
 
             // 使用 BufferedWriter 写入文件
             bufferedWriter = new BufferedWriter(new FileWriter(outputFile));
@@ -206,7 +204,7 @@ public class CropRegionOperationHandler extends OperationHandler {
             if (manifestFile.exists()){
                 String jsonContent = readFileToString(manifestFile);
                 Type type = new TypeToken<Map<String, List<Integer>>>() {}.getType();
-                Map<String, List<Integer>> existingManifest = new Gson().fromJson(jsonContent, type);
+                Map<String, List<Integer>> existingManifest = GSON.fromJson(jsonContent, type);
                 if (existingManifest != null) {
                     manifest.putAll(existingManifest);
                     manifest.put(saveFileName,stdBbox);
@@ -235,7 +233,7 @@ public class CropRegionOperationHandler extends OperationHandler {
             return;
         }
         Rect savedRect = new Rect(rect);
-        new Handler(Looper.getMainLooper()).post(() ->
+        getMainHandler().post(() ->
                 listener.onTemplateSaved(projectName, taskName, saveFileName, savedRect));
     }
 
@@ -246,7 +244,7 @@ public class CropRegionOperationHandler extends OperationHandler {
         if (listener == null) {
             return;
         }
-        new Handler(Looper.getMainLooper()).post(() ->
+        getMainHandler().post(() ->
                 listener.onTemplateCaptureCancelled(projectName, taskName, saveFileName));
     }
 
@@ -255,7 +253,7 @@ public class CropRegionOperationHandler extends OperationHandler {
                                         Runnable onDirectSave,
                                         Runnable onRefine,
                                         Runnable onCancel) {
-        new Handler(Looper.getMainLooper()).post(() -> {
+        getMainHandler().post(() -> {
             android.view.ContextThemeWrapper themed =
                     new android.view.ContextThemeWrapper(context, R.style.Theme_AtomMaster);
             String message = "粗选区域: x=" + coarseRect.left
@@ -298,28 +296,27 @@ public class CropRegionOperationHandler extends OperationHandler {
             toastOnMain("精选失败：截图为空");
             return;
         }
-        // coarseRect is in screen coordinates; sourceBitmap is at capture scale.
-        // Convert screen coords to capture-scale pixel offsets for the bitmap crop.
-        float captureScale = ScreenCaptureManager.CAPTURE_SCALE;
-        int scaledLeft   = (int)(coarseRect.left   * captureScale);
-        int scaledTop    = (int)(coarseRect.top     * captureScale);
-        int scaledRight  = (int)(coarseRect.right   * captureScale);
-        int scaledBottom = (int)(coarseRect.bottom  * captureScale);
-        scaledLeft   = Math.max(0, Math.min(scaledLeft,   sourceBitmap.getWidth() - 1));
-        scaledTop    = Math.max(0, Math.min(scaledTop,    sourceBitmap.getHeight() - 1));
-        scaledRight  = Math.max(scaledLeft + 1, Math.min(scaledRight,  sourceBitmap.getWidth()));
-        scaledBottom = Math.max(scaledTop + 1,  Math.min(scaledBottom, sourceBitmap.getHeight()));
+        ScreenCaptureManager captureManager = ScreenCaptureManager.getInstance();
+        Rect captureRect = captureManager.toCaptureRect(coarseRect);
+        if (captureRect == null) {
+            toastOnMain("粗选区域过小，无法精选");
+            return;
+        }
+        int scaledLeft = Math.max(0, Math.min(captureRect.left, sourceBitmap.getWidth() - 1));
+        int scaledTop = Math.max(0, Math.min(captureRect.top, sourceBitmap.getHeight() - 1));
+        int scaledRight = Math.max(scaledLeft + 1, Math.min(captureRect.right, sourceBitmap.getWidth()));
+        int scaledBottom = Math.max(scaledTop + 1, Math.min(captureRect.bottom, sourceBitmap.getHeight()));
         if (scaledRight - scaledLeft <= 1 || scaledBottom - scaledTop <= 1) {
             toastOnMain("粗选区域过小，无法精选");
             return;
         }
-        final int refineLeft   = scaledLeft;
-        final int refineTop    = scaledTop;
+        final int refineLeft = scaledLeft;
+        final int refineTop = scaledTop;
 
         Bitmap refineBitmap = Bitmap.createBitmap(sourceBitmap,
                 scaledLeft, scaledTop, scaledRight - scaledLeft, scaledBottom - scaledTop);
 
-        new Handler(Looper.getMainLooper()).post(() -> {
+        getMainHandler().post(() -> {
             View overlay = LayoutInflater.from(context).inflate(R.layout.dialog_refine_template_bbox_overlay, null);
             WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
                     WindowManager.LayoutParams.MATCH_PARENT,
@@ -350,21 +347,28 @@ public class CropRegionOperationHandler extends OperationHandler {
 
             pickerView.setOnSelectionChangedListener((x, y, color) -> {
                 if (tvCoord != null) {
-                    // x, y are capture-scale pixel offsets within refineBitmap
-                    // Convert to screen coords for display
-                    int absScreenX = captureScale > 0 ? Math.round((refineLeft + x) / captureScale) : (refineLeft + x);
-                    int absScreenY = captureScale > 0 ? Math.round((refineTop  + y) / captureScale) : (refineTop  + y);
+                    int absCaptureX = refineLeft + x;
+                    int absCaptureY = refineTop + y;
+                    int absScreenX = captureManager.captureToScreenX(absCaptureX);
+                    int absScreenY = captureManager.captureToScreenY(absCaptureY);
                     if (firstSelected[0]) {
                         int left = Math.min(firstPoint[0], x);
                         int top = Math.min(firstPoint[1], y);
-                        int width = Math.abs(firstPoint[0] - x) + 1;
-                        int height = Math.abs(firstPoint[1] - y) + 1;
-                        int dispX = captureScale > 0 ? Math.round((refineLeft + left) / captureScale) : (refineLeft + left);
-                        int dispY = captureScale > 0 ? Math.round((refineTop  + top ) / captureScale) : (refineTop  + top );
-                        tvCoord.setText("x=" + dispX
-                                + ", y=" + dispY
-                                + "  w=" + width
-                                + ", h=" + height);
+                        int right = Math.max(firstPoint[0], x) + 1;
+                        int bottom = Math.max(firstPoint[1], y) + 1;
+                        Rect selectedScreenRect = captureManager.toScreenRect(new Rect(
+                                refineLeft + left,
+                                refineTop + top,
+                                refineLeft + right,
+                                refineTop + bottom));
+                        if (selectedScreenRect != null) {
+                            tvCoord.setText("x=" + selectedScreenRect.left
+                                    + ", y=" + selectedScreenRect.top
+                                    + "  w=" + selectedScreenRect.width()
+                                    + ", h=" + selectedScreenRect.height());
+                        } else {
+                            tvCoord.setText("x=" + absScreenX + ", y=" + absScreenY);
+                        }
                     } else {
                         tvCoord.setText("x=" + absScreenX + ", y=" + absScreenY);
                     }
@@ -436,21 +440,21 @@ public class CropRegionOperationHandler extends OperationHandler {
                     int top = Math.min(firstPoint[1], secondY);
                     int right = Math.max(firstPoint[0], secondX) + 1;
                     int bottom = Math.max(firstPoint[1], secondY) + 1;
-                    // Convert capture-scale offsets back to screen coords for saveTemplateFromRect
-                    Rect finalRect = new Rect(
-                            captureScale > 0 ? Math.round((refineLeft + left)   / captureScale) : (refineLeft + left),
-                            captureScale > 0 ? Math.round((refineTop  + top)    / captureScale) : (refineTop  + top),
-                            captureScale > 0 ? Math.round((refineLeft + right)  / captureScale) : (refineLeft + right),
-                            captureScale > 0 ? Math.round((refineTop  + bottom) / captureScale) : (refineTop  + bottom)
-                    );
+                    Rect finalRect = captureManager.toScreenRect(new Rect(
+                            refineLeft + left,
+                            refineTop + top,
+                            refineLeft + right,
+                            refineTop + bottom));
                     recyclePreviewBitmap(previewBitmapHolder);
                     pickerView.release();
                     try {
                         wm.removeView(overlay);
                     } catch (Exception ignored) {
                     }
-                    if (callback != null) {
+                    if (callback != null && finalRect != null) {
                         callback.onReady(finalRect);
+                    } else if (onCancel != null) {
+                        onCancel.run();
                     }
                 });
             }
@@ -608,18 +612,16 @@ public class CropRegionOperationHandler extends OperationHandler {
             return;
         }
 
-        // rect 是 SelectionOverlayView 返回的屏幕坐标（view 坐标系）。
-        // sourceBitmap 是 capture 分辨率下的截图（可能是 540×1168 等缩小版）。
-        // 需要将屏幕坐标转换为 bitmap 坐标后才能正确裁剪。
-        float captureScale = ScreenCaptureManager.CAPTURE_SCALE;
-
-        // 将屏幕坐标转换为 bitmap（capture-scale）坐标用于裁剪。
-        // 必须与 ScreenCaptureManager.sanitizeRoi() 使用相同的截断（floor）方式，
-        // 否则模板尺寸与 screenMat ROI 尺寸会差 1px，导致模板无法匹配。
-        int bitmapLeft   = (int)(rect.left   * captureScale);
-        int bitmapTop    = (int)(rect.top     * captureScale);
-        int bitmapRight  = (int)(rect.right   * captureScale);
-        int bitmapBottom = (int)(rect.bottom  * captureScale);
+        ScreenCaptureManager captureManager = ScreenCaptureManager.getInstance();
+        Rect captureRect = captureManager.toCaptureRect(rect);
+        if (captureRect == null) {
+            toastOnMain("选区太小");
+            return;
+        }
+        int bitmapLeft = captureRect.left;
+        int bitmapTop = captureRect.top;
+        int bitmapRight = captureRect.right;
+        int bitmapBottom = captureRect.bottom;
 
         // 夹紧到 bitmap 边界
         bitmapLeft   = Math.max(0, Math.min(bitmapLeft,   sourceBitmap.getWidth() - 1));

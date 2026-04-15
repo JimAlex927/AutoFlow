@@ -135,30 +135,31 @@ public class VariableScriptOperationHandler extends OperationHandler {
         Context js = SCRIPT_CONTEXT_FACTORY.enterContextWithTimeout(timeoutMs);
         try {
             // 创建轻量 execScope，以 sharedScope 为 prototype 继承所有内置对象和 bootstrap 函数
-            // 不再每次调用 initStandardObjects() 和 evaluateString(bootstrap)
             Scriptable execScope = js.newObject(sharedScope);
             execScope.setPrototype(sharedScope);
             execScope.setParentScope(null);
 
-            Scriptable varsObj = js.newObject(sharedScope);
+            // 直接把变量注入到 execScope 属性，不使用 with(vars){} 包裹。
+            // with 语句迫使 Rhino 在每次变量读写时遍历 scope chain，性能很差。
+            // 直接注入后脚本可以像局部变量一样直接使用变量名，速度快得多。
+            Set<String> injectedVarKeys = new HashSet<>();
             for (Map.Entry<String, Object> entry : ctx.variables.entrySet()) {
                 String key = entry.getKey();
                 if (key == null || key.isEmpty()) continue;
-                ScriptableObject.putProperty(varsObj, key, toScriptValue(js, sharedScope, entry.getValue()));
+                ScriptableObject.putProperty(execScope, key, toScriptValue(js, sharedScope, entry.getValue()));
+                injectedVarKeys.add(key);
             }
-            ScriptableObject.putProperty(execScope, "vars", varsObj);
 
-            String wrapped = "with(vars){\n" + (script == null ? "" : script) + "\n}";
-            String cacheKey = buildCacheKey(obj, wrapped);
+            String safeScript = (script == null || script.isEmpty()) ? "null" : script;
+            String cacheKey = buildCacheKey(obj, safeScript);
             Script compiled = SCRIPT_CACHE.get(cacheKey);
             if (compiled == null) {
-                compiled = js.compileString(wrapped, "var_script", 1, null);
+                compiled = js.compileString(safeScript, "var_script", 1, null);
                 SCRIPT_CACHE.put(cacheKey, compiled);
             }
             Object result = compiled.exec(js, execScope);
 
-            // 使用预计算的 bootstrapBaselineKeys，不再每次 snapshotStringIds
-            syncVariablesBackToContext(ctx, execScope, varsObj, bootstrapBaselineKeys);
+            syncVariablesBackToContext(ctx, execScope, injectedVarKeys, bootstrapBaselineKeys);
 
             return toPlainJava(result);
         } finally {
@@ -268,32 +269,37 @@ public class VariableScriptOperationHandler extends OperationHandler {
         return Context.javaToJS(value, scope);
     }
 
-    private void syncVariablesBackToContext(OperationContext ctx, Scriptable scope, Scriptable varsObj, Set<String> scopeBaselineKeys) {
-        HashMap<String, Object> newVars = new HashMap<>();
-
-        Object[] ids = varsObj.getIds();
-        for (Object id : ids) {
-            if (!(id instanceof String)) continue;
-            String key = (String) id;
-            Object value = ScriptableObject.getProperty(varsObj, key);
-            newVars.put(key, toPlainJava(value));
+    /**
+     * 将脚本执行后 execScope 中的变量同步回 ctx.variables。
+     *
+     * @param injectedVarKeys 执行前注入到 execScope 的变量名集合
+     * @param scopeBaselineKeys bootstrap 阶段已有的内置符号（不需回写）
+     */
+    private void syncVariablesBackToContext(OperationContext ctx,
+                                             Scriptable scope,
+                                             Set<String> injectedVarKeys,
+                                             Set<String> scopeBaselineKeys) {
+        // 1. 先更新所有注入过的变量（可能被脚本修改或删除）
+        for (String key : injectedVarKeys) {
+            Object value = ScriptableObject.getProperty(scope, key);
+            if (value == null || value == Undefined.instance || value == Scriptable.NOT_FOUND) {
+                ctx.variables.remove(key);
+            } else {
+                ctx.variables.put(key, toPlainJava(value));
+            }
         }
 
+        // 2. 再收集脚本新定义的变量（不在注入集合、不是内置符号）
         Object[] scopeIds = scope.getIds();
         for (Object id : scopeIds) {
             if (!(id instanceof String)) continue;
             String key = (String) id;
-            if ("vars".equals(key) || scopeBaselineKeys.contains(key) || newVars.containsKey(key)) {
-                continue;
-            }
+            if (injectedVarKeys.contains(key) || scopeBaselineKeys.contains(key)) continue;
             Object value = ScriptableObject.getProperty(scope, key);
-            if (!shouldPersistScopeValue(value)) {
-                continue;
+            if (shouldPersistScopeValue(value)) {
+                ctx.variables.put(key, toPlainJava(value));
             }
-            newVars.put(key, toPlainJava(value));
         }
-
-        ctx.variables.putAll(newVars);
     }
 
     private boolean shouldPersistScopeValue(Object value) {

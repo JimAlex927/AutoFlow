@@ -3,7 +3,6 @@ package com.auto.master.Task.Handler.OperationHandler;
 import static com.auto.master.auto.ScriptRunner.normalizeRect;
 import static com.auto.master.auto.ScriptRunner.safeRemove;
 import static com.auto.master.auto.ScriptRunner.toastOnMain;
-import static org.opencv.android.NativeCameraView.TAG;
 import static java.lang.Math.clamp;
 
 import android.app.Activity;
@@ -55,6 +54,7 @@ import java.util.Map;
  */
 public class LoadImgToMatOperationHandler extends OperationHandler {
 
+    private static final String TAG = "LoadImgToMatOpHandler";
     // Gson 实例线程安全，静态复用避免反射初始化开销
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -194,12 +194,15 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
                     try {
                         Utils.bitmapToMat(bitmap, mat);
                         // legacy 文件需要按当前 scale 缩放；新 scale 子目录文件已是正确分辨率
+                        // 使用实际轴向缩放系数，修正 16-byte 对齐导致 X/Y 轴缩放不一致的问题
                         if (isLegacy && ScreenCaptureManager.CAPTURE_SCALE != 1.0f) {
+                            ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
+                            float sx = mgr.getActualScaleX();
+                            float sy = mgr.getActualScaleY();
                             Mat scaled = new Mat();
                             Imgproc.resize(mat, scaled,
                                     new org.opencv.core.Size(),
-                                    ScreenCaptureManager.CAPTURE_SCALE,
-                                    ScreenCaptureManager.CAPTURE_SCALE,
+                                    sx, sy,
                                     Imgproc.INTER_LINEAR);
                             mat.release();
                             mat = scaled;

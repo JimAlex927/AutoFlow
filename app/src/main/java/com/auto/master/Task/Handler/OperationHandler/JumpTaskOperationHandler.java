@@ -1,7 +1,5 @@
 package com.auto.master.Task.Handler.OperationHandler;
 
-import static org.opencv.android.NativeCameraView.TAG;
-
 import android.util.Log;
 
 import com.auto.master.Task.Operation.JumpTaskOperation;
@@ -31,6 +29,8 @@ import java.util.Map;
  * - NEXT_OPERATION_ID: 返回后跳转到原 Task 的哪个 Operation（可选，如果没有则结束）
  */
 public class JumpTaskOperationHandler extends OperationHandler {
+
+    private static final String TAG = "JumpTaskOperationHandler";
 
     JumpTaskOperationHandler() {
         this.setType(8);

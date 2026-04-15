@@ -227,6 +227,10 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
                                                         android.graphics.Rect captureRoi) {
         Mat roi = null;
         try {
+            android.graphics.Rect captureRegion = toCaptureRect(task.region);
+            if (captureRegion == null) {
+                return new MatchTaskResult(false, null, task);
+            }
             roi = safeSubmat(screen, toLocalRectCapture(task.region, captureRoi));
             if (roi == null || roi.empty()) {
                 return new MatchTaskResult(false, null, task);
@@ -234,11 +238,12 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
             Point positionInRoi = OpenCVHelper.getInstance()
                     .fastSingleMatch(roi, task.info.mat, null, task.info.similarity);
             if (positionInRoi != null && positionInRoi.x >= 0) {
-                // positionInRoi 是 capture 坐标，换算回 screen 坐标后加上 screen region 偏移
-                float invScale = 1.0f / ScreenCaptureManager.CAPTURE_SCALE;
+                ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
+                float invScaleX = mgr.getActualInvScaleX();
+                float invScaleY = mgr.getActualInvScaleY();
                 Point positionGlobal = new Point(
-                        positionInRoi.x * invScale + task.region.x,
-                        positionInRoi.y * invScale + task.region.y);
+                        Math.round(positionInRoi.x * invScaleX) + task.region.x,
+                        Math.round(positionInRoi.y * invScaleY) + task.region.y);
                 return new MatchTaskResult(true, positionGlobal, task);
             }
         } catch (Exception e) {
@@ -433,10 +438,9 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         MatchResult matchResult = new MatchResult(result.position, 1.0);
         Integer responseType = obj.getResponseType();
         if (responseType != null && responseType == 1) {
-            // info.width/height 是 capture 尺寸，换算回 screen 尺寸
-            float invScale = 1.0f / ScreenCaptureManager.CAPTURE_SCALE;
-            int screenW = (int)(result.task.info.width  * invScale);
-            int screenH = (int)(result.task.info.height * invScale);
+            ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
+            int screenW = Math.round(result.task.info.width  * mgr.getActualInvScaleX());
+            int screenH = Math.round(result.task.info.height * mgr.getActualInvScaleY());
             List<Integer> matchedBbox = Arrays.asList(
                     (int) result.position.x,
                     (int) result.position.y,
@@ -608,22 +612,39 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
 
     /**
      * 将 screen 坐标系的 region 转换为 capture 坐标系的本地 Rect，用于在 capture-scale Mat 中取子矩阵。
+     * 使用实际轴向缩放系数，修正 16-byte 对齐导致的 X/Y 轴缩放不一致问题。
      */
     private static Rect toLocalRectCapture(Rect region, android.graphics.Rect captureRoi) {
+        ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
+        android.graphics.Rect captureRegion = toCaptureRect(region);
+        if (captureRegion == null) {
+            return new Rect(0, 0, 0, 0);
+        }
         if (captureRoi == null) {
-            // 无 captureRoi 时直接缩放到 capture 坐标
             return new Rect(
-                    (int)(region.x      * ScreenCaptureManager.CAPTURE_SCALE),
-                    (int)(region.y      * ScreenCaptureManager.CAPTURE_SCALE),
-                    (int)(region.width  * ScreenCaptureManager.CAPTURE_SCALE),
-                    (int)(region.height * ScreenCaptureManager.CAPTURE_SCALE));
+                    captureRegion.left,
+                    captureRegion.top,
+                    captureRegion.width(),
+                    captureRegion.height());
+        }
+        android.graphics.Rect captureBase = mgr.toCaptureRect(captureRoi);
+        if (captureBase == null) {
+            return new Rect(0, 0, 0, 0);
         }
         // (region - captureRoi偏移) 后缩放到 capture 坐标
         return new Rect(
-                (int)((region.x - captureRoi.left) * ScreenCaptureManager.CAPTURE_SCALE),
-                (int)((region.y - captureRoi.top)  * ScreenCaptureManager.CAPTURE_SCALE),
-                (int)(region.width  * ScreenCaptureManager.CAPTURE_SCALE),
-                (int)(region.height * ScreenCaptureManager.CAPTURE_SCALE));
+                captureRegion.left - captureBase.left,
+                captureRegion.top - captureBase.top,
+                captureRegion.width(),
+                captureRegion.height());
+    }
+
+    private static android.graphics.Rect toCaptureRect(Rect region) {
+        return ScreenCaptureManager.getInstance().toCaptureRect(new android.graphics.Rect(
+                region.x,
+                region.y,
+                region.x + region.width,
+                region.y + region.height));
     }
 
     private static final class MatchTask {

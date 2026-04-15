@@ -1,9 +1,9 @@
 package com.auto.master.utils;
 
 import java.security.SecureRandom;
-import java.util.Random;
 import java.util.UUID;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.regex.Pattern;
 
 /**
  * UUID 生成工具类
@@ -56,7 +56,7 @@ public final class UUIDGenerator {
     // ==================== 高性能 UUID 生成 ====================
 
     private static final SecureRandom SECURE_RANDOM = new SecureRandom();
-    private static final Random RANDOM = new Random();
+    private static final Pattern HEX_32_PATTERN = Pattern.compile("[0-9a-fA-F]{32}");
 
     /**
      * 使用 SecureRandom 生成安全的 UUID（加密强度更高）
@@ -165,7 +165,7 @@ public final class UUIDGenerator {
             return false;
         }
 
-        return normalized.matches("[0-9a-fA-F]{32}");
+        return HEX_32_PATTERN.matcher(normalized).matches();
     }
 
     /**

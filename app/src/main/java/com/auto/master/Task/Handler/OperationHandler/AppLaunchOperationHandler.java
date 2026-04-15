@@ -2,8 +2,6 @@ package com.auto.master.Task.Handler.OperationHandler;
 
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.os.Handler;
-import android.os.Looper;
 import android.text.TextUtils;
 import android.util.Log;
 import android.view.accessibility.AccessibilityNodeInfo;
@@ -58,9 +56,8 @@ public class AppLaunchOperationHandler extends OperationHandler {
 
         final boolean[] started = {false};
         final Throwable[] error = {null};
-        Handler main = new Handler(Looper.getMainLooper());
         Object lock = new Object();
-        main.post(() -> {
+        getMainHandler().post(() -> {
             try {
                 svc.startActivity(launchIntent);
                 started[0] = true;

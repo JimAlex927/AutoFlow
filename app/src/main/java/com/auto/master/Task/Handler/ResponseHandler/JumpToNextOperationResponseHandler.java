@@ -71,15 +71,4 @@ public class JumpToNextOperationResponseHandler extends DefaultResponseHandler{
         SystemClock.sleep(10);
     }
 
-    private Task resolveTaskByOperationId(Map<String, Task> taskMap, String operationId) {
-        if (taskMap == null || operationId == null) {
-            return null;
-        }
-        for (Task t : taskMap.values()) {
-            if (t != null && t.getOperationMap() != null && t.getOperationMap().containsKey(operationId)) {
-                return t;
-            }
-        }
-        return null;
-    }
 }
