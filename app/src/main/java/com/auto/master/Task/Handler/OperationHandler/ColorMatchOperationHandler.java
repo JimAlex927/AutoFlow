@@ -139,11 +139,10 @@ public class ColorMatchOperationHandler extends OperationHandler {
     }
 
     private PointMatchResult evaluate(Mat screenMat, PointRule rule) {
-        // rule.x/y are screen coordinates; screenMat is the full capture-scale frame.
-        // Use actual per-axis scale (corrects 16-byte alignment offset vs CAPTURE_SCALE).
         ScreenCaptureManager mgr = ScreenCaptureManager.getInstance();
-        int localX = (int)(rule.x * mgr.getActualScaleX());
-        int localY = (int)(rule.y * mgr.getActualScaleY());
+        // 与取色器保存坐标、ROI 换算统一使用整数边界映射，避免采到邻近像素。
+        int localX = mgr.screenToCaptureX(rule.x);
+        int localY = mgr.screenToCaptureY(rule.y);
         if (localX < 0 || localY < 0 || localX >= screenMat.cols() || localY >= screenMat.rows()) {
             return new PointMatchResult(rule, false, 255, Color.TRANSPARENT);
         }
@@ -152,18 +151,19 @@ public class ColorMatchOperationHandler extends OperationHandler {
         if (got < 3) {
             return new PointMatchResult(rule, false, 255, Color.TRANSPARENT);
         }
-        int actualColor = Color.rgb(
-                clampColor(buf[0] & 0xFF),
-                clampColor(buf[1] & 0xFF),
-                clampColor(buf[2] & 0xFF));
-        int diff = computeMaxChannelDiff(rule.color, actualColor);
+        // ScreenCaptureManager 直接保留 ImageReader 的 RGBA_8888 字节序，buf[0..2] 即 R/G/B。
+        int actualR = clampColor(buf[0] & 0xFF);
+        int actualG = clampColor(buf[1] & 0xFF);
+        int actualB = clampColor(buf[2] & 0xFF);
+        int actualColor = Color.rgb(actualR, actualG, actualB);
+        int diff = computeMaxChannelDiff(rule.color, actualR, actualG, actualB);
         return new PointMatchResult(rule, diff <= rule.tolerance, diff, actualColor);
     }
 
-    private int computeMaxChannelDiff(int expected, int actual) {
-        int dr = Math.abs(Color.red(expected) - Color.red(actual));
-        int dg = Math.abs(Color.green(expected) - Color.green(actual));
-        int db = Math.abs(Color.blue(expected) - Color.blue(actual));
+    private int computeMaxChannelDiff(int expected, int actualR, int actualG, int actualB) {
+        int dr = Math.abs(Color.red(expected) - actualR);
+        int dg = Math.abs(Color.green(expected) - actualG);
+        int db = Math.abs(Color.blue(expected) - actualB);
         return Math.max(dr, Math.max(dg, db));
     }
 

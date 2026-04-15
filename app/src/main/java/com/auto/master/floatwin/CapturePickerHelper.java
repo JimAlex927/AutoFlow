@@ -95,10 +95,10 @@ public class CapturePickerHelper {
                         return;
                     }
                     if (listener != null) {
-                        // pickerView coords are capture-scale pixels; convert to screen coords
-                        float scale = com.auto.master.capture.ScreenCaptureManager.CAPTURE_SCALE;
-                        int screenX = scale > 0 ? Math.round(pickerView.getSelectedX() / scale) : pickerView.getSelectedX();
-                        int screenY = scale > 0 ? Math.round(pickerView.getSelectedY() / scale) : pickerView.getSelectedY();
+                        com.auto.master.capture.ScreenCaptureManager captureManager =
+                                com.auto.master.capture.ScreenCaptureManager.getInstance();
+                        int screenX = captureManager.captureToScreenX(pickerView.getSelectedX());
+                        int screenY = captureManager.captureToScreenY(pickerView.getSelectedY());
                         listener.onPointPicked(screenX, screenY);
                     }
                     pickerView.release();
@@ -166,10 +166,10 @@ public class CapturePickerHelper {
                         return;
                     }
                     if (listener != null) {
-                        // pickerView coords are capture-scale pixels; convert to screen coords
-                        float scale = com.auto.master.capture.ScreenCaptureManager.CAPTURE_SCALE;
-                        int screenX = scale > 0 ? Math.round(pickerView.getSelectedX() / scale) : pickerView.getSelectedX();
-                        int screenY = scale > 0 ? Math.round(pickerView.getSelectedY() / scale) : pickerView.getSelectedY();
+                        com.auto.master.capture.ScreenCaptureManager captureManager =
+                                com.auto.master.capture.ScreenCaptureManager.getInstance();
+                        int screenX = captureManager.captureToScreenX(pickerView.getSelectedX());
+                        int screenY = captureManager.captureToScreenY(pickerView.getSelectedY());
                         listener.onColorPointPicked(screenX, screenY, pickerView.getSelectedColor());
                     }
                     pickerView.release();
