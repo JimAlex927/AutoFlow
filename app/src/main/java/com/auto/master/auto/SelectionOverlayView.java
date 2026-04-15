@@ -65,8 +65,6 @@ public class SelectionOverlayView extends FrameLayout {
     private final Rect selection = new Rect();
     private boolean hasSelection = false;
 
-    private int topInsetPx = 0;
-
     // buttons
     private LinearLayout actionBar;
     private Button btnOk, btnCancel, btnReset, btnFull, btnRefine;
@@ -245,25 +243,18 @@ public class SelectionOverlayView extends FrameLayout {
             magnifier = new android.widget.Magnifier(canvasView);
         }
 
-        setFitsSystemWindows(true);
-    }
-
-    @Override
-    public WindowInsets onApplyWindowInsets(WindowInsets insets) {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            Insets bars = insets.getInsets(WindowInsets.Type.systemBars());
-            topInsetPx = bars.top;
-        } else {
-            topInsetPx = insets.getSystemWindowInsetTop();
-        }
-        Log.d("SelectionOverlayView", "topInsetPx=" + topInsetPx);
-        return super.onApplyWindowInsets(insets);
+        // DO NOT call setFitsSystemWindows(true) here.
+        // The overlay window uses FLAG_LAYOUT_IN_SCREEN | FLAG_LAYOUT_NO_LIMITS so it covers
+        // the full physical screen including the status bar.  If fitsSystemWindows is true the
+        // FrameLayout adds top padding equal to the status bar height, which shifts canvasView
+        // down by topInsetPx pixels.  Touch coordinates inside canvasView are then
+        //   screen_y - topInsetPx
+        // instead of screen_y, causing a constant ~80px upward offset in the saved template crop.
     }
 
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        requestApplyInsets();
     }
 
     @Override
@@ -680,15 +671,11 @@ public class SelectionOverlayView extends FrameLayout {
             return null; // 或者返回 null
         }
 
+        // selRectInOverlay is in view coordinates.  The overlay covers the full physical screen
+        // (no fitsSystemWindows padding), so view coords == screen coords.
+        // frozenBackground is captured at CAPTURE_SCALE, so we must map view→screen→bitmap.
+        // That conversion is done by saveTemplateFromRect; here we just pass-through the rect.
         Rect crop = new Rect(selRectInOverlay);
-
-        // 如果 frozenBackground 是从 MediaProjection 拿的，它通常已经包含了状态栏（topInsetPx 已经包含在内）
-        // 所以一般不需要再手动 offset topInsetPx
-        // 但为了兼容某些设备，可以保留判断
-        boolean needsTopOffset = (frozenBackground.getHeight() >= getHeight() + topInsetPx - dp(2));
-        if (needsTopOffset && topInsetPx > 0) {
-            crop.offset(0, topInsetPx);
-        }
 
         crop.left   = clamp(crop.left,   0, frozenBackground.getWidth());
         crop.right  = clamp(crop.right,  0, frozenBackground.getWidth());
