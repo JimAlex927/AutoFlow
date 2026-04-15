@@ -72,9 +72,10 @@ public final class ScriptRunner {
     // 当前执行线程，用于中断
     private static volatile Thread currentExecuteThread;
 
-    // MAIN.post 节流：onOperationStart/Complete 最多每 50ms 通知一次，减少 UI 线程压力
-    private static volatile long lastListenerNotifyMs = 0;
-    private static final long LISTENER_THROTTLE_MS = 50;
+    // onOperationStart 必须逐条通知，否则变量节点等快速逻辑节点会把下一条真实执行节点的 UI 刷新吞掉。
+    // 这里只保留完成事件的轻量节流，避免极短逻辑循环时频繁刷 UI。
+    private static volatile long lastCompleteListenerNotifyMs = 0;
+    private static final long COMPLETE_LISTENER_THROTTLE_MS = 50;
 
     /**
      * 脚本执行监听器接口
@@ -448,12 +449,7 @@ public final class ScriptRunner {
 
                                 final String opId = operation.getId();
                                 final String opName = operation.getName();
-                                // MAIN.post 节流：快速逻辑操作连续时不必每次刷新 UI
-                                long nowMs = System.currentTimeMillis();
-                                boolean shouldNotify = currentListener != null
-                                        && (nowMs - lastListenerNotifyMs >= LISTENER_THROTTLE_MS);
-                                if (shouldNotify) {
-                                    lastListenerNotifyMs = nowMs;
+                                if (currentListener != null) {
                                     final ScriptExecutionListener listener = currentListener;
                                     MAIN.post(() -> listener.onOperationStart(opId, opName));
                                 }
@@ -472,7 +468,11 @@ public final class ScriptRunner {
 
                                 boolean ok = operationHandler.handle(operation, scriptExecuteContext.sharedContext);
 
-                                if (shouldNotify && currentListener != null) {
+                                long nowMs = System.currentTimeMillis();
+                                boolean shouldNotifyComplete = currentListener != null
+                                        && (nowMs - lastCompleteListenerNotifyMs >= COMPLETE_LISTENER_THROTTLE_MS);
+                                if (shouldNotifyComplete && currentListener != null) {
+                                    lastCompleteListenerNotifyMs = nowMs;
                                     final ScriptExecutionListener listener = currentListener;
                                     MAIN.post(() -> listener.onOperationComplete(opId, ok));
                                 }
