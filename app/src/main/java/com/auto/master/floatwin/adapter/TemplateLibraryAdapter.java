@@ -141,13 +141,21 @@ public class TemplateLibraryAdapter extends RecyclerView.Adapter<TemplateLibrary
     }
 
     public void selectItem(String fileName) {
-        if (fileName != null && !fileName.isEmpty()) {
-            selectedNames.add(fileName);
-            notifySelectionChanged();
-            int position = findShownPosition(fileName);
-            if (position >= 0) {
-                notifyItemChanged(position);
+        if (fileName == null || fileName.isEmpty()) return;
+        // Look up the item's canonical key (e.g. "scale_100/foo.png") so that
+        // onBindViewHolder's selectedNames.contains(item.getKey()) check works correctly.
+        String keyToAdd = fileName;
+        for (TemplateLibraryItem item : allItems) {
+            if (TextUtils.equals(fileName, item.fileName)) {
+                keyToAdd = item.getKey();
+                break;
             }
+        }
+        selectedNames.add(keyToAdd);
+        notifySelectionChanged();
+        int position = findShownPosition(fileName);
+        if (position >= 0) {
+            notifyItemChanged(position);
         }
     }
 

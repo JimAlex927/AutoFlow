@@ -184,7 +184,7 @@ public class ScreenCaptureManager {
         // 从持久化存储恢复上次保存的倍率
 //        CAPTURE_SCALE = CaptureScaleHelper.loadScale(appContext);
 
-        CAPTURE_SCALE = 0.25f;
+        CAPTURE_SCALE = 0.4f;
 
         updateScreenMetrics(activity);
         lastRotation = getCurrentPhysicalRotation(activity);

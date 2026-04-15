@@ -9,7 +9,6 @@ import com.auto.master.Task.Operation.ColorMatchOperation;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.auto.AutoAccessibilityService;
-import com.auto.master.capture.ScreenCapture;
 import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.utils.AdaptivePollingController;
 
@@ -55,12 +54,14 @@ public class ColorMatchOperationHandler extends OperationHandler {
         boolean matched = false;
         List<Integer> matchedPoint = null;
         List<Map<String, Object>> pointResults = new ArrayList<>();
-        android.graphics.Rect captureRoi = buildCaptureRoi(rules);
+        // Always use the full frame — single-point ROIs collapse at scale<1.0 causing
+        // sanitizeRoi() to return null while captureRoi is still non-null, which makes
+        // evaluate() subtract the wrong offset and read pixel (0,0) instead of the target.
         long start = System.currentTimeMillis();
         AdaptivePollingController pollingController = AdaptivePollingController.forColorCheck();
         while (System.currentTimeMillis() - start < timeoutMs) {
             long loopStartMs = SystemClock.uptimeMillis();
-            Mat screenMat = pollingController.acquireFrame(captureRoi);
+            Mat screenMat = pollingController.acquireFrame();
             if (screenMat == null || screenMat.empty()) {
                 pollingController.onMiss();
                 pollingController.sleepUntilNextIteration(loopStartMs);
@@ -75,7 +76,7 @@ public class ColorMatchOperationHandler extends OperationHandler {
             int matchedCount = 0;
             List<Integer> firstMatchedPoint = null;
             for (PointRule rule : rules) {
-                PointMatchResult result = evaluate(screenMat, rule, captureRoi);
+                PointMatchResult result = evaluate(screenMat, rule);
                 pointResults.add(result.toMap());
                 if (result.matched) {
                     matchedCount++;
@@ -128,17 +129,11 @@ public class ColorMatchOperationHandler extends OperationHandler {
         return result;
     }
 
-    private PointMatchResult evaluate(Mat screenMat, PointRule rule, android.graphics.Rect captureRoi) {
-        // rule.x/y 是 screen 坐标，screenMat 是 capture 坐标（半分辨率）
-        int localX = rule.x;
-        int localY = rule.y;
-        if (captureRoi != null) {
-            localX -= captureRoi.left;
-            localY -= captureRoi.top;
-        }
-        // 换算到 capture 坐标
-        localX = (int)(localX * ScreenCaptureManager.CAPTURE_SCALE);
-        localY = (int)(localY * ScreenCaptureManager.CAPTURE_SCALE);
+    private PointMatchResult evaluate(Mat screenMat, PointRule rule) {
+        // rule.x/y are screen coordinates; screenMat is the full capture-scale frame.
+        // Convert directly: screen → capture, no ROI offset subtraction needed.
+        int localX = (int)(rule.x * ScreenCaptureManager.CAPTURE_SCALE);
+        int localY = (int)(rule.y * ScreenCaptureManager.CAPTURE_SCALE);
         if (localX < 0 || localY < 0 || localX >= screenMat.cols() || localY >= screenMat.rows()) {
             return new PointMatchResult(rule, false, 255, Color.TRANSPARENT);
         }
@@ -160,26 +155,6 @@ public class ColorMatchOperationHandler extends OperationHandler {
         int dg = Math.abs(Color.green(expected) - Color.green(actual));
         int db = Math.abs(Color.blue(expected) - Color.blue(actual));
         return Math.max(dr, Math.max(dg, db));
-    }
-
-    private android.graphics.Rect buildCaptureRoi(List<PointRule> rules) {
-        if (rules == null || rules.isEmpty()) {
-            return null;
-        }
-        int left = Integer.MAX_VALUE;
-        int top = Integer.MAX_VALUE;
-        int right = Integer.MIN_VALUE;
-        int bottom = Integer.MIN_VALUE;
-        for (PointRule rule : rules) {
-            left = Math.min(left, rule.x);
-            top = Math.min(top, rule.y);
-            right = Math.max(right, rule.x + 1);
-            bottom = Math.max(bottom, rule.y + 1);
-        }
-        if (left >= right || top >= bottom) {
-            return null;
-        }
-        return new android.graphics.Rect(left, top, right, bottom);
     }
 
     private int clampColor(int value) {

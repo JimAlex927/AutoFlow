@@ -4012,6 +4012,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         currentTaskDir = taskDir;
 
+        String scaleDirName = getCurrentScaleDirName();
+
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_template_library, null);
         WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(350, true);
         applyTemplateLibraryDialogViewport(dialogLp);
@@ -4025,32 +4027,31 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         TextView btnDelete     = dialogView.findViewById(R.id.btn_library_delete);
         View manageActions     = dialogView.findViewById(R.id.ly_library_manage_actions);
         View selectActions     = dialogView.findViewById(R.id.ly_library_select_actions);
-        LinearLayout lyBreadcrumb  = dialogView.findViewById(R.id.ly_breadcrumb);
-        TextView btnBack           = dialogView.findViewById(R.id.btn_breadcrumb_back);
-        TextView tvBreadcrumb      = dialogView.findViewById(R.id.tv_breadcrumb_path);
+        View lyBreadcrumb      = dialogView.findViewById(R.id.ly_breadcrumb);
 
-        if (tvTitle != null) tvTitle.setText("模板库");
+        if (tvTitle != null) tvTitle.setText("模板库 [" + scaleDirName + "]");
         if (selectActions != null) selectActions.setVisibility(View.GONE);
+        if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
+        if (btnAdd != null) btnAdd.setVisibility(View.VISIBLE);
+        if (manageActions != null) manageActions.setVisibility(View.VISIBLE);
 
         rv.setLayoutManager(new GridLayoutManager(this, 3));
         final boolean[] batchMode = {false};
         final TemplateLibraryAdapter[] adapterRef = new TemplateLibraryAdapter[1];
-        // currentBrowseDir[0] = null → 根目录（显示文件夹列表）
-        //                      = "scale_100" → 显示该 scale 目录下的模板
-        final String[] currentBrowseDir = {null};
-        final Runnable[] navigateRef = {null};
+
+        Runnable refreshList = () -> {
+            currentTaskDir = taskDir;
+            adapterRef[0].replaceData(getCurrentTaskTemplateLibraryItemsInDir(scaleDirName));
+            adapterRef[0].setDeleteActionEnabled(true);
+            btnDelete.setText("删除(" + adapterRef[0].getSelectedCount() + ")");
+            btnBatch.setText(batchMode[0] ? "完成" : "批量");
+        };
 
         TemplateLibraryAdapter adapter = new TemplateLibraryAdapter(
-                getCurrentTaskTemplateFolderItems(),
+                getCurrentTaskTemplateLibraryItemsInDir(scaleDirName),
                 item -> {
-                    if (item == null) return;
-                    if (item.isFolder) {
-                        // 进入文件夹
-                        currentBrowseDir[0] = item.scaleDirName;
-                        if (navigateRef[0] != null) navigateRef[0].run();
-                    } else {
-                        showTaskTemplateItemActionDialog(taskDir, item, dialogView, navigateRef[0]);
-                    }
+                    if (item == null || item.isFolder) return;
+                    showTaskTemplateItemActionDialog(taskDir, item, dialogView, refreshList);
                 },
                 item -> {
                     if (item == null || item.isFolder || TextUtils.isEmpty(item.fileName)) return;
@@ -4062,58 +4063,19 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     }
                     Toast.makeText(this, "已删除模板 " + item.fileName, Toast.LENGTH_SHORT).show();
                     refreshTemplateCachesForCurrentProject();
-                    if (navigateRef[0] != null) navigateRef[0].run();
+                    refreshList.run();
                 });
         adapterRef[0] = adapter;
+        adapter.setDeleteActionEnabled(true);
         rv.setAdapter(adapter);
-
-        // navigate() — 根据 currentBrowseDir[0] 更新 UI
-        navigateRef[0] = () -> {
-            currentTaskDir = taskDir;
-            String dir = currentBrowseDir[0];
-            if (dir == null) {
-                // 根目录：显示文件夹列表
-                adapterRef[0].replaceData(getCurrentTaskTemplateFolderItems());
-                adapterRef[0].setDeleteActionEnabled(false);
-                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
-                if (btnAdd != null) btnAdd.setVisibility(View.GONE);
-                if (manageActions != null) manageActions.setVisibility(View.VISIBLE);
-                btnBatch.setVisibility(View.GONE);
-                btnDelete.setVisibility(View.GONE);
-                batchMode[0] = false;
-                adapterRef[0].setBatchMode(false);
-            } else {
-                // 文件夹内：显示模板列表
-                adapterRef[0].replaceData(getCurrentTaskTemplateLibraryItemsInDir(dir));
-                adapterRef[0].setDeleteActionEnabled(true);
-                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.VISIBLE);
-                if (tvBreadcrumb != null) tvBreadcrumb.setText("模板库 / " + dir);
-                if (btnAdd != null) btnAdd.setVisibility(View.VISIBLE);
-                if (manageActions != null) manageActions.setVisibility(View.VISIBLE);
-                btnBatch.setVisibility(View.VISIBLE);
-                btnDelete.setVisibility(View.VISIBLE);
-                btnDelete.setText("删除(" + adapterRef[0].getSelectedCount() + ")");
-                btnBatch.setText(batchMode[0] ? "完成" : "批量");
-            }
-        };
         adapter.setSelectionChangedListener(count -> btnDelete.setText("删除(" + count + ")"));
-        navigateRef[0].run();  // 初始显示文件夹列表
-
-        // ← 返回按钮
-        if (btnBack != null) {
-            btnBack.setOnClickListener(v -> {
-                currentBrowseDir[0] = null;
-                batchMode[0] = false;
-                adapterRef[0].setBatchMode(false);
-                navigateRef[0].run();
-            });
-        }
+        btnDelete.setText("删除(0)");
+        btnBatch.setText("批量");
 
         dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
 
         if (btnAdd != null) {
             btnAdd.setOnClickListener(v -> {
-                String targetDir = currentBrowseDir[0];
                 safeRemoveView(dialogView);
                 showNameInputDialog(
                         "新增模板",
@@ -4121,8 +4083,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         generateTemplateTimestampName(),
                         name -> {
                             currentTaskDir = taskDir;
-                            // 新增时保存到当前浏览的 scale 目录（可为 null，由 CAPTURE_SCALE 决定）
-                            launchTemplateCaptureAfterUiSettledInScaleDir(name, targetDir);
+                            launchTemplateCaptureAfterUiSettledInScaleDir(name, scaleDirName);
                         });
             });
         }
@@ -4150,7 +4111,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 Toast.makeText(this, "已删除 " + deleted + " 张图片", Toast.LENGTH_SHORT).show();
             }
             refreshTemplateCachesForCurrentProject();
-            navigateRef[0].run();
+            batchMode[0] = false;
+            adapter.setBatchMode(false);
+            refreshList.run();
         });
         edtSearch.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -4319,8 +4282,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             if (file.exists() && file.isFile() && file.delete()) {
                 deleted++;
             }
-            // Remove from manifest (shared, screen coords)
-            File manifestFile = new File(imgDir, "manifest.json");
+            // Remove from scale-specific manifest
+            File manifestFile = new File(targetDir, "manifest.json");
             if (deleted > 0 && manifestFile.exists()
                     && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 String content = new String(Files.readAllBytes(manifestFile.toPath()),
@@ -4355,8 +4318,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             File newFile = new File(targetDir, newName);
             if (!oldFile.exists() || newFile.exists()) return false;
             if (!oldFile.renameTo(newFile)) return false;
-            // Update manifest
-            File manifestFile = new File(imgDir, "manifest.json");
+            // Update scale-specific manifest
+            File manifestFile = new File(targetDir, "manifest.json");
             if (manifestFile.exists() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 String content = new String(Files.readAllBytes(manifestFile.toPath()),
                         StandardCharsets.UTF_8);
@@ -4413,20 +4376,30 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return false;
             }
 
-            // Update manifest.json (shared, screen coords)
-            File manifestFile = new File(imgDir, "manifest.json");
-            if (manifestFile.exists() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
-                if (!TextUtils.isEmpty(content.trim())) {
-                    JSONObject manifest = new JSONObject(content);
-                    if (manifest.has(oldName)) {
-                        Object bbox = manifest.get(oldName);
-                        manifest.remove(oldName);
-                        manifest.put(newName, bbox);
-                        try (FileWriter writer = new FileWriter(manifestFile)) {
-                            writer.write(manifest.toString(2));
+            // Update manifest in each affected dir (per-scale + legacy flat)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                List<File> manifestDirs = new ArrayList<>();
+                manifestDirs.add(imgDir); // legacy flat
+                for (float scale : CaptureScaleHelper.SUPPORTED_SCALES) {
+                    File sd = new File(imgDir, CaptureScaleHelper.getScaleDirName(scale));
+                    if (sd.isDirectory()) manifestDirs.add(sd);
+                }
+                for (File mdir : manifestDirs) {
+                    File manifestFile = new File(mdir, "manifest.json");
+                    if (!manifestFile.exists()) continue;
+                    try {
+                        String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
+                        if (TextUtils.isEmpty(content.trim())) continue;
+                        JSONObject manifest = new JSONObject(content);
+                        if (manifest.has(oldName)) {
+                            Object bbox = manifest.get(oldName);
+                            manifest.remove(oldName);
+                            manifest.put(newName, bbox);
+                            try (FileWriter writer = new FileWriter(manifestFile)) {
+                                writer.write(manifest.toString(2));
+                            }
                         }
-                    }
+                    } catch (Exception ignore) {}
                 }
             }
             return true;
@@ -5316,27 +5289,32 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
             }
 
-            File manifestFile = new File(imgDir, "manifest.json");
-            if (manifestFile.exists() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
-                if (!TextUtils.isEmpty(content.trim())) {
-                    JSONObject manifest = new JSONObject(content);
-                    List<String> keys = new ArrayList<>();
-                    java.util.Iterator<String> it = manifest.keys();
-                    while (it.hasNext()) {
-                        keys.add(it.next());
-                    }
-                    boolean changed = false;
-                    for (String key : keys) {
-                        if (!refs.contains(key)) {
-                            manifest.remove(key);
-                            changed = true;
+            // Clean manifests in each dir (scale subdirs + legacy flat dir)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                for (File dir : dirsToClean) {
+                    File manifestFile = new File(dir, "manifest.json");
+                    if (!manifestFile.exists()) continue;
+                    try {
+                        String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
+                        if (TextUtils.isEmpty(content.trim())) continue;
+                        JSONObject manifest = new JSONObject(content);
+                        List<String> keys = new ArrayList<>();
+                        java.util.Iterator<String> it = manifest.keys();
+                        while (it.hasNext()) keys.add(it.next());
+                        boolean changed = false;
+                        for (String key : keys) {
+                            if (!refs.contains(key)) {
+                                manifest.remove(key);
+                                changed = true;
+                            }
                         }
-                    }
-                    if (changed) {
-                        try (FileWriter writer = new FileWriter(manifestFile)) {
-                            writer.write(manifest.toString(2));
+                        if (changed) {
+                            try (FileWriter writer = new FileWriter(manifestFile)) {
+                                writer.write(manifest.toString(2));
+                            }
                         }
+                    } catch (Exception ignore) {
+                        Log.w(TAG, "清理 manifest 失败: " + dir.getName(), ignore);
                     }
                 }
             }
@@ -6055,6 +6033,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
      * 第一层：返回当前 task 下所有存在的 scale 子目录（文件夹条目），供模板库首屏展示。
      * isFolder=true，usageCount 存放该目录下的模板数量。
      */
+    /** 返回当前 CAPTURE_SCALE 对应的 scale 目录名，如 "scale_100"、"scale_50"。 */
+    private String getCurrentScaleDirName() {
+        return CaptureScaleHelper.getScaleDirName(ScreenCaptureManager.CAPTURE_SCALE);
+    }
+
     private List<TemplateLibraryAdapter.TemplateLibraryItem> getCurrentTaskTemplateFolderItems() {
         List<TemplateLibraryAdapter.TemplateLibraryItem> items = new ArrayList<>();
         if (currentTaskDir == null) return items;
@@ -6709,172 +6692,96 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         };
     }
 
-    /** 多选模板库：进入时已选 currentSelected，确认后回调。 */
+    /** 多选模板库：只显示当前 CAPTURE_SCALE 对应目录的模板，进入时已选 currentSelected，确认后回调。 */
     private void showTemplateMultiSelectDialog(
             java.util.List<String> currentSelected,
             OperationDialogFactory.MatchMapHelper.OnMultiSelectConfirmed callback) {
 
+        String scaleDirName = getCurrentScaleDirName();
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_template_library, null);
         WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(350, true);
         applyTemplateLibraryDialogViewport(dialogLp);
         wm.addView(dialogView, dialogLp);
 
-        ((TextView) dialogView.findViewById(R.id.tv_library_title)).setText("选择模板（可多选）");
+        ((TextView) dialogView.findViewById(R.id.tv_library_title)).setText(
+                "选择模板（可多选）[" + scaleDirName + "]");
 
         androidx.recyclerview.widget.RecyclerView rv = dialogView.findViewById(R.id.rv_library);
         EditText edtSearch = dialogView.findViewById(R.id.edt_library_search);
         View manageActions = dialogView.findViewById(R.id.ly_library_manage_actions);
         View selectActions = dialogView.findViewById(R.id.ly_library_select_actions);
-        TextView btnCancel = dialogView.findViewById(R.id.btn_library_cancel);
+        View lyBreadcrumb  = dialogView.findViewById(R.id.ly_breadcrumb);
+        TextView btnCancel  = dialogView.findViewById(R.id.btn_library_cancel);
         TextView btnConfirm = dialogView.findViewById(R.id.btn_library_confirm);
-        LinearLayout lyBreadcrumb = dialogView.findViewById(R.id.ly_breadcrumb);
-        TextView btnBack = dialogView.findViewById(R.id.btn_breadcrumb_back);
-        TextView tvBreadcrumb = dialogView.findViewById(R.id.tv_breadcrumb_path);
 
         if (manageActions != null) manageActions.setVisibility(View.GONE);
-        if (selectActions != null) selectActions.setVisibility(View.GONE);
+        if (selectActions != null) selectActions.setVisibility(View.VISIBLE);
+        if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
 
         rv.setLayoutManager(new androidx.recyclerview.widget.GridLayoutManager(this, 3));
-
-        final com.auto.master.floatwin.adapter.TemplateLibraryAdapter[] adapterRef = {null};
-        final String[] currentBrowseDir = {null}; // null=根目录(文件夹列表)，否则=scale目录名
-        final Runnable[] navigateRef = {null};
+        // 传 null listener — 点击单项由批量选择控制
+        com.auto.master.floatwin.adapter.TemplateLibraryAdapter adapter =
+                new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(
+                        getCurrentTaskTemplateLibraryItemsInDir(scaleDirName), null);
+        rv.setAdapter(adapter);
+        adapter.setBatchMode(true);
+        if (currentSelected != null) {
+            for (String name : currentSelected) adapter.selectItem(name);
+        }
 
         Runnable updateConfirmBtn = () -> {
-            if (adapterRef[0] == null || btnConfirm == null) return;
-            int cnt = adapterRef[0].getSelectedCount();
-            btnConfirm.setText(cnt == 0 ? "确定" : "确定(" + cnt + ")");
+            int cnt = adapter.getSelectedCount();
+            if (btnConfirm != null) btnConfirm.setText(cnt == 0 ? "确定" : "确定(" + cnt + ")");
         };
-
-        navigateRef[0] = () -> {
-            String dir = currentBrowseDir[0];
-            String searchQuery = edtSearch != null && edtSearch.getText() != null
-                    ? edtSearch.getText().toString() : "";
-            if (dir == null) {
-                // 根目录：显示文件夹列表，隐藏选择按钮
-                List<com.auto.master.floatwin.adapter.TemplateLibraryAdapter.TemplateLibraryItem> folderItems =
-                        getCurrentTaskTemplateFolderItems();
-                com.auto.master.floatwin.adapter.TemplateLibraryAdapter folderAdapter =
-                        new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(folderItems, item -> {
-                            if (item.isFolder) {
-                                currentBrowseDir[0] = item.fileName;
-                                navigateRef[0].run();
-                            }
-                        });
-                adapterRef[0] = folderAdapter;
-                rv.setAdapter(folderAdapter);
-                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
-                if (selectActions != null) selectActions.setVisibility(View.GONE);
-            } else {
-                // 子目录：显示模板列表，进入批量选择模式
-                List<com.auto.master.floatwin.adapter.TemplateLibraryAdapter.TemplateLibraryItem> templateItems =
-                        getCurrentTaskTemplateLibraryItemsInDir(dir);
-                // 传 null listener —— 点击单项由批量选择控制
-                com.auto.master.floatwin.adapter.TemplateLibraryAdapter templateAdapter =
-                        new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(templateItems, null);
-                adapterRef[0] = templateAdapter;
-                rv.setAdapter(templateAdapter);
-                templateAdapter.setBatchMode(true);
-                // 预选当前已选中的模板（按文件名匹配）
-                if (currentSelected != null) {
-                    for (String name : currentSelected) templateAdapter.selectItem(name);
-                }
-                templateAdapter.setSelectionChangedListener(count -> updateConfirmBtn.run());
-                updateConfirmBtn.run();
-                if (!searchQuery.isEmpty()) templateAdapter.updateFilter(searchQuery);
-                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.VISIBLE);
-                if (tvBreadcrumb != null) tvBreadcrumb.setText("模板库 / " + dir);
-                if (selectActions != null) selectActions.setVisibility(View.VISIBLE);
-            }
-        };
-
-        navigateRef[0].run();
-
-        if (btnBack != null) {
-            btnBack.setOnClickListener(v -> {
-                currentBrowseDir[0] = null;
-                if (edtSearch != null) edtSearch.setText("");
-                navigateRef[0].run();
-            });
-        }
+        adapter.setSelectionChangedListener(count -> updateConfirmBtn.run());
+        updateConfirmBtn.run();
 
         dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
-        if (btnCancel != null) {
-            btnCancel.setOnClickListener(v -> safeRemoveView(dialogView));
-        }
-
+        if (btnCancel != null) btnCancel.setOnClickListener(v -> safeRemoveView(dialogView));
         if (btnConfirm != null) {
             btnConfirm.setOnClickListener(v -> {
-                java.util.List<String> selected = adapterRef[0] != null
-                        ? new java.util.ArrayList<>(adapterRef[0].getSelectedFileNames())
-                        : new java.util.ArrayList<>();
+                java.util.List<String> selected = new java.util.ArrayList<>(adapter.getSelectedFileNames());
                 safeRemoveView(dialogView);
                 if (callback != null) callback.onConfirmed(selected);
             });
         }
-
         if (edtSearch != null) {
             edtSearch.addTextChangedListener(new android.text.TextWatcher() {
                 @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
                 @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    if (adapterRef[0] != null) adapterRef[0].updateFilter(s == null ? "" : s.toString());
+                    adapter.updateFilter(s == null ? "" : s.toString());
                 }
                 @Override public void afterTextChanged(android.text.Editable s) {}
             });
         }
     }
 
-    /** 从模板 manifest 导入 bbox：弹出单选模板库，选中后将 manifest 中的 bbox 写入 edtBbox。 */
+    /** 从模板 manifest 导入 bbox：只显示当前 CAPTURE_SCALE 目录的模板，选中后将 bbox 写入 edtBbox。 */
     private void importBboxFromTemplate(View mainDialogView, EditText edtBbox) {
+        String scaleDirName = getCurrentScaleDirName();
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_template_library, null);
         WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(350, true);
         applyTemplateLibraryDialogViewport(dialogLp);
         wm.addView(dialogView, dialogLp);
 
-        ((TextView) dialogView.findViewById(R.id.tv_library_title)).setText("选择模板以导入其区域");
+        ((TextView) dialogView.findViewById(R.id.tv_library_title)).setText(
+                "选择模板以导入其区域 [" + scaleDirName + "]");
 
         androidx.recyclerview.widget.RecyclerView rv = dialogView.findViewById(R.id.rv_library);
         EditText edtSearch = dialogView.findViewById(R.id.edt_library_search);
         View manageActions = dialogView.findViewById(R.id.ly_library_manage_actions);
         View selectActions = dialogView.findViewById(R.id.ly_library_select_actions);
-        LinearLayout lyBreadcrumb = dialogView.findViewById(R.id.ly_breadcrumb);
-        TextView btnBack = dialogView.findViewById(R.id.btn_breadcrumb_back);
-        TextView tvBreadcrumb = dialogView.findViewById(R.id.tv_breadcrumb_path);
+        View lyBreadcrumb  = dialogView.findViewById(R.id.ly_breadcrumb);
 
         if (manageActions != null) manageActions.setVisibility(View.GONE);
         if (selectActions != null) selectActions.setVisibility(View.GONE);
+        if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
 
         rv.setLayoutManager(new androidx.recyclerview.widget.GridLayoutManager(this, 3));
-
-        final com.auto.master.floatwin.adapter.TemplateLibraryAdapter[] adapterRef = {null};
-        final String[] currentBrowseDir = {null};
-        final Runnable[] navigateRef = {null};
-
-        navigateRef[0] = () -> {
-            String dir = currentBrowseDir[0];
-            String searchQuery = edtSearch != null && edtSearch.getText() != null
-                    ? edtSearch.getText().toString() : "";
-            if (dir == null) {
-                // 根目录：显示文件夹列表
-                List<com.auto.master.floatwin.adapter.TemplateLibraryAdapter.TemplateLibraryItem> folderItems =
-                        getCurrentTaskTemplateFolderItems();
-                com.auto.master.floatwin.adapter.TemplateLibraryAdapter folderAdapter =
-                        new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(folderItems, item -> {
-                            if (item.isFolder) {
-                                currentBrowseDir[0] = item.fileName;
-                                if (edtSearch != null) edtSearch.setText("");
-                                navigateRef[0].run();
-                            }
-                        });
-                adapterRef[0] = folderAdapter;
-                rv.setAdapter(folderAdapter);
-                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
-            } else {
-                // 子目录：显示模板列表，单击直接导入 bbox
-                List<com.auto.master.floatwin.adapter.TemplateLibraryAdapter.TemplateLibraryItem> templateItems =
-                        getCurrentTaskTemplateLibraryItemsInDir(dir);
-                com.auto.master.floatwin.adapter.TemplateLibraryAdapter templateAdapter =
-                        new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(templateItems, item -> {
+        com.auto.master.floatwin.adapter.TemplateLibraryAdapter adapter =
+                new com.auto.master.floatwin.adapter.TemplateLibraryAdapter(
+                        getCurrentTaskTemplateLibraryItemsInDir(scaleDirName), item -> {
+                            if (item == null || item.isFolder) return;
                             List<Integer> bbox = getBboxFromTemplate(item.fileName);
                             if (bbox != null && bbox.size() >= 4) {
                                 edtBbox.setText(bbox.get(0) + "," + bbox.get(1) + "," + bbox.get(2) + "," + bbox.get(3));
@@ -6883,23 +6790,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                             }
                             safeRemoveView(dialogView);
                         });
-                adapterRef[0] = templateAdapter;
-                rv.setAdapter(templateAdapter);
-                if (!searchQuery.isEmpty()) templateAdapter.updateFilter(searchQuery);
-                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.VISIBLE);
-                if (tvBreadcrumb != null) tvBreadcrumb.setText("模板库 / " + dir);
-            }
-        };
-
-        navigateRef[0].run();
-
-        if (btnBack != null) {
-            btnBack.setOnClickListener(v -> {
-                currentBrowseDir[0] = null;
-                if (edtSearch != null) edtSearch.setText("");
-                navigateRef[0].run();
-            });
-        }
+        rv.setAdapter(adapter);
 
         dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
 
@@ -6907,7 +6798,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             edtSearch.addTextChangedListener(new android.text.TextWatcher() {
                 @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
                 @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
-                    if (adapterRef[0] != null) adapterRef[0].updateFilter(s == null ? "" : s.toString());
+                    adapter.updateFilter(s == null ? "" : s.toString());
                 }
                 @Override public void afterTextChanged(android.text.Editable s) {}
             });
@@ -6922,9 +6813,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 com.auto.master.Template.Template.getTaskManifestCache(
                         currentProjectDir.getName(), currentTaskDir.getName());
         if (manifest != null && manifest.containsKey(fileName)) return manifest.get(fileName);
-        // 2. 读文件
+        // 2. 读 scale-specific manifest 文件
         try {
-            java.io.File mf = new java.io.File(new java.io.File(currentTaskDir, "img"), "manifest.json");
+            java.io.File imgDir = new java.io.File(currentTaskDir, "img");
+            // 优先当前倍率的目录，其次 legacy 平铺目录
+            java.io.File mf = new java.io.File(new java.io.File(imgDir, getCurrentScaleDirName()), "manifest.json");
+            if (!mf.exists()) {
+                mf = new java.io.File(imgDir, "manifest.json");
+            }
             if (!mf.exists()) return null;
             String content = new String(java.nio.file.Files.readAllBytes(mf.toPath()));
             org.json.JSONObject json = new org.json.JSONObject(content);
@@ -7731,6 +7627,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void showTemplateLibraryDialog(AutoCompleteTextView templateInput, View ownerDialog) {
+        String scaleDirName = getCurrentScaleDirName();
+
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_template_library, null);
         WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(350, true);
         applyTemplateLibraryDialogViewport(dialogLp);
@@ -7744,36 +7642,39 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         TextView btnDelete     = dialogView.findViewById(R.id.btn_library_delete);
         View manageActions     = dialogView.findViewById(R.id.ly_library_manage_actions);
         View selectActions     = dialogView.findViewById(R.id.ly_library_select_actions);
-        LinearLayout lyBreadcrumb = dialogView.findViewById(R.id.ly_breadcrumb);
-        TextView btnBack          = dialogView.findViewById(R.id.btn_breadcrumb_back);
-        TextView tvBreadcrumb     = dialogView.findViewById(R.id.tv_breadcrumb_path);
+        View lyBreadcrumb      = dialogView.findViewById(R.id.ly_breadcrumb);
 
-        if (tvTitle != null) tvTitle.setText("选择模板图片");
+        if (tvTitle != null) tvTitle.setText("选择模板图片 [" + scaleDirName + "]");
         if (btnAdd != null) btnAdd.setVisibility(View.GONE);
         if (selectActions != null) selectActions.setVisibility(View.GONE);
+        if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
+        if (manageActions != null) manageActions.setVisibility(View.VISIBLE);
 
         rv.setLayoutManager(new GridLayoutManager(this, 3));
         final boolean[] batchMode = {false};
         final TemplateLibraryAdapter[] adapterRef = new TemplateLibraryAdapter[1];
-        final String[] currentBrowseDir = {null};
-        final Runnable[] navigateRef = {null};
+
+        Runnable updateBatchUi = () -> {
+            if (adapterRef[0] == null) return;
+            btnDelete.setText("删除(" + adapterRef[0].getSelectedCount() + ")");
+            btnBatch.setText(batchMode[0] ? "完成" : "批量");
+        };
+        Runnable refreshList = () -> {
+            adapterRef[0].replaceData(getCurrentTaskTemplateLibraryItemsInDir(scaleDirName));
+            updateBatchUi.run();
+        };
 
         TemplateLibraryAdapter adapter = new TemplateLibraryAdapter(
-                getCurrentTaskTemplateFolderItems(),
+                getCurrentTaskTemplateLibraryItemsInDir(scaleDirName),
                 item -> {
-                    if (item == null) return;
-                    if (item.isFolder) {
-                        currentBrowseDir[0] = item.scaleDirName;
-                        if (navigateRef[0] != null) navigateRef[0].run();
-                    } else {
-                        // 选中模板：填入输入框并关闭
-                        templateInput.setText(item.fileName, false);
-                        refreshTemplateOptions(templateInput);
-                        updateTemplatePreview(ownerDialog.findViewById(R.id.iv_template_preview),
-                                ownerDialog.findViewById(R.id.tv_template_preview_tip), item.fileName);
-                        renderRecentTemplateStrip(ownerDialog, templateInput);
-                        safeRemoveView(dialogView);
-                    }
+                    if (item == null || item.isFolder) return;
+                    // 选中模板：填入输入框并关闭
+                    templateInput.setText(item.fileName, false);
+                    refreshTemplateOptions(templateInput);
+                    updateTemplatePreview(ownerDialog.findViewById(R.id.iv_template_preview),
+                            ownerDialog.findViewById(R.id.tv_template_preview_tip), item.fileName);
+                    renderRecentTemplateStrip(ownerDialog, templateInput);
+                    safeRemoveView(dialogView);
                 },
                 item -> {
                     if (item == null || item.isFolder || TextUtils.isEmpty(item.fileName)) return;
@@ -7790,7 +7691,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     if (item.fileName.equals(cur)) templateInput.setText("", false);
                     Toast.makeText(this, "已删除模板 " + item.fileName, Toast.LENGTH_SHORT).show();
                     refreshTemplateCachesForCurrentProject();
-                    if (navigateRef[0] != null) navigateRef[0].run();
+                    refreshList.run();
                     refreshTemplateOptions(templateInput);
                     renderRecentTemplateStrip(ownerDialog, templateInput);
                     updateTemplatePreview(ownerDialog.findViewById(R.id.iv_template_preview),
@@ -7798,47 +7699,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                             templateInput.getText() == null ? "" : templateInput.getText().toString().trim());
                 });
         adapterRef[0] = adapter;
-        adapter.setDeleteActionEnabled(false);
+        adapter.setDeleteActionEnabled(true);
         rv.setAdapter(adapter);
-
-        Runnable updateBatchUi = () -> {
-            btnDelete.setText("删除(" + adapter.getSelectedCount() + ")");
-            btnBatch.setText(batchMode[0] ? "完成" : "批量");
-        };
         adapter.setSelectionChangedListener(count -> updateBatchUi.run());
+        btnDelete.setText("删除(0)");
+        btnBatch.setText("批量");
 
-        navigateRef[0] = () -> {
-            String dir = currentBrowseDir[0];
-            if (dir == null) {
-                adapterRef[0].replaceData(getCurrentTaskTemplateFolderItems());
-                adapterRef[0].setDeleteActionEnabled(false);
-                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.GONE);
-                if (manageActions != null) manageActions.setVisibility(View.VISIBLE);
-                btnBatch.setVisibility(View.GONE);
-                btnDelete.setVisibility(View.GONE);
-                batchMode[0] = false;
-                adapterRef[0].setBatchMode(false);
-            } else {
-                adapterRef[0].replaceData(getCurrentTaskTemplateLibraryItemsInDir(dir));
-                adapterRef[0].setDeleteActionEnabled(true);
-                if (lyBreadcrumb != null) lyBreadcrumb.setVisibility(View.VISIBLE);
-                if (tvBreadcrumb != null) tvBreadcrumb.setText("模板库 / " + dir);
-                if (manageActions != null) manageActions.setVisibility(View.VISIBLE);
-                btnBatch.setVisibility(View.VISIBLE);
-                btnDelete.setVisibility(View.VISIBLE);
-                updateBatchUi.run();
-            }
-        };
-        navigateRef[0].run();
-
-        if (btnBack != null) {
-            btnBack.setOnClickListener(v -> {
-                currentBrowseDir[0] = null;
-                batchMode[0] = false;
-                adapterRef[0].setBatchMode(false);
-                navigateRef[0].run();
-            });
-        }
         dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
         btnBatch.setOnClickListener(v -> {
             batchMode[0] = !batchMode[0];
@@ -7862,13 +7728,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 Toast.makeText(this, "已删除 " + deleted + " 张图片", Toast.LENGTH_SHORT).show();
             }
             refreshTemplateCachesForCurrentProject();
-            navigateRef[0].run();
+            batchMode[0] = false;
+            adapter.setBatchMode(false);
+            refreshList.run();
             refreshTemplateOptions(templateInput);
             renderRecentTemplateStrip(ownerDialog, templateInput);
             updateTemplatePreview(ownerDialog.findViewById(R.id.iv_template_preview),
                     ownerDialog.findViewById(R.id.tv_template_preview_tip),
                     templateInput.getText() == null ? "" : templateInput.getText().toString().trim());
-            updateBatchUi.run();
         });
         edtSearch.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
@@ -7910,22 +7777,35 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
             }
 
-            File manifestFile = new File(imgDir, "manifest.json");
-            if (manifestFile.exists() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
-                if (!TextUtils.isEmpty(content.trim())) {
-                    JSONObject manifest = new JSONObject(content);
-                    boolean changed = false;
-                    for (String name : fileNames) {
-                        if (manifest.has(name)) {
-                            manifest.remove(name);
-                            changed = true;
+            // Clean from per-scale manifests + legacy flat manifest
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                List<File> manifestDirs = new ArrayList<>();
+                manifestDirs.add(imgDir); // legacy flat
+                for (float scale : CaptureScaleHelper.SUPPORTED_SCALES) {
+                    File sd = new File(imgDir, CaptureScaleHelper.getScaleDirName(scale));
+                    if (sd.isDirectory()) manifestDirs.add(sd);
+                }
+                for (File mdir : manifestDirs) {
+                    File manifestFile = new File(mdir, "manifest.json");
+                    if (!manifestFile.exists()) continue;
+                    try {
+                        String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
+                        if (TextUtils.isEmpty(content.trim())) continue;
+                        JSONObject manifest = new JSONObject(content);
+                        boolean changed = false;
+                        for (String name : fileNames) {
+                            if (manifest.has(name)) {
+                                manifest.remove(name);
+                                changed = true;
+                            }
                         }
-                    }
-                    if (changed) {
-                        try (FileWriter writer = new FileWriter(manifestFile)) {
-                            writer.write(manifest.toString(2));
+                        if (changed) {
+                            try (FileWriter writer = new FileWriter(manifestFile)) {
+                                writer.write(manifest.toString(2));
+                            }
                         }
+                    } catch (Exception ignore) {
+                        Log.w(TAG, "删除模板 manifest 失败: " + mdir.getName(), ignore);
                     }
                 }
             }

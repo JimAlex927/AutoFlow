@@ -95,7 +95,11 @@ public class CapturePickerHelper {
                         return;
                     }
                     if (listener != null) {
-                        listener.onPointPicked(pickerView.getSelectedX(), pickerView.getSelectedY());
+                        // pickerView coords are capture-scale pixels; convert to screen coords
+                        float scale = com.auto.master.capture.ScreenCaptureManager.CAPTURE_SCALE;
+                        int screenX = scale > 0 ? Math.round(pickerView.getSelectedX() / scale) : pickerView.getSelectedX();
+                        int screenY = scale > 0 ? Math.round(pickerView.getSelectedY() / scale) : pickerView.getSelectedY();
+                        listener.onPointPicked(screenX, screenY);
                     }
                     pickerView.release();
                     safeRemoveView(overlayWm, overlay);
@@ -162,10 +166,11 @@ public class CapturePickerHelper {
                         return;
                     }
                     if (listener != null) {
-                        listener.onColorPointPicked(
-                                pickerView.getSelectedX(),
-                                pickerView.getSelectedY(),
-                                pickerView.getSelectedColor());
+                        // pickerView coords are capture-scale pixels; convert to screen coords
+                        float scale = com.auto.master.capture.ScreenCaptureManager.CAPTURE_SCALE;
+                        int screenX = scale > 0 ? Math.round(pickerView.getSelectedX() / scale) : pickerView.getSelectedX();
+                        int screenY = scale > 0 ? Math.round(pickerView.getSelectedY() / scale) : pickerView.getSelectedY();
+                        listener.onColorPointPicked(screenX, screenY, pickerView.getSelectedColor());
                     }
                     pickerView.release();
                     safeRemoveView(overlayWm, overlay);

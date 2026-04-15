@@ -28,6 +28,7 @@ import com.auto.master.auto.ActivityHolder;
 import com.auto.master.auto.AutoAccessibilityService;
 import com.auto.master.auto.GestureOverlayView;
 import com.auto.master.auto.SelectionOverlayView;
+import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCapture;
 import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.utils.OpenCVHelper;
@@ -146,43 +147,54 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
             if (!gestureDir.exists()) {
                 gestureDir.mkdirs();
             }
-            Map<String, List<Integer>> manifest = new HashMap<>();
-            File oldManifest = new File(imgDir, "manifest.json");
-            if (oldManifest.exists()) {
-                String jsonContent = CropRegionOperationHandler.readFileToString(oldManifest);
-                Type type = new TypeToken<Map<String, List<Integer>>>() {
-                }.getType();
+
+            // 加载当前 CAPTURE_SCALE 对应子目录的 manifest 和模板图片
+            // 模板文件已按 capture scale 保存，无需再缩放
+            String scaleDirName = com.auto.master.capture.CaptureScaleHelper.getScaleDirName(ScreenCaptureManager.CAPTURE_SCALE);
+            File scaleDir = new File(imgDir, scaleDirName);
+            File manifestFile = new File(scaleDir, "manifest.json");
+
+            // 降级：如果 scale 目录不存在，尝试 legacy 平铺目录（scale=1.0 旧文件）
+            boolean isLegacy = false;
+            if (!manifestFile.exists()) {
+                File legacyManifest = new File(imgDir, "manifest.json");
+                if (legacyManifest.exists()) {
+                    manifestFile = legacyManifest;
+                    isLegacy = true;
+                }
+            }
+
+            if (manifestFile.exists()) {
+                String jsonContent = CropRegionOperationHandler.readFileToString(manifestFile);
+                Type type = new TypeToken<Map<String, List<Integer>>>() {}.getType();
                 Map<String, List<Integer>> existingManifest = GSON.fromJson(jsonContent, type);
                 if (existingManifest == null) {
                     existingManifest = new HashMap<>();
                 }
-//                拿到旧的manifest了 先放到 manifest cache里面  todo
-//                然后加载 图片 变成 mat todo
-//                更新task的 manifest
                 Template.putTaskManifestCache(projectName, taskName, existingManifest);
-                // todo 需要更新下对应的 task的 mat
+
+                // 图片文件所在目录：scale 子目录（新）或 imgDir（legacy）
+                File templateDir = isLegacy ? imgDir : scaleDir;
+
                 Map<String, Mat> projectTaskMatMap = new HashMap<>();
                 for (Map.Entry<String, List<Integer>> entry : existingManifest.entrySet()) {
-                    //
                     String imgName = entry.getKey();
-                    File imgFile = new File(imgDir, imgName);
+                    File imgFile = new File(templateDir, imgName);
                     if (!imgFile.exists()) {
                         Log.e(TAG, "文件不存在: " + imgFile.getPath());
                         continue;
                     }
-                    String filePath = imgFile.getPath();
-                    //
-                    Bitmap bitmap = BitmapFactory.decodeFile(filePath);
+                    Bitmap bitmap = BitmapFactory.decodeFile(imgFile.getPath());
                     if (bitmap == null) {
-                        Log.e(TAG, "无法解码图片文件: " + filePath);
+                        Log.e(TAG, "无法解码图片文件: " + imgFile.getPath());
                         continue;
                     }
                     Mat mat = new Mat();
                     boolean matOk = false;
                     try {
                         Utils.bitmapToMat(bitmap, mat);
-                        // 与 VirtualDisplay 采集分辨率对齐，模板必须同步缩放
-                        if (ScreenCaptureManager.CAPTURE_SCALE != 1.0f) {
+                        // legacy 文件需要按当前 scale 缩放；新 scale 子目录文件已是正确分辨率
+                        if (isLegacy && ScreenCaptureManager.CAPTURE_SCALE != 1.0f) {
                             Mat scaled = new Mat();
                             Imgproc.resize(mat, scaled,
                                     new org.opencv.core.Size(),
@@ -196,11 +208,9 @@ public class LoadImgToMatOperationHandler extends OperationHandler {
                         matOk = true;
                     } finally {
                         bitmap.recycle();
-                        // bitmapToMat 抛出异常时释放 Mat，防止 OpenCV 内存泄漏
                         if (!matOk) mat.release();
                     }
                 }
-                // todo 一次性写入吧
                 Template.putTaskMatCache(projectName, taskName, projectTaskMatMap);
             }
             Template.markTaskCacheSnapshot(projectName, taskName, snapshotToken);

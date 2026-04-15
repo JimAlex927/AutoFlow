@@ -164,6 +164,13 @@ public class ColorSearchOperationHandler extends OperationHandler {
         int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
         int maxX = -1, maxY = -1;
 
+        // 用与 sanitizeRoi 相同的截断方式计算 capture 起点，
+        // 再从 capture 坐标折回 screen，消除浮点截断引起的系统性偏移。
+        float scale = ScreenCaptureManager.CAPTURE_SCALE;
+        float invScale = scale > 0f ? 1.0f / scale : 1.0f;
+        int capOriginX = (int)(offsetX * scale);   // 与 sanitizeRoi 的 left 计算一致
+        int capOriginY = (int)(offsetY * scale);   // 与 sanitizeRoi 的 top 计算一致
+
         for (int row = 0; row < h; row++) {
             int rowBase = row * w * ch;
             for (int col = 0; col < w; col++) {
@@ -179,10 +186,10 @@ public class ColorSearchOperationHandler extends OperationHandler {
                 if (diff > tolerance) continue;
 
                 matchedPixels++;
-                // col/row 是 capture 坐标，换算到 screen 坐标后加 screen 偏移
-                float invScale = 1.0f / ScreenCaptureManager.CAPTURE_SCALE;
-                int px = offsetX + (int)((x + col) * invScale);
-                int py = offsetY + (int)((y + row) * invScale);
+                // (x+col, y+row) 是相对于 submat 的 capture 偏移，
+                // 加上 capture 起点后除以 scale 得到绝对 screen 坐标。
+                int px = (int)((capOriginX + x + col) * invScale);
+                int py = (int)((capOriginY + y + row) * invScale);
                 if (px < minX) minX = px;
                 if (py < minY) minY = py;
                 if (px > maxX) maxX = px;
