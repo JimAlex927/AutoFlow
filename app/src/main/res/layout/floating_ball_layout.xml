@@ -4,21 +4,21 @@
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:gravity="center_horizontal"
-    android:padding="1dp">
+    android:padding="3dp">
 
     <FrameLayout
         android:id="@+id/floating_ball_container"
-        android:layout_width="44dp"
-        android:layout_height="44dp"
+        android:layout_width="48dp"
+        android:layout_height="48dp"
         android:background="@drawable/floating_ball_modern_bg"
         android:clickable="true"
         android:focusable="true"
-        android:elevation="5dp">
+        android:elevation="6dp">
 
         <ImageView
             android:id="@+id/floatingBall"
-            android:layout_width="30dp"
-            android:layout_height="30dp"
+            android:layout_width="28dp"
+            android:layout_height="28dp"
             android:layout_gravity="center"
             android:src="@drawable/logo_atom_dna"
             android:contentDescription="floating ball" />
@@ -28,12 +28,13 @@
         android:id="@+id/ball_status_text"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="5dp"
-        android:maxWidth="132dp"
-        android:paddingStart="7dp"
-        android:paddingTop="3dp"
-        android:paddingEnd="7dp"
-        android:paddingBottom="3dp"
+        android:layout_marginTop="7dp"
+        android:maxWidth="148dp"
+        android:minHeight="24dp"
+        android:paddingStart="9dp"
+        android:paddingTop="4dp"
+        android:paddingEnd="9dp"
+        android:paddingBottom="4dp"
         android:background="@drawable/floating_ball_status_bg"
         android:text=""
         android:textSize="10sp"

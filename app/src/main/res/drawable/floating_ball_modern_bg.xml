@@ -4,22 +4,24 @@
         <shape android:shape="oval">
             <gradient
                 android:angle="315"
-                android:startColor="#2D3C6E"
-                android:endColor="#233455" />
+                android:startColor="#32467D"
+                android:centerColor="#263A63"
+                android:endColor="#1D2E4E" />
             <stroke
                 android:width="1dp"
-                android:color="#55BFD6FF" />
+                android:color="#66CBE3FF" />
         </shape>
     </item>
     <item>
         <shape android:shape="oval">
             <gradient
                 android:angle="315"
-                android:startColor="#3D4F86"
-                android:endColor="#2B3F6A" />
+                android:startColor="#4C66A7"
+                android:centerColor="#35518A"
+                android:endColor="#253B63" />
             <stroke
                 android:width="1dp"
-                android:color="#77D2E6FF" />
+                android:color="#8AD8EBFF" />
         </shape>
     </item>
 </selector>

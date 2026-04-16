@@ -8733,8 +8733,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         tvStatus.setText(status);
         tvStatus.setTextColor(color);
 
-        // 更新指示器颜色
-        indicator.setBackgroundColor(color);
+        // Keep the indicator circular while updating its semantic color.
+        Drawable indicatorBg = indicator.getBackground();
+        if (indicatorBg instanceof GradientDrawable) {
+            GradientDrawable dot = (GradientDrawable) indicatorBg.mutate();
+            dot.setColor(color);
+        } else {
+            indicator.setBackgroundColor(color);
+        }
         syncProjectPanelRuntimeUi();
     }
 

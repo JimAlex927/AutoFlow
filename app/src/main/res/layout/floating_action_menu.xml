@@ -21,25 +21,26 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="收起"
-            android:textSize="10sp"
+            android:textSize="11sp"
             android:textColor="#FFFFFF"
-            android:background="#AA424242"
-            android:paddingStart="5dp"
-            android:paddingEnd="5dp"
-            android:paddingTop="2dp"
-            android:paddingBottom="2dp"
+            android:textStyle="bold"
+            android:background="@drawable/floating_quick_label_bg"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
             android:layout_marginEnd="6dp" />
         <FrameLayout
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:background="@drawable/floating_ball_modern_bg"
-            android:elevation="4dp">
+            android:elevation="5dp">
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:text="✕"
-                android:textSize="16sp"
+                android:textSize="17sp"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold" />
         </FrameLayout>
@@ -59,25 +60,26 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="项目面板"
-            android:textSize="10sp"
+            android:textSize="11sp"
             android:textColor="#FFFFFF"
-            android:background="#AA424242"
-            android:paddingStart="5dp"
-            android:paddingEnd="5dp"
-            android:paddingTop="2dp"
-            android:paddingBottom="2dp"
+            android:textStyle="bold"
+            android:background="@drawable/floating_quick_label_bg"
+            android:paddingStart="8dp"
+            android:paddingEnd="8dp"
+            android:paddingTop="4dp"
+            android:paddingBottom="4dp"
             android:layout_marginEnd="6dp" />
         <FrameLayout
-            android:layout_width="40dp"
-            android:layout_height="40dp"
+            android:layout_width="44dp"
+            android:layout_height="44dp"
             android:background="@drawable/floating_ball_modern_bg"
-            android:elevation="4dp">
+            android:elevation="5dp">
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_gravity="center"
                 android:text="▦"
-                android:textSize="16sp"
+                android:textSize="17sp"
                 android:textColor="#FFFFFF" />
         </FrameLayout>
     </LinearLayout>

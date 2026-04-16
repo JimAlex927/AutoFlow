@@ -3,7 +3,7 @@
     android:id="@+id/running_panel_container"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="@drawable/panel_background">
+    android:background="@drawable/running_panel_background">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -14,31 +14,46 @@
         <LinearLayout
             android:id="@+id/panel_header"
             android:layout_width="match_parent"
-            android:layout_height="48dp"
-            android:background="@drawable/panel_header_background"
+            android:layout_height="56dp"
+            android:background="@drawable/running_panel_header_bg"
             android:orientation="horizontal"
             android:gravity="center_vertical"
             android:paddingStart="16dp"
             android:paddingEnd="16dp">
 
-            <TextView
+            <LinearLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="运行状态"
-                android:textSize="16sp"
-                android:textColor="#FFFFFF"
-                android:textStyle="bold" />
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="运行状态"
+                    android:textSize="16sp"
+                    android:textColor="#FFFFFF"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="脚本执行监控"
+                    android:textSize="11sp"
+                    android:textColor="#CFE1FF" />
+            </LinearLayout>
 
             <ImageView
                 android:id="@+id/btn_close_running"
-                android:layout_width="24dp"
-                android:layout_height="24dp"
+                android:layout_width="32dp"
+                android:layout_height="32dp"
                 android:src="@drawable/ic_close"
                 android:tint="#FFFFFF"
-                android:background="@android:color/transparent"
+                android:background="@drawable/panel_icon_action_bg"
                 android:padding="4dp"
-                android:clickable="true" />
+                android:clickable="true"
+                android:focusable="true" />
         </LinearLayout>
 
         <!-- 状态信息栏 -->
@@ -46,8 +61,11 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="vertical"
-            android:padding="12dp"
-            android:background="#F5F5F5">
+            android:layout_marginStart="12dp"
+            android:layout_marginTop="12dp"
+            android:layout_marginEnd="12dp"
+            android:padding="14dp"
+            android:background="@drawable/running_panel_status_card_bg">
 
             <!-- 当前运行状态 -->
             <LinearLayout
@@ -60,7 +78,7 @@
                     android:id="@+id/status_indicator"
                     android:layout_width="12dp"
                     android:layout_height="12dp"
-                    android:background="@drawable/circle_green"
+                    android:background="@drawable/running_panel_status_dot_bg"
                     android:layout_marginEnd="8dp" />
 
                 <TextView
@@ -68,7 +86,7 @@
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
                     android:text="运行中"
-                    android:textSize="14sp"
+                    android:textSize="15sp"
                     android:textColor="#4CAF50"
                     android:textStyle="bold" />
             </LinearLayout>
@@ -79,30 +97,35 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="当前: -"
-                android:textSize="13sp"
-                android:textColor="#333333"
-                android:layout_marginTop="8dp"
+                android:textSize="14sp"
+                android:textColor="#223247"
+                android:layout_marginTop="10dp"
                 android:ellipsize="end"
                 android:maxLines="1" />
 
-            <!-- 进度信息 -->
-            <TextView
-                android:id="@+id/tv_progress"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="进度: 0/0"
-                android:textSize="12sp"
-                android:textColor="#666666"
-                android:layout_marginTop="4dp" />
+                android:layout_marginTop="10dp"
+                android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/tv_success_rate"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:text="成功率: -"
-                android:textSize="12sp"
-                android:textColor="#4A5565"
-                android:layout_marginTop="4dp" />
+                <TextView
+                    android:id="@+id/tv_progress"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="进度: 0/0"
+                    android:textSize="12sp"
+                    android:textColor="#556577" />
+
+                <TextView
+                    android:id="@+id/tv_success_rate"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="成功率: -"
+                    android:textSize="12sp"
+                    android:textColor="#556577" />
+            </LinearLayout>
 
             <TextView
                 android:id="@+id/tv_duration_stats"
@@ -110,8 +133,8 @@
                 android:layout_height="wrap_content"
                 android:text="耗时: -"
                 android:textSize="12sp"
-                android:textColor="#4A5565"
-                android:layout_marginTop="2dp" />
+                android:textColor="#556577"
+                android:layout_marginTop="6dp" />
 
             <TextView
                 android:id="@+id/tv_failure_reason"
@@ -131,17 +154,23 @@
             android:layout_width="match_parent"
             android:layout_height="0dp"
             android:layout_weight="1"
-            android:padding="8dp"
+            android:paddingStart="8dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="8dp"
             android:clipToPadding="false" />
 
         <!-- 控制按钮栏 -->
         <LinearLayout
             android:layout_width="match_parent"
-            android:layout_height="56dp"
+            android:layout_height="64dp"
             android:orientation="horizontal"
             android:gravity="center"
-            android:padding="8dp"
-            android:background="#FFFFFF"
+            android:paddingStart="12dp"
+            android:paddingTop="10dp"
+            android:paddingEnd="12dp"
+            android:paddingBottom="12dp"
+            android:background="@drawable/running_panel_footer_bg"
             android:elevation="4dp">
 
             <!-- 暂停/继续按钮 -->
@@ -175,11 +204,11 @@
 
     <!-- 拖动指示器 -->
     <View
-        android:id="@+id/drag_handle"
-        android:layout_width="40dp"
-        android:layout_height="4dp"
-        android:layout_gravity="center_horizontal|top"
-        android:layout_marginTop="52dp"
+            android:id="@+id/drag_handle"
+            android:layout_width="40dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center_horizontal|top"
+        android:layout_marginTop="60dp"
         android:background="@drawable/drag_handle" />
 
     <View

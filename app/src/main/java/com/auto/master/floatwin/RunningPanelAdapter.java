@@ -1,6 +1,6 @@
 package com.auto.master.floatwin;
 
-import android.graphics.Color;
+import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -89,8 +89,12 @@ class RunningPanelAdapter extends RecyclerView.Adapter<RunningPanelAdapter.ViewH
     @Override
     public void onBindViewHolder(@NonNull ViewHolder holder, int position) {
         OperationItem item = operations.get(position);
-        holder.tvName.setText(item.name);
-        holder.tvType.setText(item.type);
+        String name = item != null && !TextUtils.isEmpty(item.name) ? item.name : "未命名节点";
+        String type = item != null && !TextUtils.isEmpty(item.type) ? item.type : "unknown";
+        int displayIndex = item != null ? item.index + 1 : position + 1;
+        holder.tvIndex.setText(String.format(java.util.Locale.getDefault(), "%02d", Math.max(displayIndex, 1)));
+        holder.tvName.setText(name);
+        holder.tvType.setText(type);
         bindRunningState(holder, position == runningPosition);
     }
 
@@ -105,10 +109,10 @@ class RunningPanelAdapter extends RecyclerView.Adapter<RunningPanelAdapter.ViewH
 
     private void bindRunningState(@NonNull ViewHolder holder, boolean isRunning) {
         if (isRunning) {
-            holder.itemView.setBackgroundColor(0x66EF9A9A);
+            holder.itemView.setBackgroundResource(R.drawable.running_panel_row_active_bg);
             holder.indicator.setVisibility(View.VISIBLE);
         } else {
-            holder.itemView.setBackgroundColor(Color.TRANSPARENT);
+            holder.itemView.setBackgroundResource(R.drawable.running_panel_row_bg);
             holder.indicator.setVisibility(View.GONE);
         }
     }
@@ -125,12 +129,14 @@ class RunningPanelAdapter extends RecyclerView.Adapter<RunningPanelAdapter.ViewH
     }
 
     static class ViewHolder extends RecyclerView.ViewHolder {
+        final TextView tvIndex;
         final TextView tvName;
         final TextView tvType;
         final View indicator;
 
         ViewHolder(View itemView) {
             super(itemView);
+            tvIndex = itemView.findViewById(R.id.tv_index);
             tvName = itemView.findViewById(R.id.tv_op_name);
             tvType = itemView.findViewById(R.id.tv_op_type);
             indicator = itemView.findViewById(R.id.running_indicator);
