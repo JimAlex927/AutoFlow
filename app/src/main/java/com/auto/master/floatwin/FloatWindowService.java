@@ -3344,21 +3344,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
 //        todo 关键 后台动态修改正在运行的 operation的 关键
         this.currentOperationAdapter = adapter;
-
-        // 假设你正在执行第 index 个 operation
-//        private void onOperationStart(int index) {
-//            if (operationAdapter != null) {
-//                operationAdapter.setRunningPosition(index);
-//                 operationAdapter.setRunningPosition(index);
-//                  todo  这里改成 operation的 id更好
-//            }
-//        }
-//
-//        private void onOperationFinish(int index) {
-//            if (operationAdapter != null) {
-//                operationAdapter.clearRunningPosition();  // 或只在全部完成时清空
-//            }
-//        }
     }
 
     private void preloadProjectDataAsync() {
