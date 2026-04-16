@@ -353,6 +353,7 @@ public class MainActivity extends AppCompatActivity {
     private ActionSheetAdapter actionSheetAdapter;
 
     private boolean floatEnabled;
+    private boolean shouldAutoStartFloat = true;
     private Level currentLevel = Level.PROJECT;
     private File currentProjectDir;
     private File currentTaskDir;
@@ -386,6 +387,7 @@ public class MainActivity extends AppCompatActivity {
         setupReusableActionSheet();
         bindActions();
         syncFloatPanelState();
+        maybeAutoStartFloatService();
         refreshPermissionStatus();
         showProjects();
     }
@@ -394,6 +396,7 @@ public class MainActivity extends AppCompatActivity {
     protected void onResume() {
         super.onResume();
         syncFloatPanelState();
+        maybeAutoStartFloatService();
         refreshPermissionStatus();
         reloadCurrentLevel();
     }
@@ -495,13 +498,24 @@ public class MainActivity extends AppCompatActivity {
         if (floatEnabled) {
             stopFloatService();
             floatEnabled = false;
+            shouldAutoStartFloat = false;
             Toast.makeText(this, R.string.toast_float_panel_stopped, Toast.LENGTH_SHORT).show();
         } else {
             startFloatService();
             floatEnabled = true;
+            shouldAutoStartFloat = true;
             Toast.makeText(this, R.string.toast_float_panel_started, Toast.LENGTH_SHORT).show();
         }
         refreshPermissionStatus();
+    }
+
+    private void maybeAutoStartFloatService() {
+        if (!shouldAutoStartFloat || floatEnabled || !canDrawOverlays()) {
+            return;
+        }
+        startFloatService();
+        floatEnabled = true;
+        shouldAutoStartFloat = false;
     }
 
     private void updateFloatToggleButton() {
