@@ -47,6 +47,9 @@ public class NodeFloatButtonManager {
     // ── Public API (unchanged from old version) ───────────────────────────────
 
     public void saveConfig(NodeFloatButtonConfig config) {
+        if (config == null || config.operationId == null || config.operationId.trim().isEmpty()) {
+            return;
+        }
         configs.put(config.operationId, config);
         persistOne(config);
     }
@@ -117,8 +120,20 @@ public class NodeFloatButtonManager {
                         NodeFloatButtonConfig cfg =
                                 gson.fromJson(r, NodeFloatButtonConfig.class);
                         if (cfg != null && cfg.operationId != null) {
+                            boolean ownershipPatched = false;
+                            if (isBlank(cfg.projectName)) {
+                                cfg.projectName = proj.getName();
+                                ownershipPatched = true;
+                            }
+                            if (isBlank(cfg.taskName)) {
+                                cfg.taskName = task.getName();
+                                ownershipPatched = true;
+                            }
                             cfg.ensureDefaults();
                             configs.put(cfg.operationId, cfg);
+                            if (ownershipPatched) {
+                                persistOne(cfg);
+                            }
                         }
                     } catch (Exception ignored) {}
                 }
@@ -151,5 +166,9 @@ public class NodeFloatButtonManager {
         } catch (Exception ignored) {}
         //noinspection ResultOfMethodCallIgnored
         legacy.delete();
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }

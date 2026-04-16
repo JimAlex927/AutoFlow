@@ -18,6 +18,8 @@ local.properties
 # Gradle caches and build outputs
 .gradle/
 .gradle-home/
+.gradle-home-check*/
+.gradle-home-*/
 .gradle-temp/
 build/
 */build/

@@ -115,6 +115,7 @@ final class FloatWindowConfigUiHelper {
             return;
         }
         cfg.ensureDefaults();
+        ensureNodeConfigOwnership(cfg);
         String schemaId = ensureNodeConfigUiSchemaId(cfg);
         ConfigUiSchema baseSchema = resolveNodeConfigUiSchema(cfg);
         if (baseSchema == null) {
@@ -363,11 +364,11 @@ final class FloatWindowConfigUiHelper {
                 updated = cfg;
             }
             updated.ensureDefaults();
+            ensureNodeConfigOwnership(updated);
             updated.configUiSchemaId = schemaId;
             nodeFloatBtnManager.saveConfig(updated);
             ConfigUiSchema schemaToSave = cloneConfigUiSchema(workingSchema);
-            schemaToSave.projectName = updated.projectName;
-            schemaToSave.taskName = updated.taskName;
+            stampSchemaOwnership(schemaToSave, updated);
             configUiStore.saveSchema(schemaToSave);
             dialog.dismiss();
             host.showToast("ConfigUI 已绑定到节点");
@@ -509,6 +510,7 @@ final class FloatWindowConfigUiHelper {
                 updated = cfg;
             }
             updated.ensureDefaults();
+            ensureNodeConfigOwnership(updated);
             updated.runtimeVariablesText = raw.trim();
             if (nodeFloatBtnManager != null) {
                 nodeFloatBtnManager.saveConfig(updated);
@@ -571,6 +573,7 @@ final class FloatWindowConfigUiHelper {
                         updated = cfg;
                     }
                     updated.ensureDefaults();
+                    ensureNodeConfigOwnership(updated);
                     updated.runtimeVariablesText = ConfigUiValueCodec.encode(merged);
                     if (nodeFloatBtnManager != null) {
                         nodeFloatBtnManager.saveConfig(updated);
@@ -587,10 +590,15 @@ final class FloatWindowConfigUiHelper {
             return null;
         }
         cfg.ensureDefaults();
+        ensureNodeConfigOwnership(cfg);
         if (TextUtils.isEmpty(cfg.configUiSchemaId)) {
             return null;
         }
-        return configUiStore.getSchema(cfg.configUiSchemaId);
+        ConfigUiSchema schema = configUiStore.getSchema(cfg.configUiSchemaId);
+        if (schema != null) {
+            stampSchemaOwnership(schema, cfg);
+        }
+        return schema;
     }
 
     private static final class ConfigUiPaletteDragPayload {
@@ -1066,6 +1074,46 @@ final class FloatWindowConfigUiHelper {
             cfg.configUiSchemaId = cfg.operationId + "_config_ui";
         }
         return cfg.configUiSchemaId;
+    }
+
+    private void ensureNodeConfigOwnership(@Nullable NodeFloatButtonConfig cfg) {
+        if (cfg == null) {
+            return;
+        }
+        File currentProjectDir = host.getCurrentProjectDir();
+        File currentTaskDir = host.getCurrentTaskDir();
+        if (TextUtils.isEmpty(cfg.projectName) && currentProjectDir != null) {
+            cfg.projectName = currentProjectDir.getName();
+        }
+        if (TextUtils.isEmpty(cfg.taskName) && currentTaskDir != null) {
+            cfg.taskName = currentTaskDir.getName();
+        }
+    }
+
+    private void stampSchemaOwnership(@Nullable ConfigUiSchema schema,
+                                      @Nullable NodeFloatButtonConfig cfg) {
+        if (schema == null) {
+            return;
+        }
+        if (cfg != null) {
+            ensureNodeConfigOwnership(cfg);
+        }
+        File currentProjectDir = host.getCurrentProjectDir();
+        File currentTaskDir = host.getCurrentTaskDir();
+        if (TextUtils.isEmpty(schema.projectName)) {
+            if (cfg != null && !TextUtils.isEmpty(cfg.projectName)) {
+                schema.projectName = cfg.projectName;
+            } else if (currentProjectDir != null) {
+                schema.projectName = currentProjectDir.getName();
+            }
+        }
+        if (TextUtils.isEmpty(schema.taskName)) {
+            if (cfg != null && !TextUtils.isEmpty(cfg.taskName)) {
+                schema.taskName = cfg.taskName;
+            } else if (currentTaskDir != null) {
+                schema.taskName = currentTaskDir.getName();
+            }
+        }
     }
 
     private String validateConfigUiSchema(ConfigUiSchema schema) {

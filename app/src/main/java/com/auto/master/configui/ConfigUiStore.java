@@ -52,6 +52,9 @@ public class ConfigUiStore {
         if (schema == null || schema.schemaId == null || schema.schemaId.trim().isEmpty()) {
             return;
         }
+        if (isBlank(schema.projectName) || isBlank(schema.taskName)) {
+            return;
+        }
         schema.updatedAt = System.currentTimeMillis();
         schema.ensureDefaults();
         schemaMap.put(schema.schemaId, schema);
@@ -99,8 +102,20 @@ public class ConfigUiStore {
                     try (FileReader r = new FileReader(f)) {
                         ConfigUiSchema schema = gson.fromJson(r, ConfigUiSchema.class);
                         if (schema != null && schema.schemaId != null) {
+                            boolean ownershipPatched = false;
+                            if (isBlank(schema.projectName)) {
+                                schema.projectName = proj.getName();
+                                ownershipPatched = true;
+                            }
+                            if (isBlank(schema.taskName)) {
+                                schema.taskName = task.getName();
+                                ownershipPatched = true;
+                            }
                             schema.ensureDefaults();
                             schemaMap.put(schema.schemaId, schema);
+                            if (ownershipPatched) {
+                                persistOne(schema);
+                            }
                         }
                     } catch (Exception ignored) {}
                 }
@@ -133,5 +148,9 @@ public class ConfigUiStore {
         } catch (Exception ignored) {}
         //noinspection ResultOfMethodCallIgnored
         legacy.delete();
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.trim().isEmpty();
     }
 }
