@@ -20,19 +20,6 @@
         android:textStyle="bold"
         android:visibility="gone" />
 
-    <TextView
-        android:id="@+id/ball_dock_handle_top"
-        android:layout_width="42dp"
-        android:layout_height="18dp"
-        android:layout_gravity="center"
-        android:background="@drawable/floating_ball_dock_handle_top"
-        android:gravity="center"
-        android:text="运"
-        android:textColor="#EAF4FF"
-        android:textSize="11sp"
-        android:textStyle="bold"
-        android:visibility="gone" />
-
     <LinearLayout
         android:id="@+id/floating_ball_core"
         android:layout_width="wrap_content"
