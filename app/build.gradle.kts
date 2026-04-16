@@ -21,11 +21,12 @@ android {
 
     buildTypes {
         release {
-            // Internal testing release: keep release optimizations but sign with the local debug key
-            // so the apk can be installed directly on devices.
+            // Mirror demo2's conservative release behavior to avoid release-only
+            // regressions caused by code shrinking/obfuscation.
+            // Keep debug signing so the local release APK remains directly installable.
             signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = true
-            isShrinkResources = true
+            isMinifyEnabled = false
+            isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
