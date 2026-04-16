@@ -1,48 +1,110 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/floating_ball_touch_target"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
-    android:orientation="vertical"
-    android:gravity="center_horizontal"
-    android:padding="3dp">
-
-    <FrameLayout
-        android:id="@+id/floating_ball_container"
-        android:layout_width="48dp"
-        android:layout_height="48dp"
-        android:background="@drawable/floating_ball_modern_bg"
-        android:clickable="true"
-        android:focusable="true"
-        android:elevation="6dp">
-
-        <ImageView
-            android:id="@+id/floatingBall"
-            android:layout_width="28dp"
-            android:layout_height="28dp"
-            android:layout_gravity="center"
-            android:src="@drawable/logo_atom_dna"
-            android:contentDescription="floating ball" />
-    </FrameLayout>
+    android:clipChildren="false"
+    android:clipToPadding="false"
+    android:padding="0dp">
 
     <TextView
-        android:id="@+id/ball_status_text"
+        android:id="@+id/ball_dock_handle_left"
+        android:layout_width="18dp"
+        android:layout_height="42dp"
+        android:layout_gravity="center"
+        android:background="@drawable/floating_ball_dock_handle_left"
+        android:gravity="center"
+        android:text="运"
+        android:textColor="#EAF4FF"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/ball_dock_handle_top"
+        android:layout_width="42dp"
+        android:layout_height="18dp"
+        android:layout_gravity="center"
+        android:background="@drawable/floating_ball_dock_handle_top"
+        android:gravity="center"
+        android:text="运"
+        android:textColor="#EAF4FF"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <LinearLayout
+        android:id="@+id/floating_ball_core"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_marginTop="7dp"
-        android:maxWidth="148dp"
-        android:minHeight="24dp"
-        android:paddingStart="9dp"
-        android:paddingTop="4dp"
-        android:paddingEnd="9dp"
-        android:paddingBottom="4dp"
-        android:background="@drawable/floating_ball_status_bg"
-        android:text=""
-        android:textSize="10sp"
-        android:textColor="#FFFFFF"
-        android:textStyle="bold"
-        android:visibility="gone"
-        android:ellipsize="end"
-        android:maxLines="1"
-        android:gravity="center" />
+        android:layout_gravity="center"
+        android:gravity="center_horizontal"
+        android:orientation="vertical">
 
-</LinearLayout>
+        <FrameLayout
+            android:id="@+id/floating_ball_container"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="@drawable/floating_ball_modern_bg"
+            android:clickable="false"
+            android:elevation="6dp"
+            android:focusable="false">
+
+            <ImageView
+                android:id="@+id/floatingBall"
+                android:layout_width="28dp"
+                android:layout_height="28dp"
+                android:layout_gravity="center"
+                android:contentDescription="floating ball"
+                android:src="@drawable/logo_atom_dna" />
+        </FrameLayout>
+
+        <TextView
+            android:id="@+id/ball_status_text"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="7dp"
+            android:background="@drawable/floating_ball_status_bg"
+            android:ellipsize="end"
+            android:gravity="center"
+            android:maxLines="1"
+            android:maxWidth="148dp"
+            android:minHeight="24dp"
+            android:paddingStart="9dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="9dp"
+            android:paddingBottom="4dp"
+            android:text=""
+            android:textColor="#FFFFFF"
+            android:textSize="10sp"
+            android:textStyle="bold"
+            android:visibility="gone" />
+    </LinearLayout>
+
+    <TextView
+        android:id="@+id/ball_dock_handle_right"
+        android:layout_width="18dp"
+        android:layout_height="42dp"
+        android:layout_gravity="center"
+        android:background="@drawable/floating_ball_dock_handle_right"
+        android:gravity="center"
+        android:text="运"
+        android:textColor="#EAF4FF"
+        android:textSize="12sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+    <TextView
+        android:id="@+id/ball_dock_handle_bottom"
+        android:layout_width="42dp"
+        android:layout_height="18dp"
+        android:layout_gravity="center"
+        android:background="@drawable/floating_ball_dock_handle_bottom"
+        android:gravity="center"
+        android:text="运"
+        android:textColor="#EAF4FF"
+        android:textSize="11sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
+
+</FrameLayout>

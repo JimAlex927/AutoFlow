@@ -61,8 +61,6 @@ final class ProjectPanelUiHelper {
 
         void refreshCurrentLevelList();
 
-        void hideRunningPanel();
-
         int getProjectPanelLevel();
 
         @Nullable
@@ -240,7 +238,6 @@ final class ProjectPanelUiHelper {
     }
 
     void showRuntimeAwareProjectPanel() {
-        host.hideRunningPanel();
         if (host.getCurrentTaskDir() != null) {
             clearProjectPanelSearch();
         }
@@ -269,11 +266,7 @@ final class ProjectPanelUiHelper {
             panelView.setVisibility(View.GONE);
             detachProjectPanel();
         }
-        if (host.isScriptActiveForUi()) {
-            showProjectPanelDock();
-        } else {
-            hideProjectPanelDock();
-        }
+        hideProjectPanelDock();
     }
 
     void toggleSearch() {

@@ -68,15 +68,106 @@
             android:textStyle="bold" />
     </LinearLayout>
 
-    <FrameLayout
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
         android:layout_weight="1"
-        android:background="@android:color/transparent">
+        android:background="@android:color/transparent"
+        android:orientation="horizontal"
+        android:paddingStart="10dp"
+        android:paddingTop="10dp"
+        android:paddingEnd="10dp"
+        android:paddingBottom="10dp">
 
         <LinearLayout
-            android:layout_width="match_parent"
+            android:layout_width="74dp"
             android:layout_height="match_parent"
+            android:background="@drawable/home_sidebar_bg"
+            android:gravity="center_horizontal"
+            android:orientation="vertical"
+            android:paddingTop="14dp"
+            android:paddingBottom="10dp">
+
+            <TextView
+                android:layout_width="34dp"
+                android:layout_height="34dp"
+                android:background="@drawable/home_sidebar_brand_bg"
+                android:gravity="center"
+                android:text="AM"
+                android:textColor="@android:color/white"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/nav_home_projects"
+                android:layout_width="50dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="18dp"
+                android:background="@drawable/home_sidebar_item_bg"
+                android:gravity="center"
+                android:minHeight="42dp"
+                android:paddingStart="8dp"
+                android:paddingTop="10dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="10dp"
+                android:text="项目"
+                android:textColor="@color/home_sidebar_item_text"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/nav_home_permissions"
+                android:layout_width="50dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/home_sidebar_item_bg"
+                android:gravity="center"
+                android:minHeight="42dp"
+                android:paddingStart="8dp"
+                android:paddingTop="10dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="10dp"
+                android:text="权限"
+                android:textColor="@color/home_sidebar_item_text"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/nav_home_lab"
+                android:layout_width="50dp"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/home_sidebar_item_bg"
+                android:gravity="center"
+                android:minHeight="42dp"
+                android:paddingStart="8dp"
+                android:paddingTop="10dp"
+                android:paddingEnd="8dp"
+                android:paddingBottom="10dp"
+                android:text="扩展"
+                android:textColor="@color/home_sidebar_item_text"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <View
+                android:layout_width="1dp"
+                android:layout_height="0dp"
+                android:layout_weight="1" />
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="vNext"
+                android:textColor="#95A2B0"
+                android:textSize="10sp" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="match_parent"
+            android:layout_marginStart="10dp"
+            android:layout_weight="1"
+            android:background="@drawable/home_main_surface_bg"
             android:orientation="vertical">
 
             <LinearLayout
@@ -217,6 +308,6 @@
                 </FrameLayout>
             </androidx.swiperefreshlayout.widget.SwipeRefreshLayout>
         </LinearLayout>
-    </FrameLayout>
+    </LinearLayout>
 
 </LinearLayout>

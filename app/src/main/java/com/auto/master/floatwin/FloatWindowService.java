@@ -159,6 +159,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     private View ballView;
     private WindowManager.LayoutParams ballLp;
+    private View ballCoreView;
+    private TextView ballDockHandleLeft;
+    private TextView ballDockHandleRight;
 
     private View projectPanelView;
     private WindowManager.LayoutParams projectPanelLp;
@@ -191,6 +194,21 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     
     // 悬浮球上的状态文字
     private TextView ballStatusText;
+    private TextView ballDockHandleTop;
+    private TextView ballDockHandleBottom;
+    private static final int BALL_EDGE_MARGIN_DP = 6;
+    private static final int BALL_AUTO_DOCK_THRESHOLD_DP = 24;
+    private static final int BALL_EDGE_OVERLAP_DP = 2;
+    private static final int BALL_DOCK_EDGE_NONE = 0;
+    private static final int BALL_DOCK_EDGE_LEFT = 1;
+    private static final int BALL_DOCK_EDGE_TOP = 2;
+    private static final int BALL_DOCK_EDGE_RIGHT = 3;
+    private static final int BALL_DOCK_EDGE_BOTTOM = 4;
+    private int lastIdleBallX = 50;
+    private int lastIdleBallY = 300;
+    private int ballDockEdge = BALL_DOCK_EDGE_LEFT;
+    private boolean ballCollapsedForRunning = false;
+    private boolean ballCollapsedToEdge = false;
     // 当前正在运行的 operation 名称
     private String currentRunningOperationName = "";
     private String currentRunningOperationId = "";
@@ -208,17 +226,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private static final int PROJECT_PANEL_DOCK_MARGIN_DP = 6;
     private static final long CAPTURE_UI_SETTLE_DELAY_MS = 320L;
     private static final int TEMPLATE_CAPTURE_PREVIEW_MAX_RETRIES = 240;
-    private static final int RUNNING_PANEL_MIN_W_DP = 260;
-    private static final int RUNNING_PANEL_MIN_H_DP = 320;
-    
-    // ========== 运行状态面板相关 ==========
-    private View runningPanelView;
-    private WindowManager.LayoutParams runningPanelLp;
-    private boolean isRunningPanelShowing = false;
-    
-    // 运行状态数据
+
+    // ========== 运行状态数据 ==========
     private List<OperationItem> runningOperations = new ArrayList<>();
-    private RunningPanelAdapter runningPanelAdapter;
     private int currentOperationIndex = 0;
     private int totalOperationCount = 0;
     private boolean isPaused = false;
@@ -516,11 +526,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 @Override
                 public void refreshCurrentLevelList() {
                     FloatWindowService.this.refreshCurrentLevelList();
-                }
-
-                @Override
-                public void hideRunningPanel() {
-                    FloatWindowService.this.hideRunningPanel();
                 }
 
                 @Override
@@ -1094,15 +1099,23 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         ballLp.gravity = Gravity.TOP | Gravity.START;
         ballLp.x = 50;
         ballLp.y = 300;
+        lastIdleBallX = ballLp.x;
+        lastIdleBallY = ballLp.y;
 
         View ball = ballView.findViewById(R.id.floating_ball_container);
-        ball.setOnClickListener(v -> {
+        ballCoreView = ballView.findViewById(R.id.floating_ball_core);
+        ballDockHandleLeft = ballView.findViewById(R.id.ball_dock_handle_left);
+        ballDockHandleTop = ballView.findViewById(R.id.ball_dock_handle_top);
+        ballDockHandleRight = ballView.findViewById(R.id.ball_dock_handle_right);
+        ballDockHandleBottom = ballView.findViewById(R.id.ball_dock_handle_bottom);
+        ballStatusText = ballView.findViewById(R.id.ball_status_text);
+
+        View.OnClickListener ballClickListener = v -> {
             if (ScriptRunner.isCurrentScriptRunning()) {
-                if (isRunningPanelShowing) {
-                    hideRunningPanel();
-                } else {
-                    showRunningQuickMenu(v);
-                }
+                hideProjectPanelDock();
+                showRuntimeAwareProjectPanel();
+            } else if (ballCollapsedToEdge) {
+                expandIdleBallFromEdge();
             } else {
                 // 非运行状态：展开/收起扇形快捷菜单
                 if (fanMenuView != null) {
@@ -1111,24 +1124,273 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     showFanMenu();
                 }
             }
-        });
-        ball.setOnLongClickListener(v -> {
+        };
+        View.OnLongClickListener ballLongClickListener = v -> {
             if (ScriptRunner.isCurrentScriptRunning()) {
                 togglePauseState();
             } else {
                 hideFanMenu();
                 removeProjectPanel();
-                hideRunningPanel();
                 Toast.makeText(this, "已收起面板", Toast.LENGTH_SHORT).show();
             }
             return true;
-        });
-        ball.setOnTouchListener(new DragTouchListener(ballLp, wm, ballView, this));
+        };
+        View.OnTouchListener dragListener = new DragTouchListener(ballLp, wm, ballView, this, true) {
+            @Override
+            protected void onDragEnd(int finalX, int finalY) {
+                if (ScriptRunner.isCurrentScriptRunning() || ballCollapsedForRunning) {
+                    dockBallForRunning(finalX, finalY);
+                } else {
+                    handleIdleBallDragEnd(finalX, finalY);
+                }
+            }
+        };
 
-        // 初始化状态文字
-        ballStatusText = ballView.findViewById(R.id.ball_status_text);
+        ball.setOnClickListener(ballClickListener);
+        ball.setOnLongClickListener(ballLongClickListener);
+        ball.setOnTouchListener(dragListener);
+        if (ballStatusText != null) {
+            ballStatusText.setOnClickListener(ballClickListener);
+            ballStatusText.setOnLongClickListener(ballLongClickListener);
+            ballStatusText.setOnTouchListener(dragListener);
+        }
+        if (ballDockHandleLeft != null) {
+            ballDockHandleLeft.setOnClickListener(ballClickListener);
+            ballDockHandleLeft.setOnLongClickListener(ballLongClickListener);
+            ballDockHandleLeft.setOnTouchListener(dragListener);
+        }
+        if (ballDockHandleTop != null) {
+            ballDockHandleTop.setOnClickListener(ballClickListener);
+            ballDockHandleTop.setOnLongClickListener(ballLongClickListener);
+            ballDockHandleTop.setOnTouchListener(dragListener);
+        }
+        if (ballDockHandleRight != null) {
+            ballDockHandleRight.setOnClickListener(ballClickListener);
+            ballDockHandleRight.setOnLongClickListener(ballLongClickListener);
+            ballDockHandleRight.setOnTouchListener(dragListener);
+        }
+        if (ballDockHandleBottom != null) {
+            ballDockHandleBottom.setOnClickListener(ballClickListener);
+            ballDockHandleBottom.setOnLongClickListener(ballLongClickListener);
+            ballDockHandleBottom.setOnTouchListener(dragListener);
+        }
 
         wm.addView(ballView, ballLp);
+        ballView.post(this::applyBallPresentation);
+    }
+
+    private void handleIdleBallDragEnd(int finalX, int finalY) {
+        if (resolveDockEdge(finalX, finalY, true) != BALL_DOCK_EDGE_NONE) {
+            collapseIdleBallToEdge(finalX, finalY);
+            return;
+        }
+        rememberIdleBallPosition(finalX, finalY);
+    }
+
+    private int[] measureFloatingBallSize() {
+        if (ballView == null) {
+            return new int[]{dp(56), dp(56)};
+        }
+        int width = ballView.getWidth();
+        int height = ballView.getHeight();
+        if (width > 0 && height > 0) {
+            return new int[]{width, height};
+        }
+        int widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        ballView.measure(widthSpec, heightSpec);
+        width = ballView.getMeasuredWidth();
+        height = ballView.getMeasuredHeight();
+        if (width <= 0) {
+            width = dp(56);
+        }
+        if (height <= 0) {
+            height = dp(56);
+        }
+        return new int[]{width, height};
+    }
+
+    private void rememberIdleBallPosition(int finalX, int finalY) {
+        lastIdleBallX = finalX;
+        lastIdleBallY = finalY;
+        ballDockEdge = resolveDockEdge(finalX, finalY, false);
+        ballCollapsedForRunning = false;
+        ballCollapsedToEdge = false;
+        applyBallPresentation();
+    }
+
+    private int resolveDockEdge(int anchorX, int anchorY, boolean requireThreshold) {
+        int[] screen = getScreenSizePx();
+        int[] size = measureFloatingBallSize();
+        int leftDistance = Math.max(0, anchorX);
+        int rightDistance = Math.max(0, screen[0] - size[0] - anchorX);
+        int bottomDistance = Math.max(0, screen[1] - size[1] - anchorY);
+        int threshold = dp(BALL_AUTO_DOCK_THRESHOLD_DP);
+        int minDistance = leftDistance;
+        int edge = BALL_DOCK_EDGE_LEFT;
+        if (rightDistance < minDistance) {
+            minDistance = rightDistance;
+            edge = BALL_DOCK_EDGE_RIGHT;
+        }
+        if (bottomDistance < minDistance) {
+            minDistance = bottomDistance;
+            edge = BALL_DOCK_EDGE_BOTTOM;
+        }
+        if (requireThreshold && minDistance > threshold) {
+            return BALL_DOCK_EDGE_NONE;
+        }
+        return edge;
+    }
+
+    private int clampBallAxis(int value, int min, int max) {
+        if (max < min) {
+            return min;
+        }
+        return Math.max(min, Math.min(value, max));
+    }
+
+    private void applyDockedBallPosition(int anchorX, int anchorY) {
+        if (ballView == null || ballLp == null) {
+            return;
+        }
+        int[] screen = getScreenSizePx();
+        int[] dockSize = measureFloatingBallSize();
+        int overlap = dp(BALL_EDGE_OVERLAP_DP);
+        switch (ballDockEdge) {
+            case BALL_DOCK_EDGE_LEFT:
+                ballLp.x = -overlap;
+                ballLp.y = clampBallAxis(anchorY, 0, Math.max(0, screen[1] - dockSize[1]));
+                break;
+            case BALL_DOCK_EDGE_TOP:
+                ballLp.x = clampBallAxis(anchorX, 0, Math.max(0, screen[0] - dockSize[0]));
+                // 顶部贴边必须完整留在屏幕内，否则触摸区域会被裁掉，出现“能看到但点不到”。
+                ballLp.y = 0;
+                break;
+            case BALL_DOCK_EDGE_RIGHT:
+                ballLp.x = Math.max(0, screen[0] - dockSize[0]) + overlap;
+                ballLp.y = clampBallAxis(anchorY, 0, Math.max(0, screen[1] - dockSize[1]));
+                break;
+            case BALL_DOCK_EDGE_BOTTOM:
+                ballLp.x = clampBallAxis(anchorX, 0, Math.max(0, screen[0] - dockSize[0]));
+                ballLp.y = Math.max(0, screen[1] - dockSize[1]);
+                break;
+            default:
+                break;
+        }
+        try {
+            wm.updateViewLayout(ballView, ballLp);
+        } catch (Exception e) {
+            Log.w(TAG, "apply docked ball position failed", e);
+        }
+    }
+
+    private void collapseIdleBallToEdge(int anchorX, int anchorY) {
+        if (ballView == null || ballLp == null) {
+            return;
+        }
+        int edge = resolveDockEdge(anchorX, anchorY, true);
+        if (edge == BALL_DOCK_EDGE_NONE) {
+            rememberIdleBallPosition(anchorX, anchorY);
+            return;
+        }
+        ballDockEdge = edge;
+        ballCollapsedToEdge = true;
+        ballCollapsedForRunning = false;
+        applyBallPresentation();
+        applyDockedBallPosition(anchorX, anchorY);
+    }
+
+    private void dockBallForRunning(int anchorX, int anchorY) {
+        if (ballView == null || ballLp == null) {
+            return;
+        }
+        ballDockEdge = resolveDockEdge(anchorX, anchorY, false);
+        ballCollapsedForRunning = true;
+        ballCollapsedToEdge = false;
+        applyBallPresentation();
+        applyDockedBallPosition(anchorX, anchorY);
+    }
+
+    private void restoreBallAfterRun() {
+        if (ballView == null || ballLp == null) {
+            return;
+        }
+        ballCollapsedForRunning = false;
+        ballCollapsedToEdge = false;
+        applyBallPresentation();
+        int[] screen = getScreenSizePx();
+        int[] size = measureFloatingBallSize();
+        int margin = dp(BALL_EDGE_MARGIN_DP);
+        ballLp.x = Math.max(margin, Math.min(lastIdleBallX, Math.max(margin, screen[0] - size[0] - margin)));
+        ballLp.y = Math.max(margin, Math.min(lastIdleBallY, Math.max(margin, screen[1] - size[1] - margin)));
+        try {
+            wm.updateViewLayout(ballView, ballLp);
+        } catch (Exception e) {
+            Log.w(TAG, "restore ball after run failed", e);
+        }
+    }
+
+    private void expandIdleBallFromEdge() {
+        if (ballView == null || ballLp == null) {
+            return;
+        }
+        ballCollapsedToEdge = false;
+        ballCollapsedForRunning = false;
+        applyBallPresentation();
+        int[] screen = getScreenSizePx();
+        int[] size = measureFloatingBallSize();
+        int margin = dp(BALL_EDGE_MARGIN_DP);
+        int targetX = clampBallAxis(ballLp.x, margin, Math.max(margin, screen[0] - size[0] - margin));
+        int targetY = clampBallAxis(ballLp.y, margin, Math.max(margin, screen[1] - size[1] - margin));
+        if (ballDockEdge == BALL_DOCK_EDGE_LEFT) {
+            targetX = margin;
+        } else if (ballDockEdge == BALL_DOCK_EDGE_TOP) {
+            targetY = margin;
+        } else if (ballDockEdge == BALL_DOCK_EDGE_RIGHT) {
+            targetX = Math.max(margin, screen[0] - size[0] - margin);
+        } else if (ballDockEdge == BALL_DOCK_EDGE_BOTTOM) {
+            targetY = Math.max(margin, screen[1] - size[1] - margin);
+        }
+        ballLp.x = targetX;
+        ballLp.y = targetY;
+        lastIdleBallX = targetX;
+        lastIdleBallY = targetY;
+        try {
+            wm.updateViewLayout(ballView, ballLp);
+        } catch (Exception e) {
+            Log.w(TAG, "expand idle ball from edge failed", e);
+        }
+    }
+
+    private void applyBallPresentation() {
+        if (ballView == null) {
+            return;
+        }
+        boolean running = ballCollapsedForRunning || ScriptRunner.isCurrentScriptRunning();
+        boolean collapsed = running || ballCollapsedToEdge;
+        if (ballCoreView != null) {
+            ballCoreView.setVisibility(collapsed ? View.GONE : View.VISIBLE);
+        }
+        if (ballStatusText != null) {
+            ballStatusText.setVisibility(View.GONE);
+        }
+        String handleLabel = running ? (isPaused ? "停" : "运") : "A";
+        if (ballDockHandleLeft != null) {
+            ballDockHandleLeft.setText(handleLabel);
+            ballDockHandleLeft.setVisibility(collapsed && ballDockEdge == BALL_DOCK_EDGE_LEFT ? View.VISIBLE : View.GONE);
+        }
+        if (ballDockHandleTop != null) {
+            ballDockHandleTop.setText(handleLabel);
+            ballDockHandleTop.setVisibility(View.GONE);
+        }
+        if (ballDockHandleRight != null) {
+            ballDockHandleRight.setText(handleLabel);
+            ballDockHandleRight.setVisibility(collapsed && ballDockEdge == BALL_DOCK_EDGE_RIGHT ? View.VISIBLE : View.GONE);
+        }
+        if (ballDockHandleBottom != null) {
+            ballDockHandleBottom.setText(handleLabel);
+            ballDockHandleBottom.setVisibility(collapsed && ballDockEdge == BALL_DOCK_EDGE_BOTTOM ? View.VISIBLE : View.GONE);
+        }
     }
 
     // ==================== 浮球扇形快捷菜单 ====================
@@ -1385,50 +1647,24 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             ScriptRunner.resumeCurrentScript();
             isPaused = false;
             updateRunningPanelStatus("运行中", 0xFF4CAF50);
-            if (ballStatusText != null && !TextUtils.isEmpty(currentRunningOperationName)) {
-                ballStatusText.setText("运行中: " + currentRunningOperationName);
-                ballStatusText.setVisibility(View.VISIBLE);
-            }
+            applyBallPresentation();
             Toast.makeText(this, "脚本已继续", Toast.LENGTH_SHORT).show();
         } else {
             ScriptRunner.pauseCurrentScript();
             isPaused = true;
             updateRunningPanelStatus("已暂停", 0xFFFF9800);
-            if (ballStatusText != null) {
-                ballStatusText.setText("已暂停");
-                ballStatusText.setVisibility(View.VISIBLE);
-            }
+            applyBallPresentation();
             Toast.makeText(this, "脚本已暂停", Toast.LENGTH_SHORT).show();
         }
-        syncPauseButtonIfPanelVisible();
         syncProjectPanelRuntimeUi();
-    }
-
-    private void syncPauseButtonIfPanelVisible() {
-        if (runningPanelView == null) {
-            return;
-        }
-        TextView btnPause = runningPanelView.findViewById(R.id.btn_pause);
-        if (btnPause == null) {
-            return;
-        }
-        if (isPaused) {
-            btnPause.setText("▶ 继续");
-            btnPause.setBackgroundResource(R.drawable.btn_run_selector);
-        } else {
-            btnPause.setText("⏸ 暂停");
-            btnPause.setBackgroundResource(R.drawable.btn_pause_selector);
-        }
     }
 
     private void stopScriptFromUi() {
         ScriptRunner.stopCurrentScript();
         recordFailureReason("stopped_by_user");
-        updateRuntimeMetricsPanel();
         appendRunLog("=== Run Stopped By User ===");
         persistCurrentRunLog();
         CrashLogger.finishRunSession(this, "stopped_by_user");
-        hideRunningPanel();
         hideProjectPanelDock();
         setBallVisible(true);
         stopDelayProgress();
@@ -1440,9 +1676,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (currentOperationAdapter != null) {
             currentOperationAdapter.clearRunningPosition();
         }
-        if (ballStatusText != null) {
-            ballStatusText.setVisibility(View.GONE);
-        }
+        restoreBallAfterRun();
         syncProjectPanelRuntimeUi();
         Toast.makeText(this, "脚本已停止", Toast.LENGTH_SHORT).show();
     }
@@ -1453,6 +1687,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (ballView != null) {
             wm.removeView(ballView);
             ballView = null;
+            ballCoreView = null;
+            ballStatusText = null;
+            ballDockHandleLeft = null;
+            ballDockHandleTop = null;
+            ballDockHandleRight = null;
+            ballDockHandleBottom = null;
         }
     }
 
@@ -1472,6 +1712,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         ballView.setVisibility(View.VISIBLE);
         ballView.setAlpha(1f);
+        applyBallPresentation();
         if (ballLp != null && ballView.getParent() != null) {
             try {
                 wm.updateViewLayout(ballView, ballLp);
@@ -1513,7 +1754,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void showProjectPanelDock() {
-        projectPanelUiHelper.showProjectPanelDock();
+        hideProjectPanelDock();
     }
 
     private void hideProjectPanelDock() {
@@ -4893,21 +5134,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             currentOperationIndex = runningPos + 1;
         }
 
-        // 更新运行面板
-        if (runningPanelAdapter != null) {
-            runningPanelAdapter.setRunningPosition(runningPos);
-        }
         if (currentOperationAdapter != null) {
             postToUi(() -> currentOperationAdapter.setRunningPosition(operationId));
         }
-        updateRunningPanelProgress();
+        syncProjectPanelRuntimeUi();
         maybeStartDelayProgress(opItem);
 
-        // 2. 更新悬浮球状态
-        if (ballStatusText != null) {
-            ballStatusText.setText("运行中: " + operationName);
-            ballStatusText.setVisibility(View.VISIBLE);
-        }
+        // 2. 更新悬浮球状态：运行中切为贴边 handle
+        dockBallForRunning(ballLp != null ? ballLp.x : 0, ballLp != null ? ballLp.y : 0);
 
         // 3. 更新通知栏
         updateNotification("正在运行: " + operationName);
@@ -5010,7 +5244,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             opFailureCount++;
             recordFailureReason("operation_failed");
         }
-        updateRuntimeMetricsPanel();
         // operation 完成，更新状态
         if (!success) {
             // 如果失败，更新状态为错误
@@ -5026,11 +5259,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         appendRunLog("=== Run Complete === total=" + (System.currentTimeMillis() - currentRunStartMs) + "ms");
         persistCurrentRunLog();
         CrashLogger.finishRunSession(this, "completed");
-        updateRuntimeMetricsPanel();
         // 所有 operation 执行完成
-        if (runningPanelAdapter != null) {
-            runningPanelAdapter.setRunningPosition(-1);
-        }
         if (currentOperationAdapter != null) {
             currentOperationAdapter.clearRunningPosition();
         }
@@ -5038,16 +5267,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         // 更新状态为完成
         updateRunningPanelStatus("已完成", 0xFF4CAF50);
 
-        // 隐藏悬浮球状态
-        if (ballStatusText != null) {
-            ballStatusText.setVisibility(View.GONE);
-        }
-
         currentRunningOperationId = "";
         currentRunningOperationName = "";
         isPaused = false;
         hideProjectPanelDock();
         setBallVisible(true);
+        restoreBallAfterRun();
         updateNotification("运行完成");
 
         // Phase 4B: 隐藏步骤覆盖层
@@ -5059,7 +5284,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         // 清除监听器
         ScriptRunner.clearExecutionListener();
 
-        hideRunningPanel();
         syncProjectPanelRuntimeUi();
         Toast.makeText(this, "所有操作执行完成", Toast.LENGTH_SHORT).show();
     }
@@ -7391,7 +7615,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                                         String projectName,
                                         String selectedTaskName,
                                         List<OperationItem> selectedTaskOperations,
-                                        boolean showRunningPanelNow) {
+                                        boolean openProjectPanelNow) {
         runningOperations.clear();
         runningOperations.addAll(selectedTaskOperations);
         totalOperationCount = selectedTaskOperations.size();
@@ -7425,7 +7649,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             scriptExecuteContext.running = true;
             ScriptRunner.runOperation(scriptExecuteContext);
 
-            transitionAfterRunStart(showRunningPanelNow);
+            transitionAfterRunStart(openProjectPanelNow);
 
             Log.d(TAG, "ScriptRunner.runOperation 已调用");
         } catch (Exception e) {
@@ -7462,7 +7686,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (startOperation != null) {
             appendRunLog("entry=" + startOperation.getId() + " (" + startOperation.getName() + ")");
         }
-        updateRuntimeMetricsPanel();
     }
 
     private void recordFailureReason(String reason) {
@@ -7521,37 +7744,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         return sum / Math.max(1, data.size());
     }
 
-    private void updateRuntimeMetricsPanel() {
-        if (runningPanelView == null) {
-            return;
-        }
-        TextView tvSuccessRate = runningPanelView.findViewById(R.id.tv_success_rate);
-        TextView tvDurationStats = runningPanelView.findViewById(R.id.tv_duration_stats);
-        TextView tvFailureReason = runningPanelView.findViewById(R.id.tv_failure_reason);
-        if (tvSuccessRate == null || tvDurationStats == null || tvFailureReason == null) {
-            return;
-        }
-
-        int total = opSuccessCount + opFailureCount;
-        if (total <= 0) {
-            tvSuccessRate.setText("成功率: -");
-        } else {
-            double successRate = (opSuccessCount * 100.0d) / total;
-            tvSuccessRate.setText(String.format(Locale.getDefault(), "成功率: %.1f%% (%d/%d)", successRate, opSuccessCount, total));
-        }
-
-        long avg = averageMs(opDurationsMs);
-        long p50 = percentileMs(opDurationsMs, 0.50d);
-        long p95 = percentileMs(opDurationsMs, 0.95d);
-        if (avg < 0 || p50 < 0 || p95 < 0) {
-            tvDurationStats.setText("耗时: -");
-        } else {
-            tvDurationStats.setText(String.format(Locale.getDefault(), "耗时: avg %dms | p50 %dms | p95 %dms", avg, p50, p95));
-        }
-
-        tvFailureReason.setText("失败: " + getTopFailureReason());
-    }
-
     private void appendRunLog(String line) {
         String ts = new SimpleDateFormat("HH:mm:ss.SSS", Locale.getDefault()).format(new Date());
         String logLine = ts + "  " + line;
@@ -7582,15 +7774,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
     }
 
-    private void transitionAfterRunStart(boolean showRunningPanelNow) {
-        setBallVisible(false);
-        if (showRunningPanelNow) {
+    private void transitionAfterRunStart(boolean openProjectPanelNow) {
+        setBallVisible(true);
+        dockBallForRunning(ballLp != null ? ballLp.x : lastIdleBallX, ballLp != null ? ballLp.y : lastIdleBallY);
+        if (openProjectPanelNow) {
             showRuntimeAwareProjectPanel();
             return;
         }
         smoothHideProjectPanel(() -> {
-            hideRunningPanel();
-            showProjectPanelDock();
             Toast.makeText(this, "后台运行中，可点悬浮球查看状态", Toast.LENGTH_SHORT).show();
         });
     }
@@ -7614,16 +7805,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     }
                 })
                 .start();
-    }
-
-    private void showRunningPanelSmooth() {
-        if (runningPanelView == null) {
-            showRunningPanel();
-        }
-        if (runningPanelView != null) {
-            runningPanelView.setAlpha(0f);
-            runningPanelView.animate().alpha(1f).setDuration(180).start();
-        }
     }
 
     private void showTemplateLibraryDialog(AutoCompleteTextView templateInput, View ownerDialog) {
@@ -8462,18 +8643,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         currentRunningTask = taskName;
         CrashLogger.updateRunContext(currentRunningProject, taskName, currentRunningOperationId, currentRunningOperationName);
         
-        // 在主线程刷新面板
-        postToUi(() -> {
-            if (runningPanelAdapter != null) {
-                runningPanelAdapter.setOperations(runningOperations);
-                Log.d(TAG, "已刷新 runningPanelAdapter，数据条数: " + runningOperations.size());
-            } else {
-                Log.w(TAG, "runningPanelAdapter 为 null，无法刷新");
-            }
-            
-            // 更新进度显示
-            updateRunningPanelProgress();
-        });
+        // 在主线程刷新当前节点面板的运行态
+        postToUi(this::syncProjectPanelRuntimeUi);
         
         // 更新通知栏
         updateNotification("已切换到: " + taskName);
@@ -8541,10 +8712,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         currentRunningTask = taskName;
         CrashLogger.updateRunContext(currentRunningProject, taskName, currentRunningOperationId, currentRunningOperationName);
         
-        if (runningPanelAdapter != null) {
-            runningPanelAdapter.setOperations(runningOperations);
-        }
-        updateRunningPanelProgress();
+        syncProjectPanelRuntimeUi();
     }
 
     private String getOperationTypeNameLegacy(Integer type) {
@@ -8595,49 +8763,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
     }
 
-    // ==================== 运行状态面板 ====================
-
-    /**
-     * 显示运行状态面板
-     */
-    private void showRunningPanel() {
-        if (runningPanelView != null) return;
-
-        runningPanelView = LayoutInflater.from(this).inflate(R.layout.window_running_panel, null);
-
-        int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                : WindowManager.LayoutParams.TYPE_PHONE;
-
-        runningPanelLp = new WindowManager.LayoutParams(
-                dp(300), dp(400),
-                type,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT
-        );
-        runningPanelLp.gravity = Gravity.TOP | Gravity.START;
-        runningPanelLp.x = getSharedPanelX();
-        runningPanelLp.y = getSharedPanelY();
-        adaptPanelSizeToScreen(runningPanelLp, 300, 400);
-
-        setupRunningPanel();
-        wm.addView(runningPanelView, runningPanelLp);
-        isRunningPanelShowing = true;
-    }
-
-    /**
-     * 关闭运行状态面板
-     */
-    private void hideRunningPanel() {
-        if (runningPanelView != null) {
-            rememberSharedPanelPosition(runningPanelLp);
-            wm.removeView(runningPanelView);
-            runningPanelView = null;
-            runningPanelLp = null;
-            isRunningPanelShowing = false;
-        }
-    }
-
     private int getSharedPanelX() {
         if (sharedPanelX != Integer.MIN_VALUE) {
             return sharedPanelX;
@@ -8660,110 +8785,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         sharedPanelY = lp.y;
     }
 
-    /**
-     * 切换运行状态面板显示/隐藏
-     */
-    private void toggleRunningPanel() {
-        if (isRunningPanelShowing) {
-            hideRunningPanel();
-        } else {
-            showRunningPanel();
-        }
-    }
-
-    /**
-     * 设置运行状态面板
-     */
-    private void setupRunningPanel() {
-        // 关闭按钮
-        runningPanelView.findViewById(R.id.btn_close_running).setOnClickListener(v -> hideRunningPanel());
-
-        // 拖动头
-        View dragHeader = runningPanelView.findViewById(R.id.panel_header);
-        dragHeader.setOnTouchListener(new DragTouchListener(runningPanelLp, wm, runningPanelView, this, true));
-        View resizeHandle = runningPanelView.findViewById(R.id.resize_handle);
-        if (resizeHandle != null) {
-            resizeHandle.setOnTouchListener(new PanelResizeTouchListener(
-                    runningPanelLp,
-                    wm,
-                    runningPanelView,
-                    this,
-                    RUNNING_PANEL_MIN_W_DP,
-                    RUNNING_PANEL_MIN_H_DP
-            ));
-        }
-
-        // 暂停/继续按钮
-        TextView btnPause = runningPanelView.findViewById(R.id.btn_pause);
-        btnPause.setOnClickListener(v -> togglePauseState());
-
-        // 停止按钮
-        runningPanelView.findViewById(R.id.btn_stop).setOnClickListener(v -> stopScriptFromUi());
-
-        // 设置初始状态
-        updateRunningPanelStatus("运行中", 0xFF4CAF50);
-        syncPauseButtonIfPanelVisible();
-
-        // 初始化列表
-        RecyclerView rv = runningPanelView.findViewById(R.id.rv_running_operations);
-        rv.setLayoutManager(new LinearLayoutManager(this));
-        runningPanelAdapter = new RunningPanelAdapter(runningOperations);
-        rv.setAdapter(runningPanelAdapter);
-
-        // 更新进度
-        updateRunningPanelProgress();
-        renderDelayProgressState();
-        updateRuntimeMetricsPanel();
-    }
-
-    /**
-     * 更新运行状态面板的状态显示
-     */
     private void updateRunningPanelStatus(String status, int color) {
         runtimeStatusText = status;
         runtimeStatusColor = color;
-        if (runningPanelView == null) {
-            syncProjectPanelRuntimeUi();
-            return;
-        }
-
-        TextView tvStatus = runningPanelView.findViewById(R.id.tv_status);
-        View indicator = runningPanelView.findViewById(R.id.status_indicator);
-
-        tvStatus.setText(status);
-        tvStatus.setTextColor(color);
-
-        // Keep the indicator circular while updating its semantic color.
-        Drawable indicatorBg = indicator.getBackground();
-        if (indicatorBg instanceof GradientDrawable) {
-            GradientDrawable dot = (GradientDrawable) indicatorBg.mutate();
-            dot.setColor(color);
-        } else {
-            indicator.setBackgroundColor(color);
-        }
-        syncProjectPanelRuntimeUi();
-    }
-
-    /**
-     * 更新运行状态面板的进度
-     */
-    private void updateRunningPanelProgress() {
-        if (runningPanelView == null) {
-            syncProjectPanelRuntimeUi();
-            return;
-        }
-
-        TextView tvProgress = runningPanelView.findViewById(R.id.tv_progress);
-        TextView tvCurrentOp = runningPanelView.findViewById(R.id.tv_current_op);
-        renderDelayProgressState();
-
-        tvProgress.setText("进度: " + currentOperationIndex + "/" + totalOperationCount);
-
-        if (!currentRunningOperationName.isEmpty()) {
-            tvCurrentOp.setText("当前: " + currentRunningOperationName);
-        } else {
-            tvCurrentOp.setText("当前: -");
-        }
         syncProjectPanelRuntimeUi();
     }
 

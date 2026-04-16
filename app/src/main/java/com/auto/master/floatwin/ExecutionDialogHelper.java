@@ -17,7 +17,7 @@ import com.auto.master.R;
 public class ExecutionDialogHelper {
 
     public interface OnRunModeSelectedListener {
-        void onSelected(boolean showRunningPanel);
+        void onSelected(boolean openProjectPanelNow);
     }
 
     private final FloatWindowHost host;

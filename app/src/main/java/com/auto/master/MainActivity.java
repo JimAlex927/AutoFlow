@@ -330,6 +330,9 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvPermissionStatus;
     private TextView btnPermissionQuick;
     private TextView btnToggleFloat;
+    private TextView navHomeProjects;
+    private TextView navHomePermissions;
+    private TextView navHomeLab;
     private ImageView btnPanelBack;
     private ImageView btnPanelAdd;
     private ImageView btnPanelRefresh;
@@ -406,6 +409,9 @@ public class MainActivity extends AppCompatActivity {
         tvPermissionStatus = findViewById(R.id.tv_permission_status);
         btnPermissionQuick = findViewById(R.id.btn_permission_quick);
         btnToggleFloat = findViewById(R.id.btn_toggle_float);
+        navHomeProjects = findViewById(R.id.nav_home_projects);
+        navHomePermissions = findViewById(R.id.nav_home_permissions);
+        navHomeLab = findViewById(R.id.nav_home_lab);
         btnPanelBack = findViewById(R.id.btn_panel_back);
         btnPanelAdd = findViewById(R.id.btn_panel_add);
         btnPanelRefresh = findViewById(R.id.btn_panel_refresh);
@@ -446,6 +452,20 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.btn_permission_sheet).setOnClickListener(v -> showPermissionSheet());
         btnPermissionQuick.setOnClickListener(v -> requestNextMissingPermission());
         btnToggleFloat.setOnClickListener(v -> toggleFloatPanel());
+        navHomeProjects.setOnClickListener(v -> {
+            selectHomeProjects();
+            if (currentLevel != Level.PROJECT) {
+                showProjects();
+            }
+        });
+        navHomePermissions.setOnClickListener(v -> {
+            selectHomeProjects();
+            showPermissionSheet();
+        });
+        navHomeLab.setOnClickListener(v -> {
+            selectHomeProjects();
+            Toast.makeText(this, "扩展入口已预留，后续功能会放在这里", Toast.LENGTH_SHORT).show();
+        });
         btnPanelBack.setOnClickListener(v -> navigatePanelBack());
         btnPanelAdd.setOnClickListener(v -> handlePrimaryCreateAction());
         btnPanelRefresh.setOnClickListener(v -> reloadCurrentLevel());
@@ -569,6 +589,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showProjects() {
+        selectHomeProjects();
         currentLevel = Level.PROJECT;
         currentProjectDir = null;
         currentTaskDir = null;
@@ -578,6 +599,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showTasks(File projectDir) {
+        selectHomeProjects();
         currentLevel = Level.TASK;
         currentProjectDir = projectDir;
         currentTaskDir = null;
@@ -658,10 +680,26 @@ public class MainActivity extends AppCompatActivity {
 
     private int resolveProjectSpanCount() {
         float widthDp = getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density;
-        if (widthDp >= 840f) {
+        float contentWidthDp = Math.max(320f, widthDp - 96f);
+        if (contentWidthDp >= 840f) {
             return 3;
         }
-        return 2;
+        if (contentWidthDp >= 520f) {
+            return 2;
+        }
+        return 1;
+    }
+
+    private void selectHomeProjects() {
+        setSidebarSelected(navHomeProjects, true);
+        setSidebarSelected(navHomePermissions, false);
+        setSidebarSelected(navHomeLab, false);
+    }
+
+    private void setSidebarSelected(TextView view, boolean selected) {
+        if (view != null) {
+            view.setSelected(selected);
+        }
     }
 
     private void updatePanelChrome(String title, String breadcrumb, String hint, boolean showBack, boolean showAdd) {
