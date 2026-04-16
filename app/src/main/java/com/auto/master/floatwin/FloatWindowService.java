@@ -332,6 +332,262 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     return NODE_BTN_COLORS[0];
                 }
             });
+    private final NodeActionCoordinator nodeActionCoordinator =
+            new NodeActionCoordinator(new NodeActionCoordinator.Host() {
+                @Override
+                public Context getContext() {
+                    return FloatWindowService.this;
+                }
+
+                @Override
+                public Handler getUiHandler() {
+                    return uiHandler;
+                }
+
+                @Override
+                public File getProjectsRootDir() {
+                    return FloatWindowService.this.getProjectsRootDir();
+                }
+
+                @Override
+                public void prepareProjectPanel() {
+                    FloatWindowService.this.prepareProjectPanel();
+                }
+
+                @Override
+                public void prepareNodePanelState(File projectDir, File taskDir) {
+                    currentProjectDir = projectDir;
+                    currentTaskDir = taskDir;
+                    currentLevel = NavigationLevel.OPERATION;
+                    projectPanelContentDirty = true;
+                }
+
+                @Override
+                public void clearProjectPanelSearch() {
+                    FloatWindowService.this.clearProjectPanelSearch();
+                }
+
+                @Override
+                public void invalidateOperationListCache(@Nullable File taskDir) {
+                    FloatWindowService.this.invalidateOperationListCache(taskDir);
+                }
+
+                @Override
+                public void showProjectPanel() {
+                    FloatWindowService.this.showProjectPanel();
+                }
+
+                @Override
+                public void loadOperations(File taskDir, boolean forceReload) {
+                    FloatWindowService.this.loadOperations(taskDir, forceReload);
+                }
+
+                @Override
+                public void updateUIForLevel() {
+                    FloatWindowService.this.updateUIForLevel();
+                }
+
+                @Override
+                public void focusOperationInPanel(String operationId) {
+                    if (currentOperationAdapter == null) {
+                        return;
+                    }
+                    currentOperationAdapter.selectById(operationId);
+                    int pos = currentOperationAdapter.findPositionById(operationId);
+                    if (pos >= 0) {
+                        RecyclerView rv = getProjectPanelRecyclerView();
+                        if (rv != null) {
+                            rv.scrollToPosition(pos);
+                        }
+                    }
+                }
+
+                @Override
+                public @Nullable Project findCachedProjectByName(String projectName) {
+                    return FloatWindowService.this.findCachedProjectByName(projectName);
+                }
+
+                @Override
+                public @Nullable Project loadProjectFromDir(File projectDir) {
+                    return FloatWindowService.this.loadProjectFromDir(projectDir);
+                }
+
+                @Override
+                public void upsertCachedProject(Project project) {
+                    FloatWindowService.this.upsertCachedProject(project);
+                }
+
+                @Override
+                public @Nullable NodeFloatButtonConfig getNodeFloatButtonConfig(String operationId) {
+                    return nodeFloatBtnManager == null ? null : nodeFloatBtnManager.getConfig(operationId);
+                }
+
+                @Override
+                public void applyNodeRuntimeVariables(OperationContext ctx, @Nullable NodeFloatButtonConfig cfg) {
+                    configUiHelper.applyNodeRuntimeVariables(ctx, cfg);
+                }
+
+                @Override
+                public void hideNodeFloatButtonUntilScriptStops(String operationId) {
+                    nodeFloatButtonUiHelper.hideButtonUntilScriptStops(operationId);
+                }
+
+                @Override
+                public void startOperationWithMode(MetaOperation startOperation,
+                                                   OperationContext ctx,
+                                                   String projectName,
+                                                   String selectedTaskName,
+                                                   List<OperationItem> selectedTaskOperations,
+                                                   boolean openProjectPanelNow) {
+                    FloatWindowService.this.startOperationWithMode(
+                            startOperation, ctx, projectName, selectedTaskName, selectedTaskOperations, openProjectPanelNow);
+                }
+
+                @Override
+                public List<OperationItem> buildOperationItemsFromTask(Task task) {
+                    return FloatWindowService.this.buildOperationItemsFromTask(task);
+                }
+
+                @Override
+                public void showToast(String message) {
+                    Toast.makeText(FloatWindowService.this, message, Toast.LENGTH_SHORT).show();
+                }
+            });
+    private final RuntimeTransitionCoordinator runtimeTransitionCoordinator =
+            new RuntimeTransitionCoordinator(new RuntimeTransitionCoordinator.Host() {
+                @Override
+                public Context getContext() {
+                    return FloatWindowService.this;
+                }
+
+                @Override
+                public boolean isPaused() {
+                    return isPaused;
+                }
+
+                @Override
+                public void setPaused(boolean paused) {
+                    isPaused = paused;
+                }
+
+                @Override
+                public void updateRunningPanelStatus(String status, int color) {
+                    FloatWindowService.this.updateRunningPanelStatus(status, color);
+                }
+
+                @Override
+                public void applyBallPresentation() {
+                    FloatWindowService.this.applyBallPresentation();
+                }
+
+                @Override
+                public void syncProjectPanelRuntimeUi() {
+                    FloatWindowService.this.syncProjectPanelRuntimeUi();
+                }
+
+                @Override
+                public void showToast(String message) {
+                    Toast.makeText(FloatWindowService.this, message, Toast.LENGTH_SHORT).show();
+                }
+
+                @Override
+                public void recordFailureReason(String reason) {
+                    FloatWindowService.this.recordFailureReason(reason);
+                }
+
+                @Override
+                public void appendRunLog(String log) {
+                    FloatWindowService.this.appendRunLog(log);
+                }
+
+                @Override
+                public void persistCurrentRunLog() {
+                    FloatWindowService.this.persistCurrentRunLog();
+                }
+
+                @Override
+                public void finishRunSession(String reason) {
+                    CrashLogger.finishRunSession(FloatWindowService.this, reason);
+                }
+
+                @Override
+                public void hideProjectPanelDock() {
+                    FloatWindowService.this.hideProjectPanelDock();
+                }
+
+                @Override
+                public void setBallVisible(boolean visible) {
+                    FloatWindowService.this.setBallVisible(visible);
+                }
+
+                @Override
+                public void stopDelayProgress() {
+                    FloatWindowService.this.stopDelayProgress();
+                }
+
+                @Override
+                public void hideStepOverlay() {
+                    FloatWindowService.this.hideStepOverlay();
+                }
+
+                @Override
+                public void clearCurrentRunningOperationState() {
+                    currentRunningOperationId = "";
+                    currentRunningOperationName = "";
+                }
+
+                @Override
+                public void clearCurrentOperationRunningPosition() {
+                    if (currentOperationAdapter != null) {
+                        currentOperationAdapter.clearRunningPosition();
+                    }
+                }
+
+                @Override
+                public void restoreBallAfterRun() {
+                    FloatWindowService.this.restoreBallAfterRun();
+                }
+
+                @Override
+                public void updateNotification(String text) {
+                    FloatWindowService.this.updateNotification(text);
+                }
+
+                @Override
+                public void clearFlowGraphHighlight() {
+                    flowGraphPanelHelper.clearHighlight();
+                }
+
+                @Override
+                public void clearExecutionListener() {
+                    ScriptRunner.clearExecutionListener();
+                }
+
+                @Override
+                public void refreshAppLaunchPollingState() {
+                    FloatWindowService.this.refreshAppLaunchPollingState();
+                }
+
+                @Override
+                public long getCurrentRunStartMs() {
+                    return currentRunStartMs;
+                }
+
+                @Override
+                public void showRuntimeAwareProjectPanel() {
+                    FloatWindowService.this.showRuntimeAwareProjectPanel();
+                }
+
+                @Override
+                public View getProjectPanelView() {
+                    return projectPanelView;
+                }
+
+                @Override
+                public void removeProjectPanel() {
+                    FloatWindowService.this.removeProjectPanel();
+                }
+            });
     private final NodeFloatButtonUiHelper nodeFloatButtonUiHelper =
             new NodeFloatButtonUiHelper(new NodeFloatButtonUiHelper.Host() {
                 @Override
@@ -411,12 +667,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
                 @Override
                 public void runNodeFloatButton(NodeFloatButtonConfig cfg) {
-                    FloatWindowService.this.runFromNodeFloatBtn(cfg);
+                    nodeActionCoordinator.runFromNodeFloatButton(cfg);
                 }
 
                 @Override
                 public void navigateToNodeInPanel(NodeFloatButtonConfig cfg) {
-                    FloatWindowService.this.navigateToNodeInPanel(cfg);
+                    nodeActionCoordinator.navigateToNodeInPanel(cfg);
                 }
 
                 @Override
@@ -1160,118 +1416,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             0xFF607D8B, // 蓝灰
     };
 
-    /**
-     * 打开/显示项目面板，导航到 cfg 对应的节点列表，并高亮选中该节点。
-     */
-    private void navigateToNodeInPanel(NodeFloatButtonConfig cfg) {
-        File projectsRoot = getProjectsRootDir();
-        File projectDir   = new File(projectsRoot, cfg.projectName);
-        File taskDir      = new File(projectDir,   cfg.taskName);
-        if (!projectDir.isDirectory() || !taskDir.isDirectory()) {
-            Toast.makeText(this, "找不到对应项目/任务，可能已被删除", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        uiHandler.post(() -> {
-            prepareProjectPanel();
-            currentProjectDir    = projectDir;
-            currentTaskDir       = taskDir;
-            currentLevel         = NavigationLevel.OPERATION;
-            clearProjectPanelSearch();
-            invalidateOperationListCache(taskDir);
-            projectPanelContentDirty = true;
-            showProjectPanel();
-            loadOperations(taskDir, true);
-            updateUIForLevel();
-            // 加载完成后选中目标节点并滚动到可见区域
-            uiHandler.postDelayed(() -> {
-                if (currentOperationAdapter == null) return;
-                currentOperationAdapter.selectById(cfg.operationId);
-                int pos = currentOperationAdapter.findPositionById(cfg.operationId);
-                if (pos >= 0) {
-                    RecyclerView rv = getProjectPanelRecyclerView();
-                    if (rv != null) rv.scrollToPosition(pos);
-                }
-            }, 120);
-        });
-    }
-
     private void showNodeFloatBtnConfig(OperationItem item) {
         nodeFloatButtonUiHelper.showNodeFloatBtnConfig(item);
     }
 
     private void showConfigUiDesignerDialog(OperationItem item) {
         configUiHelper.showConfigUiDesignerDialog(item);
-    }
-
-    private void applyNodeRuntimeVariables(OperationContext ctx, @Nullable NodeFloatButtonConfig cfg) {
-        configUiHelper.applyNodeRuntimeVariables(ctx, cfg);
-    }
-
-    /** 从 NodeFloatButtonManager 构建 operationId → 按钮颜色 的映射。 */
-    private Map<String, Integer> buildFloatBtnColorMap() {
-        return nodeFloatButtonUiHelper.getFloatBtnColorMap();
-    }
-
-    /**
-     * 点击节点悬浮按钮时运行对应节点。
-     * 直接后台运行，不弹运行模式选择。
-     * 若 cfg.hideWhileRunning == true，则运行期间隐藏按钮，运行结束后恢复。
-     */
-    private void runFromNodeFloatBtn(NodeFloatButtonConfig cfg) {
-        if (ScriptRunner.isCurrentScriptRunning()) {
-            Toast.makeText(this, "脚本运行中，请先停止", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        RunLaunchData data = buildRunLaunchDataForNode(cfg.projectName, cfg.taskName, cfg.operationId);
-        if (data == null) {
-            Toast.makeText(this, "无法找到节点，请确认项目/任务未被删除", Toast.LENGTH_SHORT).show();
-            return;
-        }
-        if (cfg.hideWhileRunning) {
-            nodeFloatButtonUiHelper.hideButtonUntilScriptStops(cfg.operationId);
-        }
-        startOperationWithMode(
-                data.startOperation, data.ctx,
-                data.projectName, data.selectedTaskName,
-                data.selectedTaskOperations, false);
-    }
-
-    /**
-     * 根据 projectName + taskName + operationId 构造运行数据。
-     * 与 prepareRunLaunchData() 逻辑类似，但不依赖 UI 选中状态。
-     */
-    @Nullable
-    private RunLaunchData buildRunLaunchDataForNode(String projectName, String taskName, String operationId) {
-        Project project = findCachedProjectByName(projectName);
-        if (project == null) {
-            File projectDir = new File(getProjectsRootDir(), projectName);
-            if (projectDir.exists()) {
-                project = loadProjectFromDir(projectDir);
-                if (project != null) upsertCachedProject(project);
-            }
-        }
-        if (project == null || project.getTaskMap() == null) return null;
-
-        Task task = project.getTaskMap().get(taskName);
-        if (task == null || task.getOperationMap() == null) return null;
-
-        MetaOperation startOp = task.getOperationMap().get(operationId);
-        if (startOp == null) return null;
-
-        List<OperationItem> ops = buildOperationItemsFromTask(task);
-        OperationContext ctx = new OperationContext();
-        ctx.anchorProject = project;
-        NodeFloatButtonConfig cfg = nodeFloatBtnManager == null ? null : nodeFloatBtnManager.getConfig(operationId);
-        applyNodeRuntimeVariables(ctx, cfg);
-
-        RunLaunchData data = new RunLaunchData();
-        data.startOperation = startOp;
-        data.selectedTask = task;
-        data.projectName = projectName;
-        data.selectedTaskName = taskName;
-        data.selectedTaskOperations = ops;
-        data.ctx = ctx;
-        return data;
     }
 
     /** 截断字符串，超出 maxChars 时加 "…"。 */
@@ -1281,42 +1431,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void togglePauseState() {
-        if (isPaused) {
-            ScriptRunner.resumeCurrentScript();
-            isPaused = false;
-            updateRunningPanelStatus("运行中", 0xFF4CAF50);
-            applyBallPresentation();
-            Toast.makeText(this, "脚本已继续", Toast.LENGTH_SHORT).show();
-        } else {
-            ScriptRunner.pauseCurrentScript();
-            isPaused = true;
-            updateRunningPanelStatus("已暂停", 0xFFFF9800);
-            applyBallPresentation();
-            Toast.makeText(this, "脚本已暂停", Toast.LENGTH_SHORT).show();
-        }
-        syncProjectPanelRuntimeUi();
+        runtimeTransitionCoordinator.togglePauseState();
     }
 
     private void stopScriptFromUi() {
-        ScriptRunner.stopCurrentScript();
-        recordFailureReason("stopped_by_user");
-        appendRunLog("=== Run Stopped By User ===");
-        persistCurrentRunLog();
-        CrashLogger.finishRunSession(this, "stopped_by_user");
-        hideProjectPanelDock();
-        setBallVisible(true);
-        stopDelayProgress();
-        hideStepOverlay();
-        currentRunningOperationId = "";
-        currentRunningOperationName = "";
-        isPaused = false;
-        updateRunningPanelStatus("已停止", 0xFFF44336);
-        if (currentOperationAdapter != null) {
-            currentOperationAdapter.clearRunningPosition();
-        }
-        restoreBallAfterRun();
-        syncProjectPanelRuntimeUi();
-        Toast.makeText(this, "脚本已停止", Toast.LENGTH_SHORT).show();
+        runtimeTransitionCoordinator.stopScriptFromUi();
     }
 
     private void showProjectPanel() {
@@ -3053,7 +3172,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         ensureProjectPanelAdapters();
         switchProjectPanelAdapter(operationPanelAdapter);
         attachOperationDragHelperIfNeeded(rv);
-        operationPanelAdapter.initFloatBtnColors(buildFloatBtnColorMap());
+        operationPanelAdapter.initFloatBtnColors(nodeFloatButtonUiHelper.getFloatBtnColorMap());
         operationPanelAdapter.submitOperations(operations);
         operationPanelAdapter.setBatchMode(operationBatchMode);
         operationPanelAdapter.setBatchSelectedIds(batchSelectedOperationIds);
@@ -4710,38 +4829,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     @Override
     public void onScriptComplete() {
-        refreshAppLaunchPollingState();
-        stopDelayProgress();
-        appendRunLog("=== Run Complete === total=" + (System.currentTimeMillis() - currentRunStartMs) + "ms");
-        persistCurrentRunLog();
-        CrashLogger.finishRunSession(this, "completed");
-        // 所有 operation 执行完成
-        if (currentOperationAdapter != null) {
-            currentOperationAdapter.clearRunningPosition();
-        }
-
-        // 更新状态为完成
-        updateRunningPanelStatus("已完成", 0xFF4CAF50);
-
-        currentRunningOperationId = "";
-        currentRunningOperationName = "";
-        isPaused = false;
-        hideProjectPanelDock();
-        setBallVisible(true);
-        restoreBallAfterRun();
-        updateNotification("运行完成");
-
-        // Phase 4B: 隐藏步骤覆盖层
-        hideStepOverlay();
-
-        // Phase 4A: 清除 FlowGraph 高亮
-        flowGraphPanelHelper.clearHighlight();
-
-        // 清除监听器
-        ScriptRunner.clearExecutionListener();
-
-        syncProjectPanelRuntimeUi();
-        Toast.makeText(this, "所有操作执行完成", Toast.LENGTH_SHORT).show();
+        runtimeTransitionCoordinator.handleScriptComplete();
     }
 
     private void refreshCurrentLevelList() {
@@ -7231,36 +7319,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void transitionAfterRunStart(boolean openProjectPanelNow) {
-        setBallVisible(true);
         dockBallForRunningFromCurrentPosition();
-        if (openProjectPanelNow) {
-            showRuntimeAwareProjectPanel();
-            return;
-        }
-        smoothHideProjectPanel(() -> {
-            Toast.makeText(this, "后台运行中，可点悬浮球查看状态", Toast.LENGTH_SHORT).show();
-        });
-    }
-
-    private void smoothHideProjectPanel(Runnable endAction) {
-        if (projectPanelView == null) {
-            if (endAction != null) {
-                endAction.run();
-            }
-            return;
-        }
-
-        View panel = projectPanelView;
-        panel.animate()
-                .alpha(0f)
-                .setDuration(160)
-                .withEndAction(() -> {
-                    removeProjectPanel();
-                    if (endAction != null) {
-                        endAction.run();
-                    }
-                })
-                .start();
+        runtimeTransitionCoordinator.transitionAfterRunStart(openProjectPanelNow);
     }
 
     private void showTemplateLibraryDialog(AutoCompleteTextView templateInput, View ownerDialog) {
