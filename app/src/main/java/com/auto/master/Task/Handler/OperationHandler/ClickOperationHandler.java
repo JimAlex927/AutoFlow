@@ -23,6 +23,7 @@ public class ClickOperationHandler extends OperationHandler {
     private static final long FAST_DISPATCH_TIMEOUT_MS = 250L;
     private static final long FAST_SETTLE_MS = 32L;
     private static final long STRICT_WAIT_TIMEOUT_MS = 3000L;
+    private static final int MAX_CLICK_RETRY_COUNT = 5;
     // 静态缓存：避免 extractNumbers() 每次调用都重新编译正则
     private static final Pattern COORD_PATTERN = Pattern.compile("(-?\\d+)\\D+(-?\\d+)");
 
@@ -94,7 +95,7 @@ public class ClickOperationHandler extends OperationHandler {
 
         getMainHandler().post(() -> {
             svc.showClickFeedback((int) p.x, (int) p.y, 280);
-            boolean accepted = svc.click((int) p.x, (int) p.y,
+            boolean accepted = svc.clickWithRetry((int) p.x, (int) p.y,
                     () -> {
                         notifyCompletion(result, true);
                         Log.d(CLICK_TAG, "click completed");
@@ -102,8 +103,8 @@ public class ClickOperationHandler extends OperationHandler {
                     () -> {
                         notifyCompletion(result, false);
                         Log.w(CLICK_TAG, "click cancelled");
-                    }
-            );
+                    },
+                    MAX_CLICK_RETRY_COUNT);
             notifyDispatch(result, accepted);
         });
 
@@ -165,6 +166,9 @@ public class ClickOperationHandler extends OperationHandler {
 
     private void notifyDispatch(ClickResult result, boolean accepted) {
         synchronized (result.lock) {
+            if (result.dispatched[0]) {
+                return;
+            }
             result.dispatched[0] = true;
             result.accepted[0] = accepted;
             result.lock.notifyAll();
@@ -173,6 +177,9 @@ public class ClickOperationHandler extends OperationHandler {
 
     private void notifyCompletion(ClickResult result, boolean success) {
         synchronized (result.lock) {
+            if (result.completed[0]) {
+                return;
+            }
             result.ok[0] = success;
             result.completed[0] = true;
             result.lock.notifyAll();

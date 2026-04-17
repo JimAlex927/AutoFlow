@@ -31,6 +31,7 @@ import java.util.List;
 
 public class AutoAccessibilityService extends AccessibilityService {
     private static final long CLICK_GESTURE_DURATION_MS = 16L;
+    private static final long CLICK_RETRY_DELAY_MS = 500L;
 
     private static final String TAG = "AutoAccService";
     private static volatile AutoAccessibilityService sInstance;
@@ -308,79 +309,221 @@ public class AutoAccessibilityService extends AccessibilityService {
     private static final int GESTURE_RETRY_DELAY = 1200; // 延迟检查时间
     private static final int GESTURE_TIMEOUT_MSG = 1002303; // 消息标识
 
-    /**
-     * 手势结果回调封装类 - 参考 GestureMultiGestureOption.a
-     * 内部处理重试逻辑和延迟检查
-     */
-    private class GestureResultWrapper extends GestureResultCallback {
-        final java.util.concurrent.atomic.AtomicReference<Boolean> completedRef;
-        final Runnable onSuccess;
-        final Runnable onFail;
-        final long startTime;
-        final int maxRetry;
-        final java.util.concurrent.atomic.AtomicInteger retryCount;
-        final GestureDescription gestureDesc;
-        final GestureOverlayView.GestureNode gestureNode;
+    private final class GestureRetryController {
+        private final GestureDescription gestureDesc;
+        private final GestureOverlayView.GestureNode gestureNode;
+        private final Runnable onSuccess;
+        private final Runnable onFail;
+        private final int maxRetry;
+        private int activeAttempt = 0;
+        private boolean finished = false;
+        private Runnable pendingRetry;
 
-        GestureResultWrapper(GestureDescription gestureDesc,
-                            GestureOverlayView.GestureNode node,
-                            Runnable onSuccess,
-                            Runnable onFail,
-                            int maxRetry) {
-            this.completedRef = new java.util.concurrent.atomic.AtomicReference<>(false);
+        GestureRetryController(GestureDescription gestureDesc,
+                               GestureOverlayView.GestureNode gestureNode,
+                               Runnable onSuccess,
+                               Runnable onFail,
+                               int maxRetry) {
             this.gestureDesc = gestureDesc;
-            this.gestureNode = node;
+            this.gestureNode = gestureNode;
             this.onSuccess = onSuccess;
             this.onFail = onFail;
-            this.maxRetry = maxRetry;
-            this.retryCount = new java.util.concurrent.atomic.AtomicInteger(0);
-            this.startTime = System.currentTimeMillis();
+            this.maxRetry = Math.max(0, maxRetry);
         }
 
-        @Override
-        public void onCompleted(GestureDescription gestureDescription) {
-            super.onCompleted(gestureDescription);
-            Log.d(TAG, "手势执行完成");
-            completedRef.set(true);
-            // 取消延迟检查
-            gestureHandler.removeMessages(GESTURE_TIMEOUT_MSG);
+        void start() {
+            dispatchNextAttempt();
+        }
+
+        private void dispatchNextAttempt() {
+            if (finished) {
+                return;
+            }
+            clearPendingRetry();
+            activeAttempt++;
+            final int attemptNumber = activeAttempt;
+            if (attemptNumber > 1) {
+                Log.d(TAG, "手势开始第 " + attemptNumber + " 次尝试，额外重试 "
+                        + (attemptNumber - 1) + "/" + maxRetry);
+            }
+            showGestureTrail(gestureNode);
+            try {
+                boolean accepted = dispatchGesture(gestureDesc, new GestureResultCallback() {
+                    @Override
+                    public void onCompleted(GestureDescription gestureDescription) {
+                        super.onCompleted(gestureDescription);
+                        handleCompleted(attemptNumber);
+                    }
+
+                    @Override
+                    public void onCancelled(GestureDescription gestureDescription) {
+                        super.onCancelled(gestureDescription);
+                        handleCancelled(attemptNumber);
+                    }
+                }, null);
+                if (!accepted) {
+                    handleCancelled(attemptNumber);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "手势派发失败", e);
+                handleCancelled(attemptNumber);
+            }
+        }
+
+        private void handleCompleted(int attemptNumber) {
+            if (finished || attemptNumber != activeAttempt) {
+                return;
+            }
+            finished = true;
+            clearPendingRetry();
+            Log.d(TAG, "手势执行完成，最终成功于第 " + attemptNumber + " 次尝试");
             if (onSuccess != null) {
                 onSuccess.run();
             }
         }
 
-        @Override
-        public void onCancelled(GestureDescription gestureDescription) {
-            super.onCancelled(gestureDescription);
-            Log.w(TAG, "手势被取消，准备延迟检查...");
-            // 延迟检查是否真的失败
-            gestureHandler.postDelayed(() -> checkAndRetry(), GESTURE_RETRY_DELAY);
-        }
-
-        private void checkAndRetry() {
-            // 如果已经标记为完成，说明 onCompleted 已执行，不需要重试
-            if (completedRef.get()) {
-                Log.d(TAG, "手势实际上已成功，忽略取消回调");
+        private void handleCancelled(int attemptNumber) {
+            if (finished || attemptNumber != activeAttempt) {
                 return;
             }
-
-            // 检查是否还有重试次数
-            int currentRetry = retryCount.incrementAndGet();
-            if (currentRetry <= maxRetry) {
-                Log.d(TAG, "手势失败，第 " + currentRetry + "/" + maxRetry + " 次重试");
-                // 执行重试
-                retryGesture();
-            } else {
-                Log.e(TAG, "手势执行失败，已达最大重试次数");
-                if (onFail != null) {
-                    onFail.run();
+            if (pendingRetry != null) {
+                return;
+            }
+            Log.w(TAG, "手势第 " + attemptNumber + " 次尝试被取消，准备延迟检查...");
+            pendingRetry = () -> {
+                if (finished || attemptNumber != activeAttempt) {
+                    clearPendingRetry();
+                    return;
                 }
+                if (attemptNumber > maxRetry) {
+                    finished = true;
+                    clearPendingRetry();
+                    Log.e(TAG, "手势执行失败，已达最大重试次数 " + maxRetry);
+                    if (onFail != null) {
+                        onFail.run();
+                    }
+                    return;
+                }
+                clearPendingRetry();
+                dispatchNextAttempt();
+            };
+            gestureHandler.postDelayed(pendingRetry, GESTURE_RETRY_DELAY);
+        }
+
+        private void clearPendingRetry() {
+            if (pendingRetry != null) {
+                gestureHandler.removeCallbacks(pendingRetry);
+                pendingRetry = null;
+            }
+        }
+    }
+
+    private final class ClickRetryController {
+        private final GestureDescription gestureDesc;
+        private final int clickX;
+        private final int clickY;
+        private final Runnable onSuccess;
+        private final Runnable onFail;
+        private final int maxRetry;
+        private int activeAttempt = 0;
+        private boolean finished = false;
+        private Runnable pendingRetry;
+
+        ClickRetryController(GestureDescription gestureDesc,
+                             int clickX,
+                             int clickY,
+                             Runnable onSuccess,
+                             Runnable onFail,
+                             int maxRetry) {
+            this.gestureDesc = gestureDesc;
+            this.clickX = clickX;
+            this.clickY = clickY;
+            this.onSuccess = onSuccess;
+            this.onFail = onFail;
+            this.maxRetry = Math.max(0, maxRetry);
+        }
+
+        void start() {
+            dispatchNextAttempt();
+        }
+
+        private void dispatchNextAttempt() {
+            if (finished) {
+                return;
+            }
+            clearPendingRetry();
+            activeAttempt++;
+            final int attemptNumber = activeAttempt;
+            if (attemptNumber > 1) {
+                Log.d(TAG, "点击开始第 " + attemptNumber + " 次尝试，额外重试 "
+                        + (attemptNumber - 1) + "/" + maxRetry);
+                showClickFeedback(clickX, clickY, 220);
+            }
+            try {
+                boolean accepted = dispatchGesture(gestureDesc, new GestureResultCallback() {
+                    @Override
+                    public void onCompleted(GestureDescription gestureDescription) {
+                        super.onCompleted(gestureDescription);
+                        handleCompleted(attemptNumber);
+                    }
+
+                    @Override
+                    public void onCancelled(GestureDescription gestureDescription) {
+                        super.onCancelled(gestureDescription);
+                        handleCancelled(attemptNumber);
+                    }
+                }, null);
+                if (!accepted) {
+                    handleCancelled(attemptNumber);
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "点击派发失败", e);
+                handleCancelled(attemptNumber);
             }
         }
 
-        private void retryGesture() {
-            // 重新派发相同的手势
-            dispatchGesture(gestureDesc, this, null);
+        private void handleCompleted(int attemptNumber) {
+            if (finished || attemptNumber != activeAttempt) {
+                return;
+            }
+            finished = true;
+            clearPendingRetry();
+            if (onSuccess != null) {
+                onSuccess.run();
+            }
+        }
+
+        private void handleCancelled(int attemptNumber) {
+            if (finished || attemptNumber != activeAttempt) {
+                return;
+            }
+            if (pendingRetry != null) {
+                return;
+            }
+            pendingRetry = () -> {
+                if (finished || attemptNumber != activeAttempt) {
+                    clearPendingRetry();
+                    return;
+                }
+                if (attemptNumber > maxRetry) {
+                    finished = true;
+                    clearPendingRetry();
+                    if (onFail != null) {
+                        onFail.run();
+                    }
+                    return;
+                }
+                clearPendingRetry();
+                dispatchNextAttempt();
+            };
+            mainHandler.postDelayed(pendingRetry, CLICK_RETRY_DELAY_MS);
+        }
+
+        private void clearPendingRetry() {
+            if (pendingRetry != null) {
+                mainHandler.removeCallbacks(pendingRetry);
+                pendingRetry = null;
+            }
         }
     }
 
@@ -413,10 +556,23 @@ public class AutoAccessibilityService extends AccessibilityService {
         }
 
         GestureDescription gestureDesc = builder.build();
-        GestureResultWrapper callback = new GestureResultWrapper(
-            gestureDesc, node, onSuccess, onFail, maxRetry);
-        
-        dispatchGesture(gestureDesc, callback, null);
+        new GestureRetryController(gestureDesc, node, onSuccess, onFail, maxRetry).start();
+    }
+
+    public boolean clickWithRetry(int x,
+                                  int y,
+                                  Runnable onDone,
+                                  Runnable onFail,
+                                  int maxRetry) {
+        Path path = new Path();
+        path.moveTo(x, y);
+
+        GestureDescription gd = new GestureDescription.Builder()
+                .addStroke(new GestureDescription.StrokeDescription(path, 0, CLICK_GESTURE_DURATION_MS))
+                .build();
+
+        new ClickRetryController(gd, x, y, onDone, onFail, maxRetry).start();
+        return true;
     }
 
     /**

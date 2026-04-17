@@ -30,6 +30,7 @@ import java.util.Map;
 public class GestureOperationHandler extends OperationHandler {
 
     private static final String TAG = "GestureOperationHandler";
+    private static final int MAX_GESTURE_RETRY_COUNT = 5;
     // Gson 实例是线程安全的，静态复用避免每次反射初始化
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
 
@@ -159,19 +160,27 @@ public class GestureOperationHandler extends OperationHandler {
             final GestureOverlayView.GestureNode finalGestureNode = gestureNode;
             final boolean[] callbackInvoked = new boolean[]{false};
 
-            // 先显示手势轨迹
-            getMainHandler().post(() -> svc.showGestureTrail(finalGestureNode));
-            
             // 在同步块内调用 replayGesture，确保 wait 在 notify 之前
             synchronized (lock) {
-                svc.replayGesture(finalGestureNode, success -> {
-                    synchronized (lock) {
-                        Log.d(TAG, "手势执行回调 - 成功: " + success);
-                        successResult[0] = success;
-                        callbackInvoked[0] = true;
-                        lock.notify();
-                    }
-                });
+                svc.replayGestureWithRetry(
+                        finalGestureNode,
+                        () -> {
+                            synchronized (lock) {
+                                Log.d(TAG, "手势执行回调 - 成功: true");
+                                successResult[0] = true;
+                                callbackInvoked[0] = true;
+                                lock.notifyAll();
+                            }
+                        },
+                        () -> {
+                            synchronized (lock) {
+                                Log.d(TAG, "手势执行回调 - 成功: false");
+                                successResult[0] = false;
+                                callbackInvoked[0] = true;
+                                lock.notifyAll();
+                            }
+                        },
+                        MAX_GESTURE_RETRY_COUNT);
 
                 // 等待手势执行完成，最多等待 30 秒
                 try {
