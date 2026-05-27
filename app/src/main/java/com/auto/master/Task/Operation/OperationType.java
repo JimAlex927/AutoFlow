@@ -25,7 +25,8 @@ public enum OperationType {
     COLOR_SEARCH(19, "区域找色", "color_search"),
     HTTP_REQUEST(20, "HTTP请求", "http_request"),
     DYNAMIC_DELAY(21, "动态延时", "dynamic_delay"),
-    SET_CAPTURE_SCALE(22, "采集倍率", "set_scale");
+    SET_CAPTURE_SCALE(22, "采集倍率", "set_scale"),
+    OCR_TEXT(23, "OCR识别", "ocr");
 
     private final int code;
     private final String displayName;

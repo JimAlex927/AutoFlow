@@ -65,6 +65,8 @@
     <color name="op_color_match_bg">#FBE9E7</color>
     <color name="op_color_search">#8E24AA</color>
     <color name="op_color_search_bg">#F3E5F5</color>
+    <color name="op_ocr_text">#00796B</color>
+    <color name="op_ocr_text_bg">#E0F2F1</color>
     <color name="op_jump_task">#F4511E</color>
     <color name="op_jump_task_bg">#FBE9E7</color>
     <color name="op_condition">#F9A825</color>

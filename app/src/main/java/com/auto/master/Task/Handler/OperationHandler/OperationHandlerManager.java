@@ -22,6 +22,7 @@ import com.auto.master.Task.Operation.LoopOperation;
 import com.auto.master.Task.Operation.MatchMapTemplateOperation;
 import com.auto.master.Task.Operation.MatchTemplateOperation;
 import com.auto.master.Task.Operation.MetaOperation;
+import com.auto.master.Task.Operation.OcrTextOperation;
 import com.auto.master.Task.Operation.OperationType;
 import com.auto.master.Task.Operation.SetCaptureScaleOperation;
 import com.auto.master.Task.Operation.SwitchBranchOperation;
@@ -66,6 +67,7 @@ public class OperationHandlerManager {
         register(OperationType.HTTP_REQUEST, HttpRequestOperation.class, HttpRequestOperation::new, HttpRequestOperationHandler::new, "http", "http_request");
         register(OperationType.DYNAMIC_DELAY, DynamicDelayOperation.class, DynamicDelayOperation::new, DynamicDelayOperationHandler::new, "dynamic_delay", "dynamicdelay");
         register(OperationType.SET_CAPTURE_SCALE, SetCaptureScaleOperation.class, SetCaptureScaleOperation::new, SetCaptureScaleOperationHandler::new, "set_scale", "set_capture_scale", "capture_scale");
+        register(OperationType.OCR_TEXT, OcrTextOperation.class, OcrTextOperation::new, OcrTextOperationHandler::new, "ocr", "ocr_text", "text_ocr");
 
         registerResponse(OperationType.CLICK.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
@@ -90,6 +92,7 @@ public class OperationHandlerManager {
         registerResponse(OperationType.HTTP_REQUEST.getCode(), 1, ColorMatchResponseHandler::new);
         registerResponse(OperationType.DYNAMIC_DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.SET_CAPTURE_SCALE.getCode(), 1, JumpToNextOperationResponseHandler::new);
+        registerResponse(OperationType.OCR_TEXT.getCode(), 1, JumpToNextOperationResponseHandler::new);
     }
 
     /**

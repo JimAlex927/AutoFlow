@@ -163,6 +163,23 @@ public abstract class MetaOperation {
     public static String HTTP_STATUS_VAR = "HTTP_STATUS_VAR";
     public static String HTTP_TIMEOUT_MS = "HTTP_TIMEOUT_MS";
 
+    // OCR 参数
+    public static String OCR_LANGUAGE = "OCR_LANGUAGE";
+    public static String OCR_TARGET_TEXT = "OCR_TARGET_TEXT";
+    public static String OCR_MATCH_MODE = "OCR_MATCH_MODE";
+    public static String OCR_TEXT_VAR = "OCR_TEXT_VAR";
+    public static String OCR_CONFIDENCE_VAR = "OCR_CONFIDENCE_VAR";
+    public static String OCR_MIN_CONFIDENCE = "OCR_MIN_CONFIDENCE";
+    public static String OCR_SCALE_FACTOR = "OCR_SCALE_FACTOR";
+    public static String OCR_THRESHOLD = "OCR_THRESHOLD";
+    public static String OCR_PAGE_SEG_MODE = "OCR_PAGE_SEG_MODE";
+    public static String OCR_TEXT = "OCR_TEXT";
+    public static String OCR_CONFIDENCE = "OCR_CONFIDENCE";
+    public static final String OCR_MATCH_CONTAINS = "contains";
+    public static final String OCR_MATCH_EQUALS = "equals";
+    public static final String OCR_MATCH_REGEX = "regex";
+    public static final String OCR_MATCH_ANY = "any";
+
 
     // 无参构造方法 - Gson 必需
     public MetaOperation() {}

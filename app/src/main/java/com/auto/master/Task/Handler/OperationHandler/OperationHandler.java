@@ -14,7 +14,16 @@ import java.util.concurrent.ThreadLocalRandom;
  */
 public abstract class OperationHandler {
 
-    private static final Handler MAIN = new Handler(Looper.getMainLooper());
+    private static final Handler MAIN = createMainHandler();
+
+    private static Handler createMainHandler() {
+        try {
+            Looper looper = Looper.getMainLooper();
+            return looper == null ? null : new Handler(looper);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
 
     private Integer type = -1;
     public  Handler getMainHandler(){

@@ -13,7 +13,16 @@ public abstract class DefaultResponseHandler {
     public Integer type = -1;
 
     /** Shared main-thread Handler — avoids allocating a new Handler on every click path. */
-    protected static final Handler MAIN_HANDLER = new Handler(Looper.getMainLooper());
+    protected static final Handler MAIN_HANDLER = createMainHandler();
+
+    private static Handler createMainHandler() {
+        try {
+            Looper looper = Looper.getMainLooper();
+            return looper == null ? null : new Handler(looper);
+        } catch (RuntimeException ignored) {
+            return null;
+        }
+    }
 
     public void process(Object response, ScriptExecuteContext ctx) {
         return;

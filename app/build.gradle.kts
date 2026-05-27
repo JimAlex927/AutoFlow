@@ -84,6 +84,7 @@ dependencies {
     // String utilities (used by ResponseHandlers)
     implementation("org.apache.commons:commons-lang3:3.12.0")
 
+    implementation("cz.adaptech.tesseract4android:tesseract4android:4.9.0")
 
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("org.mozilla:rhino:1.7.15")

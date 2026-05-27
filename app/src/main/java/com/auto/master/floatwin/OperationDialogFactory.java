@@ -17,6 +17,7 @@ import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
+import com.auto.master.Task.Handler.OperationHandler.OcrTextOperationHandler;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.floatwin.adapter.LaunchAppPickerAdapter;
 import com.auto.master.floatwin.adapter.OperationIdPickerAdapter;
@@ -4764,6 +4765,351 @@ public class OperationDialogFactory {
                 host.showToast("保存区域找色失败: " + e.getMessage());
             }
         });
+    }
+
+    // ==================== OCR Text Operation ====================
+
+    public void showAddOcrTextDialog() {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_ocr_text, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.84f, 0.94f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 560, null);
+
+        bindOcrTextDialog(dialogView, null, null);
+    }
+
+    public void showEditOcrTextDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_add_ocr_text, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.84f, 0.94f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 560, null);
+
+        TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        if (btnConfirm != null) {
+            btnConfirm.setText("保存");
+        }
+        bindOcrTextDialog(dialogView, operationId, operationObject);
+    }
+
+    private void bindOcrTextDialog(View dialogView, String operationId, JSONObject operationObject) {
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        EditText edtBbox = dialogView.findViewById(R.id.edt_bbox);
+        EditText edtLanguage = dialogView.findViewById(R.id.edt_ocr_language);
+        EditText edtTextVar = dialogView.findViewById(R.id.edt_ocr_text_var);
+        EditText edtMinConfidence = dialogView.findViewById(R.id.edt_ocr_min_confidence);
+        EditText edtTimeout = dialogView.findViewById(R.id.edt_timeout);
+        TextView btnTestOcr = dialogView.findViewById(R.id.btn_test_ocr);
+        TextView tvTestResult = dialogView.findViewById(R.id.tv_ocr_test_result);
+        EditText edtPreDelay = dialogView.findViewById(R.id.edt_match_pre_delay);
+        EditText edtScaleFactor = dialogView.findViewById(R.id.edt_ocr_scale_factor);
+        EditText edtThreshold = dialogView.findViewById(R.id.edt_ocr_threshold);
+        AutoCompleteTextView edtPsm = dialogView.findViewById(R.id.edt_ocr_psm);
+        EditText edtConfidenceVar = dialogView.findViewById(R.id.edt_ocr_confidence_var);
+        AutoCompleteTextView edtNextOperation = dialogView.findViewById(R.id.edt_next_operation);
+
+        edtName.setText("OCR 识别");
+        edtLanguage.setText("chi_sim+eng");
+        edtMinConfidence.setText("0");
+        edtTimeout.setText(defaultMatchTimeoutText());
+        setupMatchDelayHint(edtPreDelay);
+        edtScaleFactor.setText("2.0");
+        edtThreshold.setText("0");
+        edtPsm.setText("auto", false);
+        setupAdvancedToggle(dialogView);
+        dialogHelpers.bindAutoComplete(edtPsm, java.util.Arrays.asList(
+                "auto", "block", "line", "word", "sparse"
+        ));
+
+        if (nextOpBinder != null) {
+            nextOpBinder.bindNextOperationSuggestions(dialogView, null);
+        }
+
+        if (operationObject != null) {
+            try {
+                edtName.setText(operationObject.optString("name", ""));
+                JSONObject inputMap = operationObject.optJSONObject("inputMap");
+                if (inputMap != null) {
+                    JSONArray bboxArr = inputMap.optJSONArray(MetaOperation.BBOX);
+                    if (bboxArr != null && bboxArr.length() >= 4) {
+                        edtBbox.setText(bboxArr.optInt(0) + "," + bboxArr.optInt(1) + ","
+                                + bboxArr.optInt(2) + "," + bboxArr.optInt(3));
+                    }
+                    edtLanguage.setText(inputMap.optString(MetaOperation.OCR_LANGUAGE, "chi_sim+eng"));
+                    edtTextVar.setText(inputMap.optString(MetaOperation.OCR_TEXT_VAR, ""));
+                    setOptionalLongText(edtMinConfidence, inputMap.opt(MetaOperation.OCR_MIN_CONFIDENCE));
+                    Object timeoutObj = inputMap.opt(MetaOperation.MATCHTIMEOUT);
+                    edtTimeout.setText(timeoutObj == null ? defaultMatchTimeoutText() : String.valueOf(timeoutObj).replace(".0", ""));
+                    setNodePreDelayText(edtPreDelay, inputMap);
+                    Object scaleObj = inputMap.opt(MetaOperation.OCR_SCALE_FACTOR);
+                    edtScaleFactor.setText(scaleObj == null ? "2.0" : String.valueOf(scaleObj).replace(".0", ""));
+                    setOptionalLongText(edtThreshold, inputMap.opt(MetaOperation.OCR_THRESHOLD));
+                    edtPsm.setText(inputMap.optString(MetaOperation.OCR_PAGE_SEG_MODE, "auto"), false);
+                    edtConfidenceVar.setText(inputMap.optString(MetaOperation.OCR_CONFIDENCE_VAR, ""));
+                    setOperationReferenceText(edtNextOperation, inputMap.optString(MetaOperation.NEXT_OPERATION_ID, ""));
+                }
+            } catch (Exception e) {
+                host.showToast("加载 OCR 节点数据失败: " + e.getMessage());
+            }
+        }
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v -> dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_pick_bbox).setOnClickListener(v -> {
+            if (regionPickHelper != null) {
+                regionPickHelper.beginRegionPickFromDialog(dialogView, edtBbox, null);
+            }
+        });
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择下一节点", operationId, edtNextOperation);
+            }
+        });
+        btnTestOcr.setOnClickListener(v -> runOcrDialogTest(
+                dialogView, edtBbox, edtLanguage, edtScaleFactor, edtThreshold, edtPsm, tvTestResult));
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v -> dialogHelpers.safeRemoveView(dialogView));
+
+        TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        btnConfirm.setOnClickListener(v -> saveOcrTextOperation(
+                dialogView, operationId, edtName, edtBbox, edtLanguage,
+                edtTextVar, edtMinConfidence, edtTimeout, edtPreDelay,
+                edtScaleFactor, edtThreshold, edtPsm, edtConfidenceVar,
+                edtNextOperation));
+    }
+
+    private void saveOcrTextOperation(
+            View dialogView,
+            String operationId,
+            EditText edtName,
+            EditText edtBbox,
+            EditText edtLanguage,
+            EditText edtTextVar,
+            EditText edtMinConfidence,
+            EditText edtTimeout,
+            EditText edtPreDelay,
+            EditText edtScaleFactor,
+            EditText edtThreshold,
+            AutoCompleteTextView edtPsm,
+            EditText edtConfidenceVar,
+            AutoCompleteTextView edtNextOperation) {
+
+        String name = safeText(edtName);
+        if (TextUtils.isEmpty(name)) {
+            edtName.setError("请填写操作名称");
+            return;
+        }
+        String bboxText = safeText(edtBbox);
+        if (TextUtils.isEmpty(bboxText)) {
+            edtBbox.setError("请填写识别区域");
+            return;
+        }
+        java.util.List<Integer> bbox = regionPickHelper != null ? regionPickHelper.parseBboxInput(bboxText) : parseBboxText(bboxText);
+        if (bbox == null || bbox.size() < 4) {
+            edtBbox.setError("区域格式应为 x,y,w,h");
+            return;
+        }
+
+        Long timeout = parsePositiveLong(safeText(edtTimeout));
+        if (timeout == null) {
+            edtTimeout.setError("请输入有效超时(毫秒)");
+            return;
+        }
+        Integer minConfidence = parseBoundedInt(safeText(edtMinConfidence), 0, 0, 100);
+        if (minConfidence == null) {
+            edtMinConfidence.setError("请输入 0~100 的整数");
+            return;
+        }
+        Float scaleFactor = parseBoundedFloat(safeText(edtScaleFactor), 2.0f, 1.0f, 4.0f);
+        if (scaleFactor == null) {
+            edtScaleFactor.setError("请输入 1.0~4.0 的数值");
+            return;
+        }
+        Integer threshold = parseBoundedInt(safeText(edtThreshold), 0, 0, 255);
+        if (threshold == null) {
+            edtThreshold.setError("请输入 0~255 的整数");
+            return;
+        }
+        String pageSegMode = normalizeOcrPageSegMode(safeText(edtPsm));
+        if (pageSegMode == null) {
+            edtPsm.setError("仅支持 auto、block、line、word、sparse 或数字模式");
+            return;
+        }
+
+        try {
+            JSONObject inputMap = new JSONObject();
+            inputMap.put(MetaOperation.BBOX, new JSONArray(bbox));
+            inputMap.put(MetaOperation.OCR_LANGUAGE, defaultIfEmpty(safeText(edtLanguage), "chi_sim+eng"));
+            if (!TextUtils.isEmpty(safeText(edtTextVar))) {
+                inputMap.put(MetaOperation.OCR_TEXT_VAR, safeText(edtTextVar));
+            }
+            inputMap.put(MetaOperation.OCR_MIN_CONFIDENCE, minConfidence);
+            inputMap.put(MetaOperation.MATCHTIMEOUT, timeout);
+            putOptionalMatchPreDelay(inputMap, edtPreDelay);
+            inputMap.put(MetaOperation.OCR_SCALE_FACTOR, scaleFactor);
+            inputMap.put(MetaOperation.OCR_THRESHOLD, threshold);
+            inputMap.put(MetaOperation.OCR_PAGE_SEG_MODE, pageSegMode);
+            if (!TextUtils.isEmpty(safeText(edtConfidenceVar))) {
+                inputMap.put(MetaOperation.OCR_CONFIDENCE_VAR, safeText(edtConfidenceVar));
+            }
+            if (!TextUtils.isEmpty(safeText(edtNextOperation))) {
+                inputMap.put(MetaOperation.NEXT_OPERATION_ID, safeText(edtNextOperation));
+            }
+
+            if (operationId != null) {
+                JSONObject updatedOperation = new JSONObject();
+                updatedOperation.put("id", operationId);
+                updatedOperation.put("name", name);
+                updatedOperation.put("type", 23);
+                updatedOperation.put("responseType", 1);
+                updatedOperation.put("inputMap", inputMap);
+                if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, updatedOperation.toString(2))) {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (updateListener != null) {
+                        updateListener.onOperationUpdated();
+                    }
+                }
+            } else {
+                JSONObject operationObject = new JSONObject();
+                operationObject.put("id", idGenerator != null ? idGenerator.generateId() : "op_" + System.currentTimeMillis());
+                operationObject.put("name", name);
+                operationObject.put("type", 23);
+                operationObject.put("responseType", 1);
+                operationObject.put("inputMap", inputMap);
+
+                JSONArray operations = crudHelper.readOperationsArray();
+                operations.put(operationObject);
+                crudHelper.writeOperationsArray(operations, "已添加 OCR 识别节点", () -> {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (addListener != null) {
+                        addListener.onOperationAdded();
+                    }
+                });
+            }
+        } catch (Exception e) {
+            host.showToast("保存 OCR 节点失败: " + e.getMessage());
+        }
+    }
+
+    private java.util.List<Integer> parseBboxText(String raw) {
+        if (TextUtils.isEmpty(raw)) {
+            return null;
+        }
+        String[] parts = raw.split("[,，\\s]+");
+        if (parts.length < 4) {
+            return null;
+        }
+        try {
+            int x = Integer.parseInt(parts[0].trim());
+            int y = Integer.parseInt(parts[1].trim());
+            int w = Integer.parseInt(parts[2].trim());
+            int h = Integer.parseInt(parts[3].trim());
+            if (w <= 0 || h <= 0) {
+                return null;
+            }
+            return java.util.Arrays.asList(x, y, w, h);
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private void runOcrDialogTest(View dialogView,
+                                  EditText edtBbox,
+                                  EditText edtLanguage,
+                                  EditText edtScaleFactor,
+                                  EditText edtThreshold,
+                                  AutoCompleteTextView edtPsm,
+                                  TextView tvTestResult) {
+        String bboxText = safeText(edtBbox);
+        java.util.List<Integer> bbox = regionPickHelper != null ? regionPickHelper.parseBboxInput(bboxText) : parseBboxText(bboxText);
+        if (bbox == null || bbox.size() < 4) {
+            edtBbox.setError("区域格式应为 x,y,w,h");
+            return;
+        }
+        Float scaleFactor = parseBoundedFloat(safeText(edtScaleFactor), 2.0f, 1.0f, 4.0f);
+        if (scaleFactor == null) {
+            edtScaleFactor.setError("请输入 1.0~4.0 的数值");
+            return;
+        }
+        Integer threshold = parseBoundedInt(safeText(edtThreshold), 0, 0, 255);
+        if (threshold == null) {
+            edtThreshold.setError("请输入 0~255 的整数");
+            return;
+        }
+        String pageSegMode = normalizeOcrPageSegMode(safeText(edtPsm));
+        if (pageSegMode == null) {
+            edtPsm.setError("仅支持 auto、block、line、word、sparse 或数字模式");
+            return;
+        }
+
+        tvTestResult.setText("正在识别...");
+        String language = defaultIfEmpty(safeText(edtLanguage), "chi_sim+eng");
+        new Thread(() -> {
+            OcrTextOperationHandler.OcrPreviewResult result =
+                    OcrTextOperationHandler.recognizeOnce(
+                            host.getContext().getApplicationContext(),
+                            bbox,
+                            language,
+                            scaleFactor,
+                            threshold,
+                            pageSegMode);
+            dialogView.post(() -> {
+                StringBuilder builder = new StringBuilder();
+                builder.append(result.success ? "识别完成" : "识别失败");
+                builder.append("  置信度: ").append(result.confidence);
+                if (!TextUtils.isEmpty(result.reason)) {
+                    builder.append("\n状态: ").append(result.reason);
+                }
+                if (!TextUtils.isEmpty(result.message)) {
+                    builder.append("\n提示: ").append(result.message);
+                }
+                builder.append("\n\n").append(TextUtils.isEmpty(result.text) ? "(空结果)" : result.text);
+                tvTestResult.setText(builder.toString());
+            });
+        }, "ocr-dialog-test").start();
+    }
+
+    private Integer parseBoundedInt(String raw, int def, int min, int max) {
+        int value = def;
+        if (!TextUtils.isEmpty(raw)) {
+            try {
+                value = Integer.parseInt(raw.trim());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private Float parseBoundedFloat(String raw, float def, float min, float max) {
+        float value = def;
+        if (!TextUtils.isEmpty(raw)) {
+            try {
+                value = Float.parseFloat(raw.trim());
+            } catch (Exception e) {
+                return null;
+            }
+        }
+        return Math.max(min, Math.min(max, value));
+    }
+
+    private String normalizeOcrPageSegMode(String raw) {
+        String value = TextUtils.isEmpty(raw) ? "auto" : raw.trim().toLowerCase();
+        if ("auto".equals(value) || "block".equals(value) || "line".equals(value)
+                || "word".equals(value) || "sparse".equals(value)
+                || "single_block".equals(value) || "single_line".equals(value)
+                || "single_word".equals(value) || "sparse_text".equals(value)) {
+            return value;
+        }
+        try {
+            Integer.parseInt(value);
+            return value;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    private String defaultIfEmpty(String raw, String def) {
+        return TextUtils.isEmpty(raw) ? def : raw;
     }
 
     // ==================== Back Key Operation ====================
