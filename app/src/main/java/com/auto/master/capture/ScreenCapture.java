@@ -145,8 +145,8 @@ public final class ScreenCapture {
         Mat fallback = null;
         while (SystemClock.uptimeMillis() <= deadline) {
             Mat frame = (roi == null || roi.isEmpty())
-                    ? pollingController.acquireFrame()
-                    : pollingController.acquireFrame(roi);
+                    ? pollingController.acquireFrame(false)
+                    : pollingController.acquireFrame(roi, false);
             if (frame != null && !frame.empty()) {
                 if (pollingController.hasFreshFrame()) {
                     return frame;

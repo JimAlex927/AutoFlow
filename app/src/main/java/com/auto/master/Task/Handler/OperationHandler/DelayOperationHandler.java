@@ -3,6 +3,7 @@ package com.auto.master.Task.Handler.OperationHandler;
 import com.auto.master.Task.Operation.DelayOperation;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
+import com.auto.master.auto.ScriptRunner;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -44,10 +45,7 @@ public class DelayOperationHandler extends OperationHandler {
             duration = 0L;
         }
 
-        try {
-            Thread.sleep(duration);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        if (!ScriptRunner.sleepCurrentSessionAware(duration)) {
             return false;
         }
 

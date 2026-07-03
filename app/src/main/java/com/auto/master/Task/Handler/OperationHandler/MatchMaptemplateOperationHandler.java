@@ -126,35 +126,39 @@ public class MatchMaptemplateOperationHandler extends OperationHandler {
         while ((duration - (System.currentTimeMillis() - startedAt)) > 0) {
             long loopStart = SystemClock.uptimeMillis();
             Mat screenMat = pollingController.acquireFrame(plan.captureRoi);
-            if (screenMat == null || screenMat.empty()) {
+            try {
+                if (screenMat == null || screenMat.empty()) {
+                    pollingController.onMiss();
+                    pollingController.sleepUntilNextIteration(loopStart);
+                    continue;
+                }
+                if (!pollingController.hasFreshFrame()) {
+                    pollingController.sleepUntilNextIteration(loopStart);
+                    continue;
+                }
+
+                MatchTask firstTask = taskList.get(0);
+                MatchTaskResult firstResult = performMatchOnSubmat(screenMat, firstTask, plan.captureRoi);
+                if (firstResult.matched) {
+                    winnerRef.set(firstResult);
+                } else if (taskList.size() > 1) {
+                    long remainingMs = (long) duration - (System.currentTimeMillis() - startedAt);
+                    if (remainingMs > 0) {
+                        runRemainingMatches(screenMat, taskList, plan.captureRoi, remainingMs, winnerRef);
+                    }
+                }
+
+                MatchTaskResult winner = winnerRef.get();
+                if (winner != null) {
+                    pollingController.onHit();
+                    return handleMatchSuccess(obj, ctx, svc, winner);
+                }
+
                 pollingController.onMiss();
                 pollingController.sleepUntilNextIteration(loopStart);
-                continue;
+            } finally {
+                pollingController.releaseFrameIfOwned(screenMat);
             }
-            if (!pollingController.hasFreshFrame()) {
-                pollingController.sleepUntilNextIteration(loopStart);
-                continue;
-            }
-
-            MatchTask firstTask = taskList.get(0);
-            MatchTaskResult firstResult = performMatchOnSubmat(screenMat, firstTask, plan.captureRoi);
-            if (firstResult.matched) {
-                winnerRef.set(firstResult);
-            } else if (taskList.size() > 1) {
-                long remainingMs = (long) duration - (System.currentTimeMillis() - startedAt);
-                if (remainingMs > 0) {
-                    runRemainingMatches(screenMat, taskList, plan.captureRoi, remainingMs, winnerRef);
-                }
-            }
-
-            MatchTaskResult winner = winnerRef.get();
-            if (winner != null) {
-                pollingController.onHit();
-                return handleMatchSuccess(obj, ctx, svc, winner);
-            }
-
-            pollingController.onMiss();
-            pollingController.sleepUntilNextIteration(loopStart);
         }
 
         return createTimeoutResponse(ctx, obj);

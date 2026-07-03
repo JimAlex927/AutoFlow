@@ -5,6 +5,7 @@ import android.os.SystemClock;
 
 import androidx.annotation.Nullable;
 
+import com.auto.master.auto.ScriptRunner;
 import com.auto.master.capture.ScreenCapture;
 import com.auto.master.Task.Operation.MetaOperation;
 
@@ -48,6 +49,7 @@ public final class AdaptivePollingController {
     private int consecutiveMisses = 0;
     private int lastObservedFrameSeq = -1;
     private boolean lastAcquireReturnedFreshFrame = false;
+    private boolean lastAcquiredFrameOwnedByCaller = false;
 
     private AdaptivePollingController(long fastIntervalMs,
                                       long mediumIntervalMs,
@@ -188,23 +190,47 @@ public final class AdaptivePollingController {
 
     @Nullable
     public Mat acquireFrame() {
-        Mat frame = ScreenCapture.getSingleBitMapWhileInContinous(false);
+        return acquireFrame(shouldCloneFrameForCurrentExecution());
+    }
+
+    @Nullable
+    public Mat acquireFrame(boolean clone) {
+        Mat frame = ScreenCapture.getSingleBitMapWhileInContinous(clone);
+        lastAcquiredFrameOwnedByCaller = clone && frame != null;
         lastAcquireReturnedFreshFrame = updateFreshState(frame);
         return frame;
     }
 
     @Nullable
     public Mat acquireFrame(@Nullable Rect roi) {
+        return acquireFrame(roi, shouldCloneFrameForCurrentExecution());
+    }
+
+    @Nullable
+    public Mat acquireFrame(@Nullable Rect roi, boolean clone) {
         if (roi == null || roi.isEmpty()) {
-            return acquireFrame();
+            return acquireFrame(clone);
         }
-        Mat frame = ScreenCapture.getSingleBitMapRoiWhileInContinous(roi, false);
+        Mat frame = ScreenCapture.getSingleBitMapRoiWhileInContinous(roi, clone);
+        lastAcquiredFrameOwnedByCaller = clone && frame != null;
         lastAcquireReturnedFreshFrame = updateFreshState(frame);
         return frame;
     }
 
     public boolean hasFreshFrame() {
         return lastAcquireReturnedFreshFrame;
+    }
+
+    public void releaseFrameIfOwned(@Nullable Mat frame) {
+        if (!lastAcquiredFrameOwnedByCaller || frame == null) {
+            return;
+        }
+        try {
+            frame.release();
+        } catch (Throwable ignored) {
+        } finally {
+            lastAcquiredFrameOwnedByCaller = false;
+        }
     }
 
     public void onMiss() {
@@ -219,7 +245,9 @@ public final class AdaptivePollingController {
         long targetIntervalMs = currentIntervalMs(SystemClock.uptimeMillis());
         long elapsedMs = SystemClock.uptimeMillis() - loopStartMs;
         if (elapsedMs < targetIntervalMs) {
-            SystemClock.sleep(targetIntervalMs - elapsedMs);
+            ScriptRunner.sleepCurrentSessionAware(targetIntervalMs - elapsedMs);
+        } else {
+            ScriptRunner.waitIfCurrentSessionPaused();
         }
     }
 
@@ -236,6 +264,10 @@ public final class AdaptivePollingController {
         }
         lastObservedFrameSeq = frameSeq;
         return true;
+    }
+
+    private boolean shouldCloneFrameForCurrentExecution() {
+        return ScriptRunner.shouldCloneCaptureFrameForCurrentSession();
     }
 
     private long currentIntervalMs(long nowMs) {

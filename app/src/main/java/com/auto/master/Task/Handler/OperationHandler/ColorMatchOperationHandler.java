@@ -67,42 +67,46 @@ public class ColorMatchOperationHandler extends OperationHandler {
         while (System.currentTimeMillis() - start < timeoutMs) {
             long loopStartMs = SystemClock.uptimeMillis();
             Mat screenMat = pollingController.acquireFrame(captureRoi);
-            if (screenMat == null || screenMat.empty()) {
+            try {
+                if (screenMat == null || screenMat.empty()) {
+                    pollingController.onMiss();
+                    pollingController.sleepUntilNextIteration(loopStartMs);
+                    continue;
+                }
+                if (!pollingController.hasFreshFrame()) {
+                    pollingController.sleepUntilNextIteration(loopStartMs);
+                    continue;
+                }
+
+                int matchedCount = 0;
+                List<Integer> firstMatchedPoint = null;
+                for (int i = 0; i < ruleCount; i++) {
+                    PointRule rule = rules.get(i);
+                    PointMatchResult result = evaluate(screenMat, rule, captureRoi);
+                    lastResults[i] = result;  // 保存本轮结果，用于循环结束后构建响应
+                    if (result.matched) {
+                        matchedCount++;
+                        if (firstMatchedPoint == null) {
+                            firstMatchedPoint = new ArrayList<>(2);
+                            firstMatchedPoint.add(rule.x);
+                            firstMatchedPoint.add(rule.y);
+                        }
+                    } else if (!anyMode) {
+                        firstMatchedPoint = null;
+                    }
+                }
+
+                if ((anyMode && matchedCount > 0) || (!anyMode && matchedCount == ruleCount)) {
+                    matched = true;
+                    matchedPoint = firstMatchedPoint;
+                    pollingController.onHit();
+                    break;
+                }
                 pollingController.onMiss();
                 pollingController.sleepUntilNextIteration(loopStartMs);
-                continue;
+            } finally {
+                pollingController.releaseFrameIfOwned(screenMat);
             }
-            if (!pollingController.hasFreshFrame()) {
-                pollingController.sleepUntilNextIteration(loopStartMs);
-                continue;
-            }
-
-            int matchedCount = 0;
-            List<Integer> firstMatchedPoint = null;
-            for (int i = 0; i < ruleCount; i++) {
-                PointRule rule = rules.get(i);
-                PointMatchResult result = evaluate(screenMat, rule, captureRoi);
-                lastResults[i] = result;  // 保存本轮结果，用于循环结束后构建响应
-                if (result.matched) {
-                    matchedCount++;
-                    if (firstMatchedPoint == null) {
-                        firstMatchedPoint = new ArrayList<>(2);
-                        firstMatchedPoint.add(rule.x);
-                        firstMatchedPoint.add(rule.y);
-                    }
-                } else if (!anyMode) {
-                    firstMatchedPoint = null;
-                }
-            }
-
-            if ((anyMode && matchedCount > 0) || (!anyMode && matchedCount == ruleCount)) {
-                matched = true;
-                matchedPoint = firstMatchedPoint;
-                pollingController.onHit();
-                break;
-            }
-            pollingController.onMiss();
-            pollingController.sleepUntilNextIteration(loopStartMs);
         }
 
         // 循环结束后一次性构建 pointResults（避免在热路径中反复 new HashMap）

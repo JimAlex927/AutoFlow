@@ -136,6 +136,7 @@ public class JumpTaskResponseHandler extends DefaultResponseHandler {
      */
     private void notifyTaskSwitch(Task targetTask) {
         ScriptRunner.ScriptExecutionListener listener = ScriptRunner.getCurrentListener();
+        final String sessionId = ScriptRunner.getCurrentSessionId();
         if (listener != null) {
             // 构建 operations 列表
             List<com.auto.master.floatwin.OperationItem> operationItems =
@@ -161,6 +162,7 @@ public class JumpTaskResponseHandler extends DefaultResponseHandler {
             }
             
             MAIN_HANDLER.post(() -> listener.onTaskSwitch(
+                sessionId,
                 targetTask.getId(),
                 targetTask.getName(),
                 operationItems

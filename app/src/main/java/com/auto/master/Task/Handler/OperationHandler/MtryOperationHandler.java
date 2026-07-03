@@ -83,8 +83,9 @@ public class MtryOperationHandler extends OperationHandler {
             // 通知 UI：当前尝试序号
             final int curAttempt = usedAttempts;
             final ScriptRunner.ScriptExecutionListener listenerAttempt = ScriptRunner.getCurrentListener();
+            final String sessionId = ScriptRunner.getCurrentSessionId();
             if (listenerAttempt != null) {
-                MAIN.post(() -> listenerAttempt.onMtryAttempt(mtryOpId, curAttempt, attempts));
+                MAIN.post(() -> listenerAttempt.onMtryAttempt(sessionId, mtryOpId, curAttempt, attempts));
             }
 
             boolean ok;
@@ -115,9 +116,10 @@ public class MtryOperationHandler extends OperationHandler {
             if (i < attempts - 1 && retryDelayMs > 0) {
                 if (retryShowCountdown) {
                     final ScriptRunner.ScriptExecutionListener listenerDelay = ScriptRunner.getCurrentListener();
+                    final String retrySessionId = ScriptRunner.getCurrentSessionId();
                     final long dl = retryDelayMs;
                     if (listenerDelay != null) {
-                        MAIN.post(() -> listenerDelay.onMtryRetryDelay(mtryOpId, dl));
+                        MAIN.post(() -> listenerDelay.onMtryRetryDelay(retrySessionId, mtryOpId, dl));
                     }
                 }
                 try {
@@ -133,8 +135,9 @@ public class MtryOperationHandler extends OperationHandler {
 
         // 清除 UI 尝试次数徽章
         ScriptRunner.ScriptExecutionListener listenerFinal = ScriptRunner.getCurrentListener();
+        final String sessionId = ScriptRunner.getCurrentSessionId();
         if (listenerFinal != null) {
-            MAIN.post(() -> listenerFinal.onMtryAttempt(mtryOpId, 0, 0));
+            MAIN.post(() -> listenerFinal.onMtryAttempt(sessionId, mtryOpId, 0, 0));
         }
 
         putMtryResponse(ctx, obj, matched, usedAttempts, lastError, lastWrappedResponse);

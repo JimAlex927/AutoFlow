@@ -53,6 +53,7 @@ import android.widget.ArrayAdapter;
 import android.widget.AutoCompleteTextView;
 import android.widget.CheckBox;
 import android.widget.ProgressBar;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -125,6 +126,8 @@ import com.auto.master.auto.GestureOverlayView;
 import com.auto.master.auto.SelectionOverlayView;
 import com.auto.master.auto.ScriptExecuteContext;
 import com.auto.master.auto.ScriptRunner;
+import com.auto.master.auto.ScriptSession;
+import com.auto.master.auto.ScriptSessionSnapshot;
 import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCapture;
 import com.auto.master.capture.ScreenCaptureManager;
@@ -226,9 +229,16 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     // 当前运行的 project 和 task 信息
     private String currentRunningProject = "";
     private String currentRunningTask = "";
+    private String selectedScriptSessionId = "";
     private final List<String> currentRunLogs = new ArrayList<>();
     private RuntimeLogPanelView runtimeLogPanelView;
     private WindowManager.LayoutParams runtimeLogPanelLp;
+    private LinearLayout scriptSessionPanelView;
+    private LinearLayout scriptSessionListContentView;
+    private EditText scriptSessionCreateNameInput;
+    private WindowManager.LayoutParams scriptSessionPanelLp;
+    private LinearLayout runSessionPickerView;
+    private WindowManager.LayoutParams runSessionPickerLp;
     private final Map<String, Long> opStartTimeMs = new HashMap<>();
     private final List<Long> opDurationsMs = new ArrayList<>();
     private final Map<String, Integer> opFailureReasons = new HashMap<>();
@@ -450,14 +460,20 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 @Override
+                public @Nullable String resolveBoundSessionForStartOperation(MetaOperation startOperation) {
+                    return FloatWindowService.this.resolveBoundSessionForStartOperation(startOperation, true);
+                }
+
+                @Override
                 public void startOperationWithMode(MetaOperation startOperation,
                                                    OperationContext ctx,
                                                    String projectName,
                                                    String selectedTaskName,
                                                    List<OperationItem> selectedTaskOperations,
-                                                   boolean openProjectPanelNow) {
+                                                   boolean openProjectPanelNow,
+                                                   @Nullable String scriptSessionId) {
                     FloatWindowService.this.startOperationWithMode(
-                            startOperation, ctx, projectName, selectedTaskName, selectedTaskOperations, openProjectPanelNow);
+                            startOperation, ctx, projectName, selectedTaskName, selectedTaskOperations, openProjectPanelNow, scriptSessionId);
                 }
 
                 @Override
@@ -478,8 +494,16 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 @Override
+                public @Nullable String getSelectedScriptSessionId() {
+                    return selectedScriptSessionId;
+                }
+
+                @Override
                 public boolean isPaused() {
-                    return isPaused;
+                    ScriptSessionSnapshot snapshot = TextUtils.isEmpty(selectedScriptSessionId)
+                            ? null
+                            : ScriptRunner.getSessionSnapshot(selectedScriptSessionId);
+                    return snapshot != null && snapshot.state == ScriptSession.State.PAUSED;
                 }
 
                 @Override
@@ -889,6 +913,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 @Override
+                public void showScriptSessionDialog() {
+                    FloatWindowService.this.showScriptSessionDialog();
+                }
+
+                @Override
                 public void onProjectPanelBackClick() {
                     FloatWindowService.this.navigateBack();
                 }
@@ -1196,6 +1225,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 @Override
                 public void toggleRuntimeLogPanel() {
                     FloatWindowService.this.toggleRuntimeLogPanel();
+                }
+
+                @Override
+                public void showScriptSessionDialog() {
+                    FloatWindowService.this.showScriptSessionDialog();
                 }
 
                 @Override
@@ -1522,7 +1556,24 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private boolean isScriptActiveForUi() {
-        return ScriptRunner.isCurrentScriptRunning() || isPaused;
+        ScriptSessionSnapshot snapshot = TextUtils.isEmpty(selectedScriptSessionId)
+                ? null
+                : ScriptRunner.getSessionSnapshot(selectedScriptSessionId);
+        if (snapshot == null || snapshot.state == null) {
+            return false;
+        }
+        return snapshot.state == ScriptSession.State.QUEUED
+                || snapshot.state == ScriptSession.State.RUNNING
+                || snapshot.state == ScriptSession.State.PAUSED;
+    }
+
+    private boolean hasIdleScriptSession() {
+        for (ScriptSessionSnapshot snapshot : ScriptRunner.listSessionSnapshots()) {
+            if (snapshot != null && snapshot.state == ScriptSession.State.IDLE) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private void prepareProjectPanel() {
@@ -2084,17 +2135,19 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     if (!newJsonObj.has("inputMap") && jsonObject.has("inputMap")) {
                         newJsonObj.put("inputMap", jsonObject.optJSONObject("inputMap"));
                     }
-                    // 保留旧 inputMap 中的节点前置延迟元数据（由 NodePreDelayDialogHelper 独立管理）
+                    // 保留旧 inputMap 中由独立入口管理的节点元数据。
                     JSONObject oldInputMap = jsonObject.optJSONObject("inputMap");
                     JSONObject newInputMap = newJsonObj.optJSONObject("inputMap");
                     if (oldInputMap != null && newInputMap != null) {
-                        for (String preDelayKey : new String[]{
+                        for (String metadataKey : new String[]{
                                 MetaOperation.NODE_PRE_DELAY_MS,
                                 MetaOperation.NODE_PRE_DELAY_MIN_MS,
                                 MetaOperation.NODE_PRE_DELAY_MAX_MS,
-                                MetaOperation.NODE_PRE_DELAY_RANDOM}) {
-                            if (oldInputMap.has(preDelayKey) && !newInputMap.has(preDelayKey)) {
-                                newInputMap.put(preDelayKey, oldInputMap.opt(preDelayKey));
+                                MetaOperation.NODE_PRE_DELAY_RANDOM,
+                                MetaOperation.NODE_BOUND_SESSION_ID,
+                                MetaOperation.NODE_BOUND_SESSION_NAME}) {
+                            if (oldInputMap.has(metadataKey) && !newInputMap.has(metadataKey)) {
+                                newInputMap.put(metadataKey, oldInputMap.opt(metadataKey));
                             }
                         }
                     }
@@ -3796,6 +3849,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     @Override
                     public void onNodePreDelay(OperationItem item) {
                         showNodePreDelayDialog(item);
+                    }
+
+                    @Override
+                    public void onBindSession(OperationItem item) {
+                        showNodeSessionBindingDialog(item);
                     }
                 },
                 selectedIds -> {
@@ -5539,6 +5597,101 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     // OperationItem 已提取至独立文件 com.auto.master.floatwin.OperationItem
 
     // ==================== ScriptExecutionListener 实现 ====================
+
+    private boolean isSelectedScriptSession(@Nullable String sessionId) {
+        if (TextUtils.isEmpty(sessionId)) {
+            return true;
+        }
+        if (TextUtils.equals(sessionId, selectedScriptSessionId)) {
+            return true;
+        }
+        return TextUtils.isEmpty(selectedScriptSessionId)
+                && TextUtils.equals(sessionId, ScriptRunner.getActiveSessionId());
+    }
+
+    @Override
+    public void onOperationStart(String sessionId, String operationId, String operationName) {
+        if (!isSelectedScriptSession(sessionId)) {
+            refreshScriptSessionDialogIfVisible();
+            return;
+        }
+        refreshScriptSessionDialogIfVisible();
+        onOperationStart(operationId, operationName);
+    }
+
+    @Override
+    public void onNodePreDelayStart(String sessionId, String operationId, long durationMs) {
+        if (!isSelectedScriptSession(sessionId)) {
+            return;
+        }
+        onNodePreDelayStart(operationId, durationMs);
+    }
+
+    @Override
+    public void onDelayOperationCountdownStart(String sessionId,
+                                               String operationId,
+                                               long durationMs,
+                                               @Nullable CountDownLatch readySignal) {
+        if (!isSelectedScriptSession(sessionId)) {
+            if (readySignal != null) {
+                readySignal.countDown();
+            }
+            return;
+        }
+        onDelayOperationCountdownStart(operationId, durationMs, readySignal);
+    }
+
+    @Override
+    public void onMtryAttempt(String sessionId, String operationId, int current, int total) {
+        if (!isSelectedScriptSession(sessionId)) {
+            return;
+        }
+        onMtryAttempt(operationId, current, total);
+    }
+
+    @Override
+    public void onMtryRetryDelay(String sessionId, String operationId, long delayMs) {
+        if (!isSelectedScriptSession(sessionId)) {
+            return;
+        }
+        onMtryRetryDelay(operationId, delayMs);
+    }
+
+    @Override
+    public void onOperationComplete(String sessionId, String operationId, boolean success) {
+        if (!isSelectedScriptSession(sessionId)) {
+            refreshScriptSessionDialogIfVisible();
+            return;
+        }
+        refreshScriptSessionDialogIfVisible();
+        onOperationComplete(operationId, success);
+    }
+
+    @Override
+    public void onScriptComplete(String sessionId) {
+        if (!isSelectedScriptSession(sessionId)) {
+            refreshScriptSessionDialogIfVisible();
+            return;
+        }
+        uiHandler.postDelayed(() -> {
+            bindScriptSession(sessionId);
+            refreshScriptSessionDialogIfVisible();
+        }, 50L);
+        focusRunMode = false;
+        refreshAppLaunchPollingState();
+        ScriptRunner.clearExecutionListener();
+    }
+
+    @Override
+    public void onTaskSwitch(String sessionId,
+                             String taskId,
+                             String taskName,
+                             List<OperationItem> operations) {
+        if (!isSelectedScriptSession(sessionId)) {
+            return;
+        }
+        onTaskSwitch(taskId, taskName, operations);
+    }
 
     @Override
     public void onOperationStart(String operationId, String operationName) {
@@ -8325,12 +8478,21 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             Toast.makeText(this, "未找到选中的 operation", Toast.LENGTH_SHORT).show();
             return null;
         }
+        if (!hasNodeSessionBinding(startOperation)) {
+            Toast.makeText(this, "当前节点未绑定会话，请先在节点菜单绑定", Toast.LENGTH_SHORT).show();
+            return null;
+        }
 
         List<OperationItem> selectedTaskOperations = buildOperationItemsFromTask(selectedTask);
 
         OperationContext ctx = new OperationContext();
         ctx.anchorProject = project;
-        ctx.runtimeLogSink = this::appendRunLog;
+        ctx.runtimeLogSink = line -> {
+            String sessionId = ScriptRunner.getCurrentSessionId();
+            if (isSelectedScriptSession(sessionId)) {
+                appendRunLog(line);
+            }
+        };
 
         RunLaunchData launchData = new RunLaunchData();
         launchData.startOperation = startOperation;
@@ -8549,10 +8711,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         }
 
                         @Override
-                        public void onNodePreDelay(OperationItem item) {
-                            showNodePreDelayDialog(item);
-                        }
-                    },
+                    public void onNodePreDelay(OperationItem item) {
+                        showNodePreDelayDialog(item);
+                    }
+
+                    @Override
+                    public void onBindSession(OperationItem item) {
+                        showNodeSessionBindingDialog(item);
+                    }
+                },
                     selectedIds -> {
                         batchSelectedOperationIds.clear();
                         batchSelectedOperationIds.addAll(selectedIds);
@@ -8647,12 +8814,222 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         executionDialogHelper.showRunModeMenu(anchor, listener);
     }
 
+    private void showNodeSessionBindingDialog(@Nullable OperationItem item) {
+        if (item == null || TextUtils.isEmpty(item.id)) {
+            Toast.makeText(this, "节点无效，无法绑定会话", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (wm == null) {
+            return;
+        }
+        getOperationJsonAsync(item.id, operationJson -> {
+            if (TextUtils.isEmpty(operationJson)) {
+                Toast.makeText(this, "未找到节点数据", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            String currentSessionId = "";
+            String currentSessionName = "";
+            try {
+                JSONObject operation = new JSONObject(operationJson);
+                JSONObject inputMap = operation.optJSONObject("inputMap");
+                if (inputMap != null) {
+                    currentSessionId = inputMap.optString(MetaOperation.NODE_BOUND_SESSION_ID, "");
+                    currentSessionName = inputMap.optString(MetaOperation.NODE_BOUND_SESSION_NAME, "");
+                }
+            } catch (Exception e) {
+                Log.w(TAG, "parse node session binding failed", e);
+            }
+
+            LinearLayout dialog = buildSessionDialogBase("绑定会话", this::removeRunSessionPickerDialog);
+            LinearLayout content = new LinearLayout(this);
+            content.setOrientation(LinearLayout.VERTICAL);
+            content.setPadding(0, dp(8), 0, 0);
+
+            String currentText = TextUtils.isEmpty(currentSessionName)
+                    ? "当前未绑定"
+                    : "当前绑定: " + currentSessionName;
+            TextView current = buildSessionRowText(currentText, false);
+            content.addView(current);
+
+            EditText nameInput = buildSessionNameInput("输入会话名");
+            if (!TextUtils.isEmpty(currentSessionName)) {
+                nameInput.setText(currentSessionName);
+            }
+            content.addView(nameInput);
+
+            final String baseOperationJson = operationJson;
+            TextView createAndBind = buildSessionDialogAction("创建/更新绑定");
+            createAndBind.setOnClickListener(v -> {
+                String name = nameInput.getText() == null ? "" : nameInput.getText().toString().trim();
+                if (TextUtils.isEmpty(name)) {
+                    Toast.makeText(this, "请输入会话名", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                ScriptSessionSnapshot existing = findSessionSnapshotByName(name);
+                String sessionId = existing == null ? ScriptRunner.createSession(name) : existing.sessionId;
+                persistNodeSessionBinding(item.id, baseOperationJson, sessionId, name);
+                removeRunSessionPickerDialog();
+            });
+            content.addView(createAndBind);
+
+            for (ScriptSessionSnapshot snapshot : ScriptRunner.listSessionSnapshots()) {
+                if (snapshot == null) {
+                    continue;
+                }
+                TextView row = buildSessionRowText(formatSessionRow(snapshot),
+                        TextUtils.equals(snapshot.sessionId, currentSessionId));
+                row.setOnClickListener(v -> {
+                    persistNodeSessionBinding(item.id, baseOperationJson, snapshot.sessionId, snapshot.sessionName);
+                    removeRunSessionPickerDialog();
+                });
+                content.addView(row);
+            }
+
+            TextView clear = buildSessionDialogAction("清除绑定");
+            clear.setTextColor(0xFFFFCDD2);
+            clear.setOnClickListener(v -> {
+                persistNodeSessionBinding(item.id, baseOperationJson, "", "");
+                removeRunSessionPickerDialog();
+            });
+            content.addView(clear);
+
+            dialog.addView(content, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT));
+            TextView resizeHandle = new TextView(this);
+            resizeHandle.setText("↘");
+            resizeHandle.setTextColor(0xFFCBD5E1);
+            resizeHandle.setTextSize(16);
+            resizeHandle.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+            resizeHandle.setPadding(0, dp(2), dp(2), 0);
+            dialog.addView(resizeHandle, new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    dp(24)));
+            addRunSessionPickerDialogView(dialog);
+        });
+    }
+
+    private void persistNodeSessionBinding(String operationId,
+                                           String operationJson,
+                                           @Nullable String sessionId,
+                                           @Nullable String sessionName) {
+        try {
+            JSONObject operation = new JSONObject(operationJson);
+            JSONObject inputMap = operation.optJSONObject("inputMap");
+            if (inputMap == null) {
+                inputMap = new JSONObject();
+                operation.put("inputMap", inputMap);
+            }
+            if (TextUtils.isEmpty(sessionId) && TextUtils.isEmpty(sessionName)) {
+                inputMap.remove(MetaOperation.NODE_BOUND_SESSION_ID);
+                inputMap.remove(MetaOperation.NODE_BOUND_SESSION_NAME);
+            } else {
+                inputMap.put(MetaOperation.NODE_BOUND_SESSION_ID, nullToEmpty(sessionId));
+                inputMap.put(MetaOperation.NODE_BOUND_SESSION_NAME, nullToEmpty(sessionName));
+            }
+            if (saveOperationJson(operationId, operation.toString(2), currentOperationAdapter)) {
+                Toast.makeText(this,
+                        TextUtils.isEmpty(sessionName) ? "已清除会话绑定" : "已绑定会话: " + sessionName,
+                        Toast.LENGTH_SHORT).show();
+            }
+        } catch (Exception e) {
+            Log.w(TAG, "save node session binding failed", e);
+            Toast.makeText(this, "保存会话绑定失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Nullable
+    private ScriptSessionSnapshot findSessionSnapshotByName(String sessionName) {
+        if (TextUtils.isEmpty(sessionName)) {
+            return null;
+        }
+        for (ScriptSessionSnapshot snapshot : ScriptRunner.listSessionSnapshots()) {
+            if (snapshot != null && TextUtils.equals(sessionName, snapshot.sessionName)) {
+                return snapshot;
+            }
+        }
+        return null;
+    }
+
+    private boolean hasNodeSessionBinding(@Nullable MetaOperation operation) {
+        Map<String, Object> inputMap = operation == null ? null : operation.getInputMap();
+        return !TextUtils.isEmpty(getInputString(inputMap, MetaOperation.NODE_BOUND_SESSION_ID))
+                || !TextUtils.isEmpty(getInputString(inputMap, MetaOperation.NODE_BOUND_SESSION_NAME));
+    }
+
+    @Nullable
+    private String resolveBoundSessionForStartOperation(@Nullable MetaOperation operation, boolean showToast) {
+        Map<String, Object> inputMap = operation == null ? null : operation.getInputMap();
+        String boundSessionId = getInputString(inputMap, MetaOperation.NODE_BOUND_SESSION_ID);
+        String boundSessionName = getInputString(inputMap, MetaOperation.NODE_BOUND_SESSION_NAME);
+        if (TextUtils.isEmpty(boundSessionId) && TextUtils.isEmpty(boundSessionName)) {
+            if (showToast) {
+                Toast.makeText(this, "当前节点未绑定会话，请先在节点菜单绑定", Toast.LENGTH_SHORT).show();
+            }
+            return null;
+        }
+
+        if (!TextUtils.isEmpty(boundSessionId)) {
+            ScriptSessionSnapshot snapshot = ScriptRunner.getSessionSnapshot(boundSessionId);
+            if (snapshot != null) {
+                if (snapshot.state == ScriptSession.State.IDLE) {
+                    return snapshot.sessionId;
+                }
+                if (showToast) {
+                    Toast.makeText(this, "绑定会话正在运行或暂停: " + snapshot.sessionName, Toast.LENGTH_SHORT).show();
+                }
+                return null;
+            }
+        }
+
+        if (!TextUtils.isEmpty(boundSessionName)) {
+            ScriptSessionSnapshot namedSnapshot = findSessionSnapshotByName(boundSessionName);
+            if (namedSnapshot != null) {
+                if (namedSnapshot.state == ScriptSession.State.IDLE) {
+                    return namedSnapshot.sessionId;
+                }
+                if (showToast) {
+                    Toast.makeText(this, "绑定会话正在运行或暂停: " + namedSnapshot.sessionName, Toast.LENGTH_SHORT).show();
+                }
+                return null;
+            }
+            return ScriptRunner.createSession(boundSessionName);
+        }
+
+        if (showToast) {
+            Toast.makeText(this, "绑定会话不存在，请重新绑定", Toast.LENGTH_SHORT).show();
+        }
+        return null;
+    }
+
+    private String getInputString(@Nullable Map<String, Object> inputMap, String key) {
+        if (inputMap == null || TextUtils.isEmpty(key)) {
+            return "";
+        }
+        Object raw = inputMap.get(key);
+        return raw == null ? "" : String.valueOf(raw).trim();
+    }
+
+    private String nullToEmpty(@Nullable String value) {
+        return value == null ? "" : value;
+    }
+
     private void startOperationWithMode(MetaOperation startOperation,
                                         OperationContext ctx,
                                         String projectName,
                                         String selectedTaskName,
                                         List<OperationItem> selectedTaskOperations,
                                         boolean openProjectPanelNow) {
+        startOperationWithMode(startOperation, ctx, projectName, selectedTaskName, selectedTaskOperations, openProjectPanelNow, null);
+    }
+
+    private void startOperationWithMode(MetaOperation startOperation,
+                                        OperationContext ctx,
+                                        String projectName,
+                                        String selectedTaskName,
+                                        List<OperationItem> selectedTaskOperations,
+                                        boolean openProjectPanelNow,
+                                        @Nullable String scriptSessionId) {
         startOperationWithMode(
                 startOperation,
                 ctx,
@@ -8661,7 +9038,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 selectedTaskOperations,
                 openProjectPanelNow
                         ? ExecutionDialogHelper.RunMode.WITH_PANEL
-                        : ExecutionDialogHelper.RunMode.BACKGROUND);
+                        : ExecutionDialogHelper.RunMode.BACKGROUND,
+                scriptSessionId);
     }
 
     private void startOperationWithMode(MetaOperation startOperation,
@@ -8670,6 +9048,25 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                                         String selectedTaskName,
                                         List<OperationItem> selectedTaskOperations,
                                         ExecutionDialogHelper.RunMode runMode) {
+        startOperationWithMode(startOperation, ctx, projectName, selectedTaskName, selectedTaskOperations, runMode, null);
+    }
+
+    private void startOperationWithMode(MetaOperation startOperation,
+                                        OperationContext ctx,
+                                        String projectName,
+                                        String selectedTaskName,
+                                        List<OperationItem> selectedTaskOperations,
+                                        ExecutionDialogHelper.RunMode runMode,
+                                        @Nullable String scriptSessionId) {
+        String resolvedScriptSessionId = TextUtils.isEmpty(scriptSessionId)
+                ? resolveBoundSessionForStartOperation(startOperation, true)
+                : scriptSessionId;
+        if (TextUtils.isEmpty(resolvedScriptSessionId)) {
+            return;
+        }
+        selectedScriptSessionId = resolvedScriptSessionId;
+        ScriptRunner.setActiveSessionId(resolvedScriptSessionId);
+        attachRuntimeLogSink(ctx, resolvedScriptSessionId);
         boolean focusMode = runMode == ExecutionDialogHelper.RunMode.FOCUS;
         boolean openProjectPanelNow = runMode == ExecutionDialogHelper.RunMode.WITH_PANEL;
         focusRunMode = focusMode;
@@ -8710,12 +9107,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             scriptExecuteContext.tobeHandledOperation = startOperation;
             scriptExecuteContext.sharedContext = ctx;
             scriptExecuteContext.running = true;
-            ScriptRunner.runOperation(scriptExecuteContext);
+            scriptExecuteContext.sessionId = resolvedScriptSessionId;
+            selectedScriptSessionId = ScriptRunner.runOperation(scriptExecuteContext, resolvedScriptSessionId);
+            ScriptRunner.setActiveSessionId(selectedScriptSessionId);
+            refreshScriptSessionDialogIfVisible();
 
             transitionAfterRunStart(openProjectPanelNow, focusMode);
 
             if (!focusMode) {
-                Log.d(TAG, "ScriptRunner.runOperation 已调用");
+                Log.d(TAG, "ScriptRunner.runOperation 已调用 session=" + selectedScriptSessionId);
             }
         } catch (Exception e) {
             Log.d("检验检验检验检验检验检验", "setupProjectPanel: " + e.toString());
@@ -9003,6 +9403,518 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 runtimeLogPanelView.appendLine(logLine);
             }
         });
+    }
+
+    private void showScriptSessionDialog() {
+        if (wm == null) {
+            return;
+        }
+        if (scriptSessionPanelView != null) {
+            renderScriptSessionDialogContent();
+            return;
+        }
+        LinearLayout dialog = buildSessionDialogBase("会话管理");
+        LinearLayout header = (LinearLayout) dialog.getChildAt(0);
+        TextView create = buildSessionDialogAction("创建");
+        create.setOnClickListener(v -> {
+            String name = scriptSessionCreateNameInput == null || scriptSessionCreateNameInput.getText() == null
+                    ? ""
+                    : scriptSessionCreateNameInput.getText().toString().trim();
+            if (TextUtils.isEmpty(name)) {
+                Toast.makeText(this, "请输入会话名", Toast.LENGTH_SHORT).show();
+                return;
+            }
+            ScriptRunner.createSession(name);
+            scriptSessionCreateNameInput.setText("");
+            renderScriptSessionDialogContent();
+        });
+        header.addView(create, Math.max(1, header.getChildCount() - 1));
+
+        scriptSessionCreateNameInput = buildSessionNameInput("输入会话名");
+        dialog.addView(scriptSessionCreateNameInput, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        ScrollView scrollView = new ScrollView(this);
+        scriptSessionListContentView = new LinearLayout(this);
+        scriptSessionListContentView.setOrientation(LinearLayout.VERTICAL);
+        scriptSessionListContentView.setPadding(0, dp(4), 0, 0);
+        scrollView.addView(scriptSessionListContentView, new ScrollView.LayoutParams(
+                ScrollView.LayoutParams.MATCH_PARENT,
+                ScrollView.LayoutParams.WRAP_CONTENT));
+
+        dialog.addView(scrollView, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                0,
+                1f));
+
+        TextView resizeHandle = new TextView(this);
+        resizeHandle.setText("↘");
+        resizeHandle.setTextColor(0xFFCBD5E1);
+        resizeHandle.setTextSize(16);
+        resizeHandle.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        resizeHandle.setPadding(0, dp(2), dp(2), 0);
+        dialog.addView(resizeHandle, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                dp(24)));
+
+        renderScriptSessionDialogContent();
+        addSessionDialogView(dialog);
+    }
+
+    private void renderScriptSessionDialogContent() {
+        if (scriptSessionListContentView == null) {
+            return;
+        }
+        scriptSessionListContentView.removeAllViews();
+        List<ScriptSessionSnapshot> sessions = new ArrayList<>();
+        for (ScriptSessionSnapshot snapshot : ScriptRunner.listSessionSnapshots()) {
+            if (isVisibleManagedSession(snapshot)) {
+                sessions.add(snapshot);
+            }
+        }
+        if (sessions.isEmpty()) {
+            TextView empty = buildSessionRowText("暂无会话，点击右上角创建", false);
+            scriptSessionListContentView.addView(empty);
+        } else {
+            for (ScriptSessionSnapshot snapshot : sessions) {
+                LinearLayout row = new LinearLayout(this);
+                row.setOrientation(LinearLayout.HORIZONTAL);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                TextView detail = buildSessionRowText(formatSessionRow(snapshot),
+                        TextUtils.equals(snapshot.sessionId, selectedScriptSessionId));
+                detail.setOnClickListener(v -> {
+                    bindScriptSession(snapshot.sessionId);
+                    Toast.makeText(this, "已切换会话", Toast.LENGTH_SHORT).show();
+                    renderScriptSessionDialogContent();
+                });
+                row.addView(detail, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+                TextView closeSession = buildSessionDialogAction("关闭");
+                closeSession.setTextColor(0xFFFFCDD2);
+                closeSession.setOnClickListener(v -> {
+                    ScriptRunner.closeSession(snapshot.sessionId);
+                    if (TextUtils.equals(snapshot.sessionId, selectedScriptSessionId)) {
+                        clearSelectedSessionUiState();
+                    }
+                    renderScriptSessionDialogContent();
+                });
+                row.addView(closeSession);
+                scriptSessionListContentView.addView(row);
+            }
+        }
+    }
+
+    private void attachRuntimeLogSink(@Nullable OperationContext ctx, @Nullable String sessionId) {
+        if (ctx == null) {
+            return;
+        }
+        ctx.runtimeLogSink = line -> {
+            if (TextUtils.isEmpty(sessionId) || TextUtils.equals(sessionId, selectedScriptSessionId)) {
+                appendRunLog(line);
+            }
+        };
+    }
+
+    private void refreshScriptSessionDialog() {
+        renderScriptSessionDialogContent();
+    }
+
+    private void refreshScriptSessionDialogIfVisible() {
+        if (scriptSessionPanelView != null) {
+            refreshScriptSessionDialog();
+        }
+    }
+
+    private void removeScriptSessionDialog() {
+        if (scriptSessionPanelView == null) {
+            return;
+        }
+        safeRemoveView(scriptSessionPanelView);
+        scriptSessionPanelView = null;
+        scriptSessionListContentView = null;
+        scriptSessionCreateNameInput = null;
+        scriptSessionPanelLp = null;
+    }
+
+    private LinearLayout buildSessionDialogBase(String titleText) {
+        return buildSessionDialogBase(titleText, this::removeScriptSessionDialog);
+    }
+
+    private LinearLayout buildSessionDialogBase(String titleText, Runnable closeAction) {
+        LinearLayout dialog = new LinearLayout(this);
+        dialog.setOrientation(LinearLayout.VERTICAL);
+        dialog.setPadding(dp(10), dp(8), dp(10), dp(8));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0xF21F2937);
+        bg.setStroke(dp(1), 0xAA38BDF8);
+        bg.setCornerRadius(dp(8));
+        dialog.setBackground(bg);
+
+        LinearLayout header = new LinearLayout(this);
+        header.setOrientation(LinearLayout.HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
+
+        TextView title = new TextView(this);
+        title.setText(titleText);
+        title.setTextColor(Color.WHITE);
+        title.setTextSize(14);
+        title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        header.addView(title, new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f));
+
+        TextView close = buildSessionDialogAction("关闭");
+        close.setOnClickListener(v -> {
+            if (closeAction != null) {
+                closeAction.run();
+            }
+        });
+        header.addView(close);
+        dialog.addView(header, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT));
+        return dialog;
+    }
+
+    private EditText buildSessionNameInput(String hint) {
+        EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setHint(hint);
+        input.setHintTextColor(0xFF94A3B8);
+        input.setTextColor(Color.WHITE);
+        input.setTextSize(12);
+        input.setPadding(dp(8), dp(4), dp(8), dp(4));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(0x332D3748);
+        bg.setStroke(dp(1), 0x6638BDF8);
+        bg.setCornerRadius(dp(6));
+        input.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, dp(8));
+        input.setLayoutParams(lp);
+        return input;
+    }
+
+    private void addRunSessionPickerDialogView(LinearLayout dialog) {
+        if (runSessionPickerView != null) {
+            safeRemoveView(runSessionPickerView);
+            runSessionPickerView = null;
+        }
+        int[] screen = getScreenSizePx();
+        int width = Math.max(dp(280), (int) (screen[0] * 0.64f));
+        int height = Math.max(dp(220), (int) (screen[1] * 0.32f));
+        int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_PHONE;
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                width,
+                height,
+                type,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT);
+        lp.gravity = Gravity.TOP | Gravity.START;
+        lp.x = Math.max(dp(8), (screen[0] - width) / 2);
+        lp.y = Math.max(dp(32), screen[1] / 4);
+        bindSessionPanelGestures(dialog, lp);
+        try {
+            runSessionPickerView = dialog;
+            runSessionPickerLp = lp;
+            wm.addView(dialog, lp);
+        } catch (Exception e) {
+            runSessionPickerView = null;
+            runSessionPickerLp = null;
+            Log.w(TAG, "show run session picker failed", e);
+        }
+    }
+
+    private void removeRunSessionPickerDialog() {
+        if (runSessionPickerView == null) {
+            return;
+        }
+        safeRemoveView(runSessionPickerView);
+        runSessionPickerView = null;
+        runSessionPickerLp = null;
+    }
+
+    private void addSessionDialogView(LinearLayout dialog) {
+        WindowManager.LayoutParams previousLp = scriptSessionPanelLp;
+        if (scriptSessionPanelView != null) {
+            safeRemoveView(scriptSessionPanelView);
+            scriptSessionPanelView = null;
+        }
+        if (previousLp != null) {
+            scriptSessionPanelLp = previousLp;
+        }
+        int[] screen = getScreenSizePx();
+        int width = Math.max(dp(240), (int) (screen[0] * 0.58f));
+        int height = Math.max(dp(180), (int) (screen[1] * 0.32f));
+        int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+                ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                : WindowManager.LayoutParams.TYPE_PHONE;
+        WindowManager.LayoutParams lp = scriptSessionPanelLp;
+        if (lp == null) {
+            lp = new WindowManager.LayoutParams(
+                    width,
+                    height,
+                    type,
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
+                            | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT);
+            lp.gravity = Gravity.TOP | Gravity.START;
+            lp.x = Math.max(dp(8), (screen[0] - width) / 2);
+            lp.y = Math.max(dp(32), (screen[1] - height) / 3);
+        }
+        bindSessionPanelGestures(dialog, lp);
+        try {
+            scriptSessionPanelView = dialog;
+            scriptSessionPanelLp = lp;
+            wm.addView(dialog, lp);
+        } catch (Exception e) {
+            scriptSessionPanelView = null;
+            scriptSessionListContentView = null;
+            scriptSessionCreateNameInput = null;
+            scriptSessionPanelLp = null;
+            Log.w(TAG, "show session dialog failed", e);
+        }
+    }
+
+    private void bindSessionPanelGestures(LinearLayout panel, WindowManager.LayoutParams lp) {
+        if (panel == null || lp == null || panel.getChildCount() == 0) {
+            return;
+        }
+        View header = panel.getChildAt(0);
+        header.setOnTouchListener(new View.OnTouchListener() {
+            private int startX;
+            private int startY;
+            private float downRawX;
+            private float downRawY;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startX = lp.x;
+                        startY = lp.y;
+                        downRawX = event.getRawX();
+                        downRawY = event.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        int[] screen = getScreenSizePx();
+                        lp.x = Math.max(0, Math.min(startX + (int) (event.getRawX() - downRawX),
+                                Math.max(0, screen[0] - lp.width)));
+                        lp.y = Math.max(0, Math.min(startY + (int) (event.getRawY() - downRawY),
+                                Math.max(0, screen[1] - lp.height)));
+                        try {
+                            wm.updateViewLayout(panel, lp);
+                        } catch (Exception ignored) {
+                        }
+                        return true;
+                    default:
+                        return true;
+                }
+            }
+        });
+
+        View resizeHandle = panel.getChildAt(panel.getChildCount() - 1);
+        resizeHandle.setOnTouchListener(new View.OnTouchListener() {
+            private int startWidth;
+            private int startHeight;
+            private float downRawX;
+            private float downRawY;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startWidth = lp.width;
+                        startHeight = lp.height;
+                        downRawX = event.getRawX();
+                        downRawY = event.getRawY();
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        int[] screen = getScreenSizePx();
+                        lp.width = Math.max(dp(240), Math.min(startWidth + (int) (event.getRawX() - downRawX),
+                                Math.max(dp(240), screen[0] - lp.x)));
+                        lp.height = Math.max(dp(180), Math.min(startHeight + (int) (event.getRawY() - downRawY),
+                                Math.max(dp(180), screen[1] - lp.y)));
+                        try {
+                            wm.updateViewLayout(panel, lp);
+                        } catch (Exception ignored) {
+                        }
+                        return true;
+                    default:
+                        return true;
+                }
+            }
+        });
+    }
+
+    private TextView buildSessionDialogAction(String text) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(Color.WHITE);
+        view.setTextSize(12);
+        view.setGravity(Gravity.CENTER);
+        view.setPadding(dp(8), dp(4), dp(8), dp(4));
+        return view;
+    }
+
+    private boolean isVisibleManagedSession(@Nullable ScriptSessionSnapshot snapshot) {
+        if (snapshot == null || snapshot.state == null) {
+            return false;
+        }
+        return snapshot.state == ScriptSession.State.IDLE
+                || snapshot.state == ScriptSession.State.QUEUED
+                || snapshot.state == ScriptSession.State.RUNNING
+                || snapshot.state == ScriptSession.State.PAUSED;
+    }
+
+    private TextView buildSessionRowText(String text, boolean selected) {
+        TextView view = new TextView(this);
+        view.setText(text);
+        view.setTextColor(Color.WHITE);
+        view.setSingleLine(true);
+        view.setEllipsize(TextUtils.TruncateAt.END);
+        view.setTextSize(10);
+        view.setPadding(dp(6), dp(4), dp(6), dp(4));
+        GradientDrawable bg = new GradientDrawable();
+        bg.setColor(selected ? 0x6638BDF8 : 0x332D3748);
+        bg.setStroke(dp(1), selected ? 0xFF38BDF8 : 0x44556677);
+        bg.setCornerRadius(dp(6));
+        view.setBackground(bg);
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, 0, dp(3));
+        view.setLayoutParams(lp);
+        return view;
+    }
+
+    private String formatSessionRow(ScriptSessionSnapshot snapshot) {
+        String project = TextUtils.isEmpty(snapshot.projectName) ? "-" : snapshot.projectName;
+        String task = TextUtils.isEmpty(snapshot.taskName) ? "-" : snapshot.taskName;
+        String op = TextUtils.isEmpty(snapshot.operationName) ? snapshot.operationId : snapshot.operationName;
+        if (TextUtils.isEmpty(op)) {
+            op = snapshot.state == ScriptSession.State.IDLE ? "未绑定" : "-";
+        }
+        String displayName = TextUtils.isEmpty(snapshot.sessionName) ? "未命名会话" : snapshot.sessionName;
+        String location = "-".equals(project) && "-".equals(task) ? "-" : project + "/" + task;
+        return getSessionStatusText(snapshot.state)
+                + "  " + displayName
+                + "  " + location
+                + "  节点:" + op;
+    }
+
+    private void bindScriptSession(String sessionId) {
+        ScriptSessionSnapshot snapshot = ScriptRunner.getSessionSnapshot(sessionId);
+        if (snapshot == null) {
+            return;
+        }
+        selectedScriptSessionId = snapshot.sessionId;
+        ScriptRunner.setActiveSessionId(snapshot.sessionId);
+        boolean activeSession = snapshot.state == ScriptSession.State.QUEUED
+                || snapshot.state == ScriptSession.State.RUNNING
+                || snapshot.state == ScriptSession.State.PAUSED;
+        currentRunningProject = activeSession ? snapshot.projectName : "";
+        currentRunningTask = activeSession ? snapshot.taskName : "";
+        currentRunningOperationId = activeSession ? snapshot.operationId : "";
+        currentRunningOperationName = activeSession ? snapshot.operationName : "";
+        currentRunStartMs = snapshot.startTimeMs;
+        isPaused = snapshot.state == ScriptSession.State.PAUSED;
+        stopDelayProgress();
+        hideStepOverlay();
+        synchronized (currentRunLogs) {
+            currentRunLogs.clear();
+            currentRunLogs.addAll(snapshot.logs);
+        }
+        if (runtimeLogPanelView != null) {
+            runtimeLogPanelView.setLines(currentRunLogs);
+        }
+        updateRunningPanelStatus(getSessionStatusText(snapshot.state), getSessionStatusColor(snapshot.state));
+        if (!TextUtils.isEmpty(snapshot.operationId) && activeSession && currentOperationAdapter != null) {
+            currentOperationAdapter.setRunningPosition(snapshot.operationId);
+        } else if (currentOperationAdapter != null) {
+            currentOperationAdapter.clearRunningPosition();
+        }
+        syncProjectPanelRuntimeUi();
+        if (activeSession && !TextUtils.isEmpty(snapshot.operationId)) {
+            flowGraphPanelHelper.highlightOperation(snapshot.operationId);
+        } else {
+            flowGraphPanelHelper.clearHighlight();
+        }
+    }
+
+    private void clearSelectedSessionUiState() {
+        selectedScriptSessionId = "";
+        currentRunningProject = "";
+        currentRunningTask = "";
+        currentRunningOperationId = "";
+        currentRunningOperationName = "";
+        currentOperationIndex = 0;
+        totalOperationCount = 0;
+        isPaused = false;
+        updateRunningPanelStatus("待机", 0xFF4CAF50);
+        synchronized (currentRunLogs) {
+            currentRunLogs.clear();
+        }
+        if (runtimeLogPanelView != null) {
+            runtimeLogPanelView.setLines(currentRunLogs);
+        }
+        if (currentOperationAdapter != null) {
+            currentOperationAdapter.clearRunningPosition();
+        }
+        stopDelayProgress();
+        hideStepOverlay();
+        flowGraphPanelHelper.clearHighlight();
+        syncProjectPanelRuntimeUi();
+    }
+
+    private String getSessionStatusText(@Nullable ScriptSession.State state) {
+        if (state == null) {
+            return "待机";
+        }
+        switch (state) {
+            case IDLE:
+                return "空闲";
+            case QUEUED:
+                return "等待中";
+            case RUNNING:
+                return "运行中";
+            case PAUSED:
+                return "已暂停";
+            case STOPPING:
+                return "停止中";
+            case STOPPED:
+                return "已停止";
+            case COMPLETED:
+                return "已完成";
+            case FAILED:
+                return "运行出错";
+            default:
+                return "待机";
+        }
+    }
+
+    private int getSessionStatusColor(@Nullable ScriptSession.State state) {
+        if (state == null) {
+            return 0xFF4CAF50;
+        }
+        switch (state) {
+            case PAUSED:
+            case QUEUED:
+            case IDLE:
+                return 0xFFFF9800;
+            case STOPPING:
+            case STOPPED:
+            case FAILED:
+                return 0xFFF44336;
+            case RUNNING:
+            case COMPLETED:
+            default:
+                return 0xFF4CAF50;
+        }
     }
 
     private void persistCurrentRunLog() {

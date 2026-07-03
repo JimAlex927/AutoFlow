@@ -44,10 +44,6 @@ public final class TaskScheduleExecutor {
             Log.e(TAG, "accessibility not connected, skip schedule=" + spec.id);
             return;
         }
-        if (ScriptRunner.isCurrentScriptRunning()) {
-            Log.w(TAG, "script already running, skip schedule=" + spec.id);
-            return;
-        }
         try {
             Project project = loadProjectFromStorage(context, spec.projectName);
             if (project == null || project.getTaskMap() == null) {

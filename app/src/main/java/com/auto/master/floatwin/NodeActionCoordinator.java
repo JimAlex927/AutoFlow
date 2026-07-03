@@ -9,8 +9,6 @@ import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
 import com.auto.master.Task.Project.Project;
 import com.auto.master.Task.Task;
-import com.auto.master.auto.ScriptRunner;
-
 import java.io.File;
 import java.util.List;
 
@@ -33,12 +31,14 @@ final class NodeActionCoordinator {
         @Nullable NodeFloatButtonConfig getNodeFloatButtonConfig(String operationId);
         void applyNodeRuntimeVariables(OperationContext ctx, @Nullable NodeFloatButtonConfig cfg);
         void hideNodeFloatButtonUntilScriptStops(String operationId);
+        @Nullable String resolveBoundSessionForStartOperation(MetaOperation startOperation);
         void startOperationWithMode(MetaOperation startOperation,
                                     OperationContext ctx,
                                     String projectName,
                                     String selectedTaskName,
                                     List<OperationItem> selectedTaskOperations,
-                                    boolean openProjectPanelNow);
+                                    boolean openProjectPanelNow,
+                                    @Nullable String scriptSessionId);
         List<OperationItem> buildOperationItemsFromTask(Task task);
         void showToast(String message);
     }
@@ -70,13 +70,13 @@ final class NodeActionCoordinator {
     }
 
     void runFromNodeFloatButton(NodeFloatButtonConfig cfg) {
-        if (ScriptRunner.isCurrentScriptRunning()) {
-            host.showToast("脚本运行中，请先停止");
-            return;
-        }
         RunLaunchData data = buildRunLaunchDataForNode(cfg.projectName, cfg.taskName, cfg.operationId);
         if (data == null) {
             host.showToast("无法找到节点，请确认项目/任务未被删除");
+            return;
+        }
+        String scriptSessionId = host.resolveBoundSessionForStartOperation(data.startOperation);
+        if (scriptSessionId == null || scriptSessionId.isEmpty()) {
             return;
         }
         if (cfg.hideWhileRunning) {
@@ -88,7 +88,8 @@ final class NodeActionCoordinator {
                 data.projectName,
                 data.selectedTaskName,
                 data.selectedTaskOperations,
-                false
+                false,
+                scriptSessionId
         );
     }
 

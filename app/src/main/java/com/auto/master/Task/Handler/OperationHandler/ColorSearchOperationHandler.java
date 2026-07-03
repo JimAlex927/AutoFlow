@@ -68,27 +68,31 @@ public class ColorSearchOperationHandler extends OperationHandler {
         while (System.currentTimeMillis() - start < timeoutMs) {
             long loopStartMs = SystemClock.uptimeMillis();
             Mat screenMat = pollingController.acquireFrame(captureRoi);
-            if (screenMat == null || screenMat.empty()) {
+            try {
+                if (screenMat == null || screenMat.empty()) {
+                    pollingController.onMiss();
+                    pollingController.sleepUntilNextIteration(loopStartMs);
+                    continue;
+                }
+                if (!pollingController.hasFreshFrame()) {
+                    pollingController.sleepUntilNextIteration(loopStartMs);
+                    continue;
+                }
+
+                SearchResult result = scanRegion(screenMat, localBbox, targetColor, tolerance, minPixels,
+                        captureRoi.left, captureRoi.top);
+                matchedPixelCount = result.matchedPixels;
+                matchedBbox = result.matchedBbox;
+                if (result.matched) {
+                    matched = true;
+                    pollingController.onHit();
+                    break;
+                }
                 pollingController.onMiss();
                 pollingController.sleepUntilNextIteration(loopStartMs);
-                continue;
+            } finally {
+                pollingController.releaseFrameIfOwned(screenMat);
             }
-            if (!pollingController.hasFreshFrame()) {
-                pollingController.sleepUntilNextIteration(loopStartMs);
-                continue;
-            }
-
-            SearchResult result = scanRegion(screenMat, localBbox, targetColor, tolerance, minPixels,
-                    captureRoi.left, captureRoi.top);
-            matchedPixelCount = result.matchedPixels;
-            matchedBbox = result.matchedBbox;
-            if (result.matched) {
-                matched = true;
-                pollingController.onHit();
-                break;
-            }
-            pollingController.onMiss();
-            pollingController.sleepUntilNextIteration(loopStartMs);
         }
 
         if (matched && matchedBbox != null && (ctx == null || !ctx.suppressVisualFeedback)) {

@@ -12,6 +12,7 @@ final class RunLaunchData {
     Task selectedTask;
     String projectName;
     String selectedTaskName;
+    String scriptSessionId;
     List<OperationItem> selectedTaskOperations = new ArrayList<>();
     OperationContext ctx;
 }

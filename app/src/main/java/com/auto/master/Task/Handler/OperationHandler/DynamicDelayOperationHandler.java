@@ -3,6 +3,7 @@ package com.auto.master.Task.Handler.OperationHandler;
 import com.auto.master.Task.Operation.DynamicDelayOperation;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
+import com.auto.master.auto.ScriptRunner;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -61,10 +62,7 @@ public class DynamicDelayOperationHandler extends OperationHandler {
             ctx.delayCountdownNotifier.onDynamicDelayStarting(obj.getId(), duration, showCountdown);
         }
 
-        try {
-            Thread.sleep(duration);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
+        if (!ScriptRunner.sleepCurrentSessionAware(duration)) {
             return false;
         }
 

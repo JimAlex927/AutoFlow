@@ -8,6 +8,8 @@ import java.util.Deque;
 
 public class ScriptExecuteContext {
 
+    public volatile String sessionId;
+
     public  volatile MetaOperation tobeHandledOperation;
 
     public volatile int repeatedTimes = 0;

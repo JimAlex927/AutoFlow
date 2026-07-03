@@ -68,6 +68,8 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
         void onFloatButton(OperationItem item);
 
         void onNodePreDelay(OperationItem item);
+
+        void onBindSession(OperationItem item);
     }
 
     interface OnBatchSelectionListener {
@@ -575,6 +577,7 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
         actionItems.add(new ActionItem(8, "ConfigUI 设计", "为这个节点设计可视化配置界面", true));
         actionItems.add(new ActionItem(9, "悬浮按钮", "为这个节点创建/编辑专属悬浮按钮", true));
         actionItems.add(new ActionItem(10, "节点前置延迟", "运行到这个节点前先等待一段时间", true));
+        actionItems.add(new ActionItem(11, "绑定会话", "配置这个节点作为入口运行时使用的会话", true));
 
         View popupView = LayoutInflater.from(anchor.getContext()).inflate(R.layout.dialog_node_action_sheet, null);
         TextView titleView = popupView.findViewById(R.id.tv_action_title);
@@ -627,6 +630,9 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
                     break;
                 case 10:
                     actionListener.onNodePreDelay(item);
+                    break;
+                case 11:
+                    actionListener.onBindSession(item);
                     break;
                 default:
                     break;

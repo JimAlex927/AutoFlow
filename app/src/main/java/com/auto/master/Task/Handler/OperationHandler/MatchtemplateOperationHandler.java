@@ -131,16 +131,16 @@ public class MatchtemplateOperationHandler extends OperationHandler {
         while (duration > System.currentTimeMillis() - startedAt) {
             long loopStartMs = SystemClock.uptimeMillis();
             Mat screenMat = pollingController.acquireFrame(captureRoi);
-            if (screenMat == null || screenMat.empty()) {
-                pollingController.onMiss();
-                pollingController.sleepUntilNextIteration(loopStartMs);
-                continue;
-            }
-            if (!pollingController.hasFreshFrame()) {
-                pollingController.sleepUntilNextIteration(loopStartMs);
-                continue;
-            }
             try {
+                if (screenMat == null || screenMat.empty()) {
+                    pollingController.onMiss();
+                    pollingController.sleepUntilNextIteration(loopStartMs);
+                    continue;
+                }
+                if (!pollingController.hasFreshFrame()) {
+                    pollingController.sleepUntilNextIteration(loopStartMs);
+                    continue;
+                }
                 Point position = matchTemplate(screenMat, templateMat, similarity, scaleFactor,
                         matchMethod, sampleRatio, matchMask, randomRoiPlan);
                 if (position == null || position.x < 0 || position.y < 0) {
@@ -181,6 +181,8 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             } catch (Exception e) {
                 Log.w(TAG, "模板匹配失败: " + e.getMessage());
                 pollingController.onMiss();
+            } finally {
+                pollingController.releaseFrameIfOwned(screenMat);
             }
             pollingController.sleepUntilNextIteration(loopStartMs);
         }

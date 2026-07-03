@@ -26,6 +26,7 @@ final class FloatBallOverlayController {
         void removeProjectPanel();
         void showProjectPanel();
         void toggleRuntimeLogPanel();
+        void showScriptSessionDialog();
         void showToast(String message);
         boolean isPaused();
     }
@@ -436,7 +437,7 @@ final class FloatBallOverlayController {
         );
         fanMenuLp.gravity = Gravity.TOP | Gravity.START;
         fanMenuLp.x = ballLp.x;
-        fanMenuLp.y = Math.max(0, ballLp.y - host.dp(112));
+        fanMenuLp.y = Math.max(0, ballLp.y - host.dp(160));
 
         View btnPanel = fanMenuView.findViewById(R.id.fan_btn_panel);
         View btnLog = fanMenuView.findViewById(R.id.fan_btn_log);
@@ -454,8 +455,8 @@ final class FloatBallOverlayController {
 
         host.getWindowManager().addView(fanMenuView, fanMenuLp);
         animateFanButton(btnPanel, 0);
-        animateFanButton(btnLog, 90);
-        animateFanButton(btnClose, 180);
+        animateFanButton(btnLog, 80);
+        animateFanButton(btnClose, 160);
     }
 
     private void animateFanButton(View btn, long delayMs) {
@@ -479,8 +480,8 @@ final class FloatBallOverlayController {
         View btnClose = fanMenuView.findViewById(R.id.fan_btn_close);
         View toRemove = fanMenuView;
         btnClose.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(0).start();
-        btnLog.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(40).start();
-        btnPanel.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(80)
+        btnLog.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(60).start();
+        btnPanel.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(120)
                 .withEndAction(() -> {
                     try {
                         host.getWindowManager().removeView(toRemove);

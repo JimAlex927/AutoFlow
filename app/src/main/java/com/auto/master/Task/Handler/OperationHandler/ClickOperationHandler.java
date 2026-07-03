@@ -20,9 +20,9 @@ import java.util.regex.Pattern;
  */
 public class ClickOperationHandler extends OperationHandler {
     private static final String CLICK_TAG = "ClickOperationHandler";
-    private static final long FAST_DISPATCH_TIMEOUT_MS = 250L;
+    private static final long FAST_DISPATCH_TIMEOUT_MS = 2000L;
     private static final long FAST_SETTLE_MS = 32L;
-    private static final long STRICT_WAIT_TIMEOUT_MS = 3000L;
+    private static final long STRICT_WAIT_TIMEOUT_MS = 5000L;
     private static final int MAX_CLICK_RETRY_COUNT = 5;
     // 静态缓存：避免 extractNumbers() 每次调用都重新编译正则
     private static final Pattern COORD_PATTERN = Pattern.compile("(-?\\d+)\\D+(-?\\d+)");

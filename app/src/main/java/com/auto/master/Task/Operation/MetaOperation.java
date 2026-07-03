@@ -60,6 +60,8 @@ public abstract class MetaOperation {
     public static String NODE_PRE_DELAY_MIN_MS = "NODE_PRE_DELAY_MIN_MS";
     public static String NODE_PRE_DELAY_MAX_MS = "NODE_PRE_DELAY_MAX_MS";
     public static String NODE_PRE_DELAY_RANDOM = "NODE_PRE_DELAY_RANDOM";
+    public static String NODE_BOUND_SESSION_ID = "NODE_BOUND_SESSION_ID";
+    public static String NODE_BOUND_SESSION_NAME = "NODE_BOUND_SESSION_NAME";
     public static String MATCH_PRE_DELAY_MS = "MATCH_PRE_DELAY_MS";
     public static String MATCH_POST_DELAY_MS = "MATCH_POST_DELAY_MS";
     public static String POLL_FAST_INTERVAL_MS = "POLL_FAST_INTERVAL_MS";

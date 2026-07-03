@@ -47,6 +47,7 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import com.auto.master.Task.Handler.OperationHandler.LoadImgToMatOperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.OperationHandler;
@@ -73,15 +74,21 @@ public final class ScriptRunner {
 
     private static final String TAG = "ScriptRunner";
     private static final int NATIVE_BUFFER_TRIM_INTERVAL_OPS = 512;
-    private static final ExecutorService SINGLE = Executors.newSingleThreadExecutor();
+    private static final int MAX_CONCURRENT_SESSIONS = 3;
+    private static final AtomicInteger THREAD_INDEX = new AtomicInteger(1);
+    private static final ExecutorService EXECUTOR = Executors.newFixedThreadPool(
+            MAX_CONCURRENT_SESSIONS,
+            runnable -> {
+                Thread thread = new Thread(runnable, "ScriptSession-" + THREAD_INDEX.getAndIncrement());
+                thread.setDaemon(false);
+                return thread;
+            });
+    private static final ScriptSessionManager SESSION_MANAGER = new ScriptSessionManager();
+    private static final ThreadLocal<ScriptSession> CURRENT_SESSION = new ThreadLocal<>();
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
-
-    // 当前执行线程，用于中断
-    private static volatile Thread currentExecuteThread;
 
     // onOperationStart 必须逐条通知，否则变量节点等快速逻辑节点会把下一条真实执行节点的 UI 刷新吞掉。
     // 这里只保留完成事件的轻量节流，避免极短逻辑循环时频繁刷 UI。
-    private static volatile long lastCompleteListenerNotifyMs = 0;
     private static final long COMPLETE_LISTENER_THROTTLE_MS = 50;
     // 主线程繁忙时（如上一节点刚做完截图/OCR/列表刷新），倒计时悬浮条的 postAtFrontOfQueue
     // 任务可能延迟超过原先的 120ms，导致后台线程提前超时进入真正的 sleep。若 sleep 时长很短，
@@ -101,11 +108,23 @@ public final class ScriptRunner {
          */
         void onOperationStart(String operationId, String operationName);
 
+        default void onOperationStart(String sessionId, String operationId, String operationName) {
+            onOperationStart(operationId, operationName);
+        }
+
         default void onNodePreDelayStart(String operationId, long durationMs) {
+        }
+
+        default void onNodePreDelayStart(String sessionId, String operationId, long durationMs) {
+            onNodePreDelayStart(operationId, durationMs);
         }
 
         /** 普通延时节点开始等待，优先通知倒计时 UI。 */
         default void onDelayOperationCountdownStart(String operationId, long durationMs) {
+        }
+
+        default void onDelayOperationCountdownStart(String sessionId, String operationId, long durationMs) {
+            onDelayOperationCountdownStart(operationId, durationMs);
         }
 
         /** 普通延时节点即将 sleep；readySignal 在倒计时 UI 已启动后释放。 */
@@ -118,12 +137,27 @@ public final class ScriptRunner {
             }
         }
 
+        default void onDelayOperationCountdownStart(String sessionId,
+                                                    String operationId,
+                                                    long durationMs,
+                                                    CountDownLatch readySignal) {
+            onDelayOperationCountdownStart(operationId, durationMs, readySignal);
+        }
+
         /** MTry 开始第 current 次尝试（current=0 表示清除徽章）。 */
         default void onMtryAttempt(String operationId, int current, int total) {
         }
 
+        default void onMtryAttempt(String sessionId, String operationId, int current, int total) {
+            onMtryAttempt(operationId, current, total);
+        }
+
         /** MTry 重试前延时开始，delayMs > 0 才调用。 */
         default void onMtryRetryDelay(String operationId, long delayMs) {
+        }
+
+        default void onMtryRetryDelay(String sessionId, String operationId, long delayMs) {
+            onMtryRetryDelay(operationId, delayMs);
         }
         
         /**
@@ -132,11 +166,19 @@ public final class ScriptRunner {
          * @param success 是否成功
          */
         void onOperationComplete(String operationId, boolean success);
+
+        default void onOperationComplete(String sessionId, String operationId, boolean success) {
+            onOperationComplete(operationId, success);
+        }
         
         /**
          * 所有 operation 执行完成
          */
         void onScriptComplete();
+
+        default void onScriptComplete(String sessionId) {
+            onScriptComplete();
+        }
 
         /**
          * Task 切换（用于悬浮窗显示当前 Task 的 operations）
@@ -145,6 +187,13 @@ public final class ScriptRunner {
          * @param operations Task 中的 operation 列表
          */
         void onTaskSwitch(String taskId, String taskName, List<com.auto.master.floatwin.OperationItem> operations);
+
+        default void onTaskSwitch(String sessionId,
+                                  String taskId,
+                                  String taskName,
+                                  List<com.auto.master.floatwin.OperationItem> operations) {
+            onTaskSwitch(taskId, taskName, operations);
+        }
     }
     
     // 当前监听器
@@ -168,7 +217,13 @@ public final class ScriptRunner {
      * 获取当前监听器
      */
     public static ScriptExecutionListener getCurrentListener() {
-        return currentListener;
+        ScriptSession session = CURRENT_SESSION.get();
+        return session == null ? currentListener : session.getListener();
+    }
+
+    public static String getCurrentSessionId() {
+        ScriptSession session = CURRENT_SESSION.get();
+        return session == null ? SESSION_MANAGER.getActiveSessionId() : session.getSessionId();
     }
 
     /**
@@ -212,7 +267,7 @@ public final class ScriptRunner {
 //        }
 //    }
     public static void runJson(String projectName, String json) {
-        SINGLE.execute(() -> {
+        EXECUTOR.execute(() -> {
             try {
                 if (!AutoAccessibilityService.isConnected()) {
                     Log.e(TAG, "AccessibilityService not connected");
@@ -249,7 +304,7 @@ public final class ScriptRunner {
 
 
     public static void runProject(Project project) {
-        SINGLE.execute(() -> {
+        EXECUTOR.execute(() -> {
             try {
                 if (!AutoAccessibilityService.isConnected()) {
                     Log.e(TAG, "AccessibilityService not connected");
@@ -300,58 +355,174 @@ public final class ScriptRunner {
 //        runOperation(metaOperation, null);
     }
 
-    // 当前的执行上下文，用于控制暂停/停止
-    private static ScriptExecuteContext currentExecuteContext;
-
     /**
      * 暂停当前运行的脚本
      */
     public static void pauseCurrentScript() {
-        if (currentExecuteContext != null) {
-            currentExecuteContext.pause();
-            ScreenCaptureManager.getInstance().setKeepAliveDuringScript(false);
-            Log.d(TAG, "脚本已暂停");
+        pauseScript(SESSION_MANAGER.getActiveSessionId());
+    }
+
+    public static void pauseScript(String sessionId) {
+        ScriptSession session = SESSION_MANAGER.getSession(sessionId);
+        ScriptExecuteContext ctx = session == null ? null : session.getExecuteContext();
+        if (ctx == null) {
+            return;
         }
+        ctx.pause();
+        session.setState(ScriptSession.State.PAUSED);
+        Log.d(TAG, "脚本已暂停 session=" + sessionId);
     }
 
     /**
      * 恢复当前暂停的脚本
      */
     public static void resumeCurrentScript() {
-        if (currentExecuteContext != null) {
-            ScreenCaptureManager.getInstance().setKeepAliveDuringScript(true);
-            currentExecuteContext.resume();
-            Log.d(TAG, "脚本已恢复");
+        resumeScript(SESSION_MANAGER.getActiveSessionId());
+    }
+
+    public static void resumeScript(String sessionId) {
+        ScriptSession session = SESSION_MANAGER.getSession(sessionId);
+        ScriptExecuteContext ctx = session == null ? null : session.getExecuteContext();
+        if (ctx == null) {
+            return;
         }
+        ScreenCaptureManager.getInstance().setKeepAliveDuringScript(true);
+        ctx.resume();
+        session.setState(ScriptSession.State.RUNNING);
+        Log.d(TAG, "脚本已恢复 session=" + sessionId);
     }
 
     /**
      * 停止当前运行的脚本
      */
     public static void stopCurrentScript() {
-        if (currentExecuteContext != null) {
-            currentExecuteContext.stop();
-            ScreenCaptureManager.getInstance().setKeepAliveDuringScript(false);
-            // 中断执行线程，让阻塞的 operation 立即退出
-            if (currentExecuteThread != null) {
-                currentExecuteThread.interrupt();
-            }
-            Log.d(TAG, "脚本已停止");
+        stopScript(SESSION_MANAGER.getActiveSessionId());
+    }
+
+    public static void stopScript(String sessionId) {
+        ScriptSession session = SESSION_MANAGER.getSession(sessionId);
+        ScriptExecuteContext ctx = session == null ? null : session.getExecuteContext();
+        if (ctx == null) {
+            return;
         }
+        ctx.stop();
+        session.setState(ScriptSession.State.STOPPING);
+        Thread executeThread = session.getExecuteThread();
+        if (executeThread != null) {
+            executeThread.interrupt();
+        }
+        Log.d(TAG, "脚本已停止 session=" + sessionId);
     }
 
     /**
      * 获取当前脚本是否暂停
      */
     public static boolean isCurrentScriptPaused() {
-        return currentExecuteContext != null && currentExecuteContext.paused;
+        ScriptSession session = SESSION_MANAGER.getActiveSession();
+        ScriptExecuteContext ctx = session == null ? null : session.getExecuteContext();
+        return ctx != null && ctx.paused;
+    }
+
+    public static boolean waitIfCurrentSessionPaused() {
+        ScriptSession session = CURRENT_SESSION.get();
+        ScriptExecuteContext ctx = session == null ? null : session.getExecuteContext();
+        if (ctx == null) {
+            return true;
+        }
+        if (ctx.stopped || !Boolean.TRUE.equals(ctx.running)) {
+            return false;
+        }
+        synchronized (ctx.pauseLock) {
+            while (ctx.paused && Boolean.TRUE.equals(ctx.running) && !ctx.stopped) {
+                try {
+                    ctx.pauseLock.wait();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+        }
+        return !ctx.stopped && Boolean.TRUE.equals(ctx.running);
+    }
+
+    public static boolean sleepCurrentSessionAware(long durationMs) {
+        long remainingMs = Math.max(0L, durationMs);
+        long lastTickMs = SystemClock.uptimeMillis();
+        while (remainingMs > 0L) {
+            if (!waitIfCurrentSessionPaused()) {
+                return false;
+            }
+            long chunkMs = Math.min(remainingMs, 50L);
+            try {
+                Thread.sleep(chunkMs);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
+            long nowMs = SystemClock.uptimeMillis();
+            remainingMs -= Math.max(0L, nowMs - lastTickMs);
+            lastTickMs = nowMs;
+        }
+        return waitIfCurrentSessionPaused();
     }
 
     /**
      * 获取当前脚本是否正在运行
      */
     public static boolean isCurrentScriptRunning() {
-        return currentExecuteContext != null && currentExecuteContext.running;
+        return SESSION_MANAGER.isAnyRunning();
+    }
+
+    public static boolean isAnyScriptRunning() {
+        return SESSION_MANAGER.isAnyRunning();
+    }
+
+    public static boolean shouldCloneCaptureFrameForCurrentSession() {
+        return SESSION_MANAGER.getRunningSessionCount() > 1;
+    }
+
+    public static boolean isScriptRunning(String sessionId) {
+        return SESSION_MANAGER.isRunning(sessionId);
+    }
+
+    public static String createSession() {
+        return createSession(null);
+    }
+
+    public static String createSession(String sessionName) {
+        return SESSION_MANAGER.createSessionSlot(sessionName).getSessionId();
+    }
+
+    public static void closeSession(String sessionId) {
+        ScriptSession session = SESSION_MANAGER.getSession(sessionId);
+        if (session == null) {
+            return;
+        }
+        ScriptSession.State state = session.getState();
+        if (state == ScriptSession.State.IDLE
+                || state == ScriptSession.State.COMPLETED
+                || state == ScriptSession.State.FAILED
+                || state == ScriptSession.State.STOPPED) {
+            SESSION_MANAGER.removeSession(sessionId);
+            return;
+        }
+        stopScript(sessionId);
+    }
+
+    public static String getActiveSessionId() {
+        return SESSION_MANAGER.getActiveSessionId();
+    }
+
+    public static void setActiveSessionId(String sessionId) {
+        SESSION_MANAGER.setActiveSessionId(sessionId);
+    }
+
+    public static List<ScriptSessionSnapshot> listSessionSnapshots() {
+        return SESSION_MANAGER.listSnapshots();
+    }
+
+    public static ScriptSessionSnapshot getSessionSnapshot(String sessionId) {
+        return SESSION_MANAGER.getSnapshot(sessionId);
     }
 
     /**
@@ -405,11 +576,20 @@ public final class ScriptRunner {
         return ctx != null && !ctx.stopped && Boolean.TRUE.equals(ctx.running);
     }
 
-    public static void runOperation(ScriptExecuteContext scriptExecuteContext) {
-        currentExecuteContext = scriptExecuteContext;
+    public static String runOperation(ScriptExecuteContext scriptExecuteContext) {
+        return runOperation(scriptExecuteContext, scriptExecuteContext == null ? null : scriptExecuteContext.sessionId);
+    }
+
+    public static String runOperation(ScriptExecuteContext scriptExecuteContext, String requestedSessionId) {
+        final ScriptSession session = SESSION_MANAGER.bindSession(requestedSessionId, scriptExecuteContext, currentListener);
+        if (session == null) {
+            throw new IllegalStateException("会话正在运行或不可用");
+        }
+        final String sessionId = session.getSessionId();
+        scriptExecuteContext.sessionId = sessionId;
 
 //        1、无限循环
-        SINGLE.execute(
+        session.setFuture(EXECUTOR.submit(
 
 //                运行之前先重新加载资源文件
 //                重新加载下项目的资源文件到内存
@@ -427,7 +607,11 @@ public final class ScriptRunner {
 //                    } catch (Exception ignored) {}
                     int consecutiveErrors = 0;
                     int operationsSinceNativeTrim = 0;
+                    boolean failed = false;
+                    final ScriptExecutionListener sessionListener = session.getListener();
                     try {
+                        CURRENT_SESSION.set(session);
+                        session.setState(ScriptSession.State.RUNNING);
                         ScreenCaptureManager.getInstance().setKeepAliveDuringScript(true);
 //                    *************************************************
                         String projectName = "";
@@ -441,6 +625,8 @@ public final class ScriptRunner {
                         if (entryOperation != null && entryOperation.taskId != null) {
                             entryTaskName = entryOperation.taskId;
                         }
+                        session.setCurrentProjectName(projectName);
+                        session.setCurrentTaskName(entryTaskName);
                         if (!entryTaskName.isEmpty() && !Template.isTaskCacheWarm(projectName, entryTaskName)) {
                             LoadImgToMatOperation loadImgToMatOperation = new LoadImgToMatOperation();
                             loadImgToMatOperation.setId("loadResource");
@@ -453,7 +639,7 @@ public final class ScriptRunner {
                         }
 //                    *************************************************
 
-                        currentExecuteThread = Thread.currentThread();
+                        session.setExecuteThread(Thread.currentThread());
                         while (Boolean.TRUE.equals(scriptExecuteContext.running)) {
                             try {
                                 synchronized (scriptExecuteContext.pauseLock) {
@@ -484,8 +670,8 @@ public final class ScriptRunner {
                                                     scriptExecuteContext.tobeHandledOperation = jumpOp;
                                                     scriptExecuteContext.sharedContext.lastOperation = jumpOp;
 
-                                                    if (currentListener != null) {
-                                                        final ScriptExecutionListener listener = currentListener;
+                                                    if (sessionListener != null) {
+                                                        final ScriptExecutionListener listener = sessionListener;
                                                         final String taskName = originTask.getName();
                                                         final String taskId = jumpOp.taskId;
                                                         final java.util.List<com.auto.master.floatwin.OperationItem> operationItems =
@@ -506,7 +692,7 @@ public final class ScriptRunner {
                                                                     com.auto.master.floatwin.FloatWindowService.extractNodePreDelayRandom(op)
                                                             ));
                                                         }
-                                                        MAIN.post(() -> listener.onTaskSwitch(taskId, taskName, operationItems));
+                                                        MAIN.post(() -> listener.onTaskSwitch(sessionId, taskId, taskName, operationItems));
                                                     }
 
                                                     SystemClock.sleep(10);
@@ -529,19 +715,21 @@ public final class ScriptRunner {
                                 final long operationLogStartMs = System.currentTimeMillis();
                                 RuntimeOperationLogFormatter.logOperationStart(operation, scriptExecuteContext.sharedContext);
                                 // 非延时倒计时节点：正常通知 operationStart
-                                if (!delayCountdownOperation && currentListener != null) {
-                                    final ScriptExecutionListener listener = currentListener;
-                                    MAIN.post(() -> listener.onOperationStart(opId, opName));
+                                session.setCurrentOperation(opId, opName);
+                                if (!delayCountdownOperation && sessionListener != null) {
+                                    final ScriptExecutionListener listener = sessionListener;
+                                    MAIN.post(() -> listener.onOperationStart(sessionId, opId, opName));
                                 }
 
                                 Integer type = operation.getType();
                                 OperationHandler operationHandler = OperationHandlerManager.getOperationHandler(type);
                                 if (operationHandler == null) {
                                     Log.e(TAG, "未找到 OperationHandler, type=" + type + ", opId=" + opId);
-                                    if (currentListener != null) {
-                                        final ScriptExecutionListener listener = currentListener;
-                                        MAIN.post(() -> listener.onOperationComplete(opId, false));
+                                    if (sessionListener != null) {
+                                        final ScriptExecutionListener listener = sessionListener;
+                                        MAIN.post(() -> listener.onOperationComplete(sessionId, opId, false));
                                     }
+                                    failed = true;
                                     scriptExecuteContext.running = false;
                                     break;
                                 }
@@ -549,14 +737,14 @@ public final class ScriptRunner {
                                 // nodePreDelay 先于主延时倒计时执行，避免 stopDelay() 把主倒计时 UI 杀掉
                                 long nodePreDelayMs = OperationHandler.resolveNodePreDelayMs(operation);
                                 if (nodePreDelayMs > 0L) {
-                                    if (currentListener != null) {
-                                        final ScriptExecutionListener listener = currentListener;
+                                    if (sessionListener != null) {
+                                        final ScriptExecutionListener listener = sessionListener;
                                         final long delayForUi = nodePreDelayMs;
                                         // 延时倒计时节点：nodePreDelay 阶段用 onOperationStart 通知 UI
                                         if (delayCountdownOperation) {
-                                            MAIN.post(() -> listener.onOperationStart(opId, opName));
+                                            MAIN.post(() -> listener.onOperationStart(sessionId, opId, opName));
                                         }
-                                        MAIN.post(() -> listener.onNodePreDelayStart(opId, delayForUi));
+                                        MAIN.post(() -> listener.onNodePreDelayStart(sessionId, opId, delayForUi));
                                     }
                                     if (!sleepNodePreDelay(scriptExecuteContext, nodePreDelayMs)) {
                                         scriptExecuteContext.running = false;
@@ -565,10 +753,10 @@ public final class ScriptRunner {
                                 }
 
                                 // 延时倒计时：nodePreDelay 结束后才启动主倒计时 UI（此时不会被 nodePreDelay 覆盖）
-                                if (delayCountdownOperation && currentListener != null) {
-                                    final ScriptExecutionListener listener = currentListener;
+                                if (delayCountdownOperation && sessionListener != null) {
+                                    final ScriptExecutionListener listener = sessionListener;
                                     CountDownLatch countdownReady = new CountDownLatch(1);
-                                    listener.onDelayOperationCountdownStart(opId, delayDurationMs, countdownReady);
+                                    listener.onDelayOperationCountdownStart(sessionId, opId, delayDurationMs, countdownReady);
                                     try {
                                         countdownReady.await(COUNTDOWN_READY_WAIT_MS, TimeUnit.MILLISECONDS);
                                     } catch (InterruptedException e) {
@@ -586,13 +774,13 @@ public final class ScriptRunner {
                                         System.currentTimeMillis() - operationLogStartMs);
 
                                 long nowMs = System.currentTimeMillis();
-                                boolean shouldNotifyComplete = currentListener != null
+                                boolean shouldNotifyComplete = sessionListener != null
                                         && (delayCountdownOperation
-                                        || nowMs - lastCompleteListenerNotifyMs >= COMPLETE_LISTENER_THROTTLE_MS);
-                                if (shouldNotifyComplete && currentListener != null) {
-                                    lastCompleteListenerNotifyMs = nowMs;
-                                    final ScriptExecutionListener listener = currentListener;
-                                    MAIN.post(() -> listener.onOperationComplete(opId, ok));
+                                        || nowMs - session.getLastCompleteListenerNotifyMs() >= COMPLETE_LISTENER_THROTTLE_MS);
+                                if (shouldNotifyComplete) {
+                                    session.setLastCompleteListenerNotifyMs(nowMs);
+                                    final ScriptExecutionListener listener = sessionListener;
+                                    MAIN.post(() -> listener.onOperationComplete(sessionId, opId, ok));
                                 }
 
                                 // 纯逻辑操作（变量/分支/循环判断）完成极快，
@@ -600,6 +788,7 @@ public final class ScriptRunner {
                                 Thread.yield();
 
                                 if (!ok) {
+                                    failed = true;
                                     scriptExecuteContext.running = false;
                                     break;
                                 }
@@ -609,6 +798,7 @@ public final class ScriptRunner {
                                 DefaultResponseHandler responseHandler = ResponseHandlerManager.getResponseHandler(operation.getClass(), responseType);
                                 if (responseHandler == null) {
                                     Log.e(TAG, "未找到 ResponseHandler, class=" + operation.getClass().getSimpleName() + ", responseType=" + responseType);
+                                    failed = true;
                                     scriptExecuteContext.running = false;
                                     break;
                                 }
@@ -622,12 +812,16 @@ public final class ScriptRunner {
                             } catch (InterruptedException e) {
                                 Log.d(TAG, "脚本执行被中断");
                                 Thread.currentThread().interrupt();
+                                if (!scriptExecuteContext.stopped) {
+                                    failed = true;
+                                }
                                 scriptExecuteContext.running = false;
                                 break;
                             } catch (Exception e) {
                                 consecutiveErrors++;
                                 Log.e(TAG, "运行线程抛出异常(" + consecutiveErrors + "): " + e.getMessage(), e);
                                 if (consecutiveErrors >= 3) {
+                                    failed = true;
                                     scriptExecuteContext.running = false;
                                     break;
                                 }
@@ -635,25 +829,38 @@ public final class ScriptRunner {
                             }
                         }
                     } finally {
-                        currentExecuteContext = null;
-                        currentExecuteThread = null;
-                        ScreenCaptureManager.getInstance().setKeepAliveDuringScript(false);
+                        if (scriptExecuteContext.stopped) {
+                            session.setState(ScriptSession.State.STOPPED);
+                        } else if (failed) {
+                            session.setState(ScriptSession.State.FAILED);
+                        } else {
+                            session.setState(ScriptSession.State.COMPLETED);
+                        }
+                        session.setExecuteThread(null);
+                        if (!SESSION_MANAGER.isAnyRunning()) {
+                            ScreenCaptureManager.getInstance().setKeepAliveDuringScript(false);
+                        }
                         OpenCVHelper.releaseCurrentThreadBuffers();
-                        AutoAccessibilityService brightnessSvc = AutoAccessibilityService.get();
-                        if (brightnessSvc != null) {
-                            SetScreenBrightnessOperationHandler.restoreDefaultBrightness(brightnessSvc.getApplicationContext());
+                        if (!SESSION_MANAGER.isAnyRunning()) {
+                            AutoAccessibilityService brightnessSvc = AutoAccessibilityService.get();
+                            if (brightnessSvc != null) {
+                                SetScreenBrightnessOperationHandler.restoreDefaultBrightness(brightnessSvc.getApplicationContext());
+                            }
                         }
 //                        if (wakeLock != null && wakeLock.isHeld()) {
 //                            wakeLock.release();
 //                        }
-                        if (currentListener != null) {
-                            final ScriptExecutionListener listener = currentListener;
-                            MAIN.post(listener::onScriptComplete);
+                        if (sessionListener != null) {
+                            final ScriptExecutionListener listener = sessionListener;
+                            MAIN.post(() -> listener.onScriptComplete(sessionId));
                         }
+                        CURRENT_SESSION.remove();
+                        SESSION_MANAGER.resetSessionToIdle(sessionId);
                     }
                 }
-        );
+        ));
 
+        return sessionId;
     }
 
     /**

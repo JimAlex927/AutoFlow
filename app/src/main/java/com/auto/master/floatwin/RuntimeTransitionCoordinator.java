@@ -10,6 +10,7 @@ import com.auto.master.auto.ScriptRunner;
 final class RuntimeTransitionCoordinator {
     interface Host {
         Context getContext();
+        @Nullable String getSelectedScriptSessionId();
         boolean isPaused();
         void setPaused(boolean paused);
         void updateRunningPanelStatus(String status, int color);
@@ -44,14 +45,19 @@ final class RuntimeTransitionCoordinator {
     }
 
     void togglePauseState() {
+        String sessionId = host.getSelectedScriptSessionId();
+        if (sessionId == null || sessionId.isEmpty()) {
+            host.showToast("请先选择一个运行会话");
+            return;
+        }
         if (host.isPaused()) {
-            ScriptRunner.resumeCurrentScript();
+            ScriptRunner.resumeScript(sessionId);
             host.setPaused(false);
             host.updateRunningPanelStatus("运行中", 0xFF4CAF50);
             host.applyBallPresentation();
             host.showToast("脚本已继续");
         } else {
-            ScriptRunner.pauseCurrentScript();
+            ScriptRunner.pauseScript(sessionId);
             host.setPaused(true);
             host.updateRunningPanelStatus("已暂停", 0xFFFF9800);
             host.applyBallPresentation();
@@ -61,7 +67,12 @@ final class RuntimeTransitionCoordinator {
     }
 
     void stopScriptFromUi() {
-        ScriptRunner.stopCurrentScript();
+        String sessionId = host.getSelectedScriptSessionId();
+        if (sessionId == null || sessionId.isEmpty()) {
+            host.showToast("请先选择一个运行会话");
+            return;
+        }
+        ScriptRunner.stopScript(sessionId);
         host.recordFailureReason("stopped_by_user");
         host.appendRunLog("=== Run Stopped By User ===");
         host.persistCurrentRunLog();
