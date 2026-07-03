@@ -134,6 +134,7 @@ import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.capture.ScreenCapturePermissionActivity;
 import com.auto.master.importer.ProjectImportPickerActivity;
 import com.auto.master.importer.ScriptPackageManager;
+import com.auto.master.ui.EntityActionSheetAdapter;
 import com.auto.master.utils.BitmapManager;
 import com.auto.master.utils.CrashLogger;
 import com.auto.master.utils.AdaptivePollingController;
@@ -262,6 +263,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private ProjectPanelAdapter projectPanelAdapter;
     private TaskPanelAdapter taskPanelAdapter;
     private OperationPanelAdapter operationPanelAdapter;
+    private PopupWindow entityActionPopupWindow;
+    private TextView entityActionTitleView;
+    private TextView entityActionNameView;
+    private TextView entityActionHintView;
+    private TextView entityActionPrimaryButton;
+    private RecyclerView entityActionRecyclerView;
+    private EntityActionSheetAdapter entityActionSheetAdapter;
     private PopupWindow taskActionPopupWindow;
     private TextView taskActionPopupTitleView;
     private RecyclerView taskActionPopupListView;
@@ -3451,10 +3459,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (rv == null) return;
         final int loadToken = panelDataLoadToken.incrementAndGet();
         
-        // 优化RecyclerView性能
-        if (!(rv.getLayoutManager() instanceof LinearLayoutManager)
-                || rv.getLayoutManager() instanceof GridLayoutManager) {
-            RecyclerViewOptimizer.optimizeForProjectList(rv, this);
+        if (!(rv.getLayoutManager() instanceof GridLayoutManager)) {
+            rv.setLayoutManager(new GridLayoutManager(this, resolveProjectPanelSpanCount()));
+            RecyclerViewOptimizer.optimize(rv, true);
+        } else {
+            GridLayoutManager manager = (GridLayoutManager) rv.getLayoutManager();
+            int spanCount = resolveProjectPanelSpanCount();
+            if (manager.getSpanCount() != spanCount) {
+                manager.setSpanCount(spanCount);
+            }
         }
 
         File root = getProjectsRootDir();
@@ -3515,10 +3528,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (rv == null) return;
         final int loadToken = panelDataLoadToken.incrementAndGet();
         
-        // 优化RecyclerView性能
-        if (!(rv.getLayoutManager() instanceof LinearLayoutManager)
-                || rv.getLayoutManager() instanceof GridLayoutManager) {
-            RecyclerViewOptimizer.optimizeForProjectList(rv, this);
+        if (!(rv.getLayoutManager() instanceof GridLayoutManager)) {
+            rv.setLayoutManager(new GridLayoutManager(this, resolveProjectPanelSpanCount()));
+            RecyclerViewOptimizer.optimize(rv, true);
+        } else {
+            GridLayoutManager manager = (GridLayoutManager) rv.getLayoutManager();
+            int spanCount = resolveProjectPanelSpanCount();
+            if (manager.getSpanCount() != spanCount) {
+                manager.setSpanCount(spanCount);
+            }
         }
 
         long version = projectDir.lastModified();
@@ -3564,6 +3582,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 renderTaskItems(filterTaskItems(taskListCache, querySnapshot));
             });
         });
+    }
+
+    private int resolveProjectPanelSpanCount() {
+        int widthPx = projectPanelLp != null && projectPanelLp.width > 0
+                ? projectPanelLp.width
+                : getResources().getDisplayMetrics().widthPixels;
+        float widthDp = widthPx / getResources().getDisplayMetrics().density;
+        return widthDp >= 300f ? 2 : 1;
     }
 
     private void updateEmptyView(boolean isEmpty, String hint) {
@@ -4221,30 +4247,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (item == null || item.dir == null || anchor == null) {
             return;
         }
-        View popupView = LayoutInflater.from(this).inflate(R.layout.dialog_node_action_sheet, null);
-        TextView tvTitle = popupView.findViewById(R.id.tv_action_title);
-        RecyclerView rvActions = popupView.findViewById(R.id.rv_action_list);
-        if (tvTitle != null) {
-            tvTitle.setText(item.dir.getName());
-        }
-        rvActions.setLayoutManager(new LinearLayoutManager(this));
-
-        List<OperationPanelAdapter.ActionItem> actionItems = new ArrayList<>();
-        actionItems.add(new OperationPanelAdapter.ActionItem(1, "导出项目", "打包成 zip 文件并分享", true));
-        actionItems.add(new OperationPanelAdapter.ActionItem(2, "重命名项目", "修改当前项目名称", true));
-        actionItems.add(new OperationPanelAdapter.ActionItem(3, "删除项目", "从本地删除该项目", true));
-
-        PopupWindow popupWindow = new PopupWindow(
-                popupView,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                true);
-        popupWindow.setOutsideTouchable(true);
-        popupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        popupWindow.setElevation(10f);
-
-        rvActions.setAdapter(new OperationPanelAdapter.ActionSheetAdapter(actionItems, action -> {
-            popupWindow.dismiss();
+        List<EntityActionSheetAdapter.Item> actionItems = new ArrayList<>();
+        actionItems.add(new EntityActionSheetAdapter.Item(
+                1, android.R.drawable.ic_menu_share, "导出", "分享 zip", true));
+        actionItems.add(new EntityActionSheetAdapter.Item(
+                2, android.R.drawable.ic_menu_edit, "重命名", "修改名称", true));
+        actionItems.add(new EntityActionSheetAdapter.Item(
+                3, android.R.drawable.ic_menu_delete, "删除", "移除项目", true));
+        showEntityActionPanel("项目操作", item.dir.getName(), item.taskCount + " 个 Task", actionItems, action -> {
             if (action.id == 1) {
                 exportProjectAsync(item.dir);
             } else if (action.id == 2) {
@@ -4252,8 +4262,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             } else if (action.id == 3) {
                 confirmDeleteProject(item);
             }
-        }));
-        popupWindow.showAsDropDown(anchor, -dp(160), dp(4), Gravity.END);
+        }, anchor);
     }
 
     private void exportProjectAsync(File projectDir) {
@@ -4301,17 +4310,16 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (taskDir == null || !taskDir.isDirectory() || anchor == null) {
             return;
         }
-        ensureTaskActionPopup();
-        if (taskActionPopupWindow == null || taskActionPopupTitleView == null || taskActionSheetAdapter == null) {
-            return;
-        }
-        taskActionPopupTitleView.setText(taskDir.getName());
-        taskActionSheetItems.clear();
-        taskActionSheetItems.add(new OperationPanelAdapter.ActionItem(1, "打开 Task", "进入这个 Task 的节点列表", true));
-        taskActionSheetItems.add(new OperationPanelAdapter.ActionItem(2, "模板库", "管理当前 Task 的模板截图", true));
-        taskActionSheetItems.add(new OperationPanelAdapter.ActionItem(3, "重命名 Task", "修改当前 Task 名称", true));
-        taskActionSheetItems.add(new OperationPanelAdapter.ActionItem(4, "删除 Task", "从本地删除这个 Task", true));
-        taskActionSheetHandler = action -> {
+        List<EntityActionSheetAdapter.Item> actionItems = new ArrayList<>();
+        actionItems.add(new EntityActionSheetAdapter.Item(
+                1, android.R.drawable.ic_media_play, "打开", "节点列表", true));
+        actionItems.add(new EntityActionSheetAdapter.Item(
+                2, android.R.drawable.ic_menu_gallery, "模板库", "模板截图", true));
+        actionItems.add(new EntityActionSheetAdapter.Item(
+                3, android.R.drawable.ic_menu_edit, "重命名", "修改名称", true));
+        actionItems.add(new EntityActionSheetAdapter.Item(
+                4, android.R.drawable.ic_menu_delete, "删除", "移除 Task", true));
+        showEntityActionPanel("任务操作", taskDir.getName(), "选择要执行的 Task 操作", actionItems, action -> {
             if (action == null || !action.enabled) {
                 return;
             }
@@ -4335,12 +4343,76 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 default:
                     break;
             }
-        };
-        taskActionSheetAdapter.notifyDataSetChanged();
-        if (taskActionPopupWindow.isShowing()) {
-            taskActionPopupWindow.dismiss();
+        }, anchor);
+    }
+
+    private void ensureEntityActionPopup() {
+        if (entityActionPopupWindow != null) {
+            return;
         }
-        taskActionPopupWindow.showAsDropDown(anchor, -dp(180), dp(4), Gravity.END);
+        View popupView = LayoutInflater.from(this).inflate(R.layout.dialog_entity_action_sheet, null);
+        View scrim = popupView.findViewById(R.id.entity_action_scrim);
+        View panel = popupView.findViewById(R.id.entity_action_panel);
+        entityActionTitleView = popupView.findViewById(R.id.tv_entity_action_title);
+        entityActionNameView = popupView.findViewById(R.id.tv_entity_action_name);
+        entityActionHintView = popupView.findViewById(R.id.tv_entity_action_hint);
+        entityActionRecyclerView = popupView.findViewById(R.id.rv_entity_action_grid);
+        entityActionPrimaryButton = popupView.findViewById(R.id.btn_entity_action_primary);
+        TextView closeTop = popupView.findViewById(R.id.btn_entity_action_close_top);
+        TextView closeBottom = popupView.findViewById(R.id.btn_entity_action_close);
+        entityActionSheetAdapter = new EntityActionSheetAdapter();
+        entityActionRecyclerView.setLayoutManager(new GridLayoutManager(this, 3));
+        entityActionRecyclerView.setAdapter(entityActionSheetAdapter);
+        entityActionPrimaryButton.setVisibility(View.GONE);
+        View.OnClickListener closeListener = v -> entityActionPopupWindow.dismiss();
+        scrim.setOnClickListener(closeListener);
+        closeTop.setOnClickListener(closeListener);
+        closeBottom.setOnClickListener(closeListener);
+        panel.setOnClickListener(v -> {
+        });
+        entityActionPopupWindow = new PopupWindow(
+                popupView,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                true);
+        entityActionPopupWindow.setOutsideTouchable(true);
+        entityActionPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        entityActionPopupWindow.setElevation(14f);
+    }
+
+    private void showEntityActionPanel(
+            String title,
+            String name,
+            String hint,
+            List<EntityActionSheetAdapter.Item> items,
+            EntityActionSheetAdapter.OnActionClickListener handler,
+            View anchor
+    ) {
+        ensureEntityActionPopup();
+        if (entityActionPopupWindow == null
+                || entityActionTitleView == null
+                || entityActionNameView == null
+                || entityActionHintView == null
+                || entityActionSheetAdapter == null) {
+            return;
+        }
+        entityActionTitleView.setText(title);
+        entityActionNameView.setText(name);
+        entityActionHintView.setText(hint);
+        if (entityActionPrimaryButton != null) {
+            entityActionPrimaryButton.setVisibility(View.GONE);
+        }
+        entityActionSheetAdapter.submitItems(items, action -> {
+            entityActionPopupWindow.dismiss();
+            if (handler != null) {
+                handler.onActionClick(action);
+            }
+        });
+        if (entityActionPopupWindow.isShowing()) {
+            entityActionPopupWindow.dismiss();
+        }
+        View parent = projectPanelView != null ? projectPanelView : anchor.getRootView();
+        entityActionPopupWindow.showAtLocation(parent, Gravity.CENTER, 0, 0);
     }
 
     private void ensureTaskActionPopup() {

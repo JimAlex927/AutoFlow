@@ -21,12 +21,13 @@ import android.widget.TextView;
 
 import androidx.annotation.NonNull;
 import androidx.recyclerview.widget.DiffUtil;
-import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.GridLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
 import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCaptureManager;
+import com.auto.master.ui.EntityActionSheetAdapter;
 
 import java.io.File;
 import java.util.ArrayList;
@@ -102,6 +103,12 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
     private Map<String, Integer> floatBtnColorMap = Collections.emptyMap();
     private File taskDir;
     private final Map<String, Bitmap> previewBitmapCache = new HashMap<>();
+    private PopupWindow nodeActionPopupWindow;
+    private TextView nodeActionTitleView;
+    private TextView nodeActionNameView;
+    private TextView nodeActionHintView;
+    private TextView nodeActionPrimaryButton;
+    private EntityActionSheetAdapter nodeActionSheetAdapter;
 
     OperationPanelAdapter(
             List<OperationItem> operations,
@@ -567,39 +574,41 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
             return;
         }
         List<ActionItem> actionItems = new ArrayList<>();
-        actionItems.add(new ActionItem(1, "编辑节点", "打开这个节点的编辑页", true));
-        actionItems.add(new ActionItem(2, "复制到节点库", "先收进节点库，后面可反复粘贴", true));
-        actionItems.add(new ActionItem(3, "从节点库粘贴到后面", "从节点库挑一个节点插到当前节点后面", actionListener.canPaste()));
-        actionItems.add(new ActionItem(4, "从节点库插入到前面", "从节点库挑一个节点插到当前节点前面", actionListener.canPaste()));
-        actionItems.add(new ActionItem(5, "上移", "把当前节点往前挪一位", position > 0));
-        actionItems.add(new ActionItem(6, "下移", "把当前节点往后挪一位", position < operations.size() - 1));
-        actionItems.add(new ActionItem(7, "删除", "删除当前节点", true));
-        actionItems.add(new ActionItem(8, "ConfigUI 设计", "为这个节点设计可视化配置界面", true));
-        actionItems.add(new ActionItem(9, "悬浮按钮", "为这个节点创建/编辑专属悬浮按钮", true));
-        actionItems.add(new ActionItem(10, "节点前置延迟", "运行到这个节点前先等待一段时间", true));
-        actionItems.add(new ActionItem(11, "绑定会话", "配置这个节点作为入口运行时使用的会话", true));
+        actionItems.add(new ActionItem(1, "编辑", "节点配置", true));
+        actionItems.add(new ActionItem(2, "复制", "存入节点库", true));
+        actionItems.add(new ActionItem(3, "粘贴到后", "节点库 -> 后面", actionListener.canPaste()));
+        actionItems.add(new ActionItem(4, "插入到前", "节点库 -> 前面", actionListener.canPaste()));
+        actionItems.add(new ActionItem(5, "上移", "前移一位", position > 0));
+        actionItems.add(new ActionItem(6, "下移", "后移一位", position < operations.size() - 1));
+        actionItems.add(new ActionItem(7, "删除", "移除节点", true));
+        actionItems.add(new ActionItem(8, "配置 UI", "可视化表单", true));
+        actionItems.add(new ActionItem(9, "悬浮按钮", "创建/编辑", true));
+        actionItems.add(new ActionItem(10, "前置延迟", "运行前等待", true));
+        actionItems.add(new ActionItem(11, "绑定会话", "入口会话", true));
 
-        View popupView = LayoutInflater.from(anchor.getContext()).inflate(R.layout.dialog_node_action_sheet, null);
-        TextView titleView = popupView.findViewById(R.id.tv_action_title);
-        RecyclerView recyclerView = popupView.findViewById(R.id.rv_action_list);
-        if (titleView != null) {
-            titleView.setText(TextUtils.isEmpty(item.name) ? "节点操作" : item.name);
+        ensureNodeActionPopup(anchor.getContext());
+        if (nodeActionPopupWindow == null || nodeActionSheetAdapter == null) {
+            return;
         }
-        recyclerView.setLayoutManager(new LinearLayoutManager(anchor.getContext()));
-        PopupWindow popupWindow = new PopupWindow(
-                popupView,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                ViewGroup.LayoutParams.WRAP_CONTENT,
-                true
-        );
-        popupWindow.setOutsideTouchable(true);
-        popupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        popupWindow.setElevation(10f);
-        recyclerView.setAdapter(new ActionSheetAdapter(actionItems, action -> {
+        if (nodeActionTitleView != null) {
+            nodeActionTitleView.setText("节点操作");
+        }
+        if (nodeActionNameView != null) {
+            nodeActionNameView.setText(TextUtils.isEmpty(item.name) ? item.type : item.name);
+        }
+        if (nodeActionHintView != null) {
+            String type = TextUtils.isEmpty(item.type) ? "Operation" : item.type;
+            String id = TextUtils.isEmpty(item.id) ? "" : " · " + item.id;
+            nodeActionHintView.setText(type + id);
+        }
+        if (nodeActionPrimaryButton != null) {
+            nodeActionPrimaryButton.setVisibility(View.GONE);
+        }
+        nodeActionSheetAdapter.submitItems(toEntityActionItems(actionItems), action -> {
             if (!action.enabled) {
                 return;
             }
-            popupWindow.dismiss();
+            nodeActionPopupWindow.dismiss();
             switch (action.id) {
                 case 1:
                     actionListener.onEdit(item);
@@ -637,8 +646,83 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
                 default:
                     break;
             }
-        }));
-        popupWindow.showAsDropDown(anchor, -dp(anchor.getContext(), 180), dp(anchor.getContext(), 4), Gravity.END);
+        });
+        if (nodeActionPopupWindow.isShowing()) {
+            nodeActionPopupWindow.dismiss();
+        }
+        nodeActionPopupWindow.showAtLocation(anchor.getRootView(), Gravity.CENTER, 0, 0);
+    }
+
+    private void ensureNodeActionPopup(Context context) {
+        if (nodeActionPopupWindow != null) {
+            return;
+        }
+        View popupView = LayoutInflater.from(context).inflate(R.layout.dialog_entity_action_sheet, null);
+        View scrim = popupView.findViewById(R.id.entity_action_scrim);
+        View panel = popupView.findViewById(R.id.entity_action_panel);
+        nodeActionTitleView = popupView.findViewById(R.id.tv_entity_action_title);
+        nodeActionNameView = popupView.findViewById(R.id.tv_entity_action_name);
+        nodeActionHintView = popupView.findViewById(R.id.tv_entity_action_hint);
+        nodeActionPrimaryButton = popupView.findViewById(R.id.btn_entity_action_primary);
+        TextView closeTop = popupView.findViewById(R.id.btn_entity_action_close_top);
+        TextView closeBottom = popupView.findViewById(R.id.btn_entity_action_close);
+        RecyclerView recyclerView = popupView.findViewById(R.id.rv_entity_action_grid);
+        nodeActionSheetAdapter = new EntityActionSheetAdapter();
+        recyclerView.setLayoutManager(new GridLayoutManager(context, 3));
+        recyclerView.setAdapter(nodeActionSheetAdapter);
+        nodeActionPopupWindow = new PopupWindow(
+                popupView,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                true);
+        nodeActionPopupWindow.setOutsideTouchable(true);
+        nodeActionPopupWindow.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        nodeActionPopupWindow.setElevation(10f);
+        View.OnClickListener closeListener = v -> nodeActionPopupWindow.dismiss();
+        scrim.setOnClickListener(closeListener);
+        closeTop.setOnClickListener(closeListener);
+        closeBottom.setOnClickListener(closeListener);
+        panel.setOnClickListener(v -> {
+        });
+    }
+
+    private List<EntityActionSheetAdapter.Item> toEntityActionItems(List<ActionItem> actionItems) {
+        List<EntityActionSheetAdapter.Item> items = new ArrayList<>();
+        for (ActionItem action : actionItems) {
+            items.add(new EntityActionSheetAdapter.Item(
+                    action.id,
+                    resolveActionIcon(action),
+                    action.title,
+                    action.desc,
+                    action.enabled));
+        }
+        return items;
+    }
+
+    private int resolveActionIcon(ActionItem action) {
+        if (action == null || TextUtils.isEmpty(action.title)) {
+            return android.R.drawable.ic_menu_manage;
+        }
+        String title = action.title;
+        if (title.contains("编辑") || title.contains("配置") || title.contains("设计") || title.contains("延迟") || title.contains("绑定")) {
+            return android.R.drawable.ic_menu_edit;
+        }
+        if (title.contains("复制") || title.contains("粘贴") || title.contains("插入")) {
+            return android.R.drawable.ic_menu_add;
+        }
+        if (title.contains("上移")) {
+            return android.R.drawable.arrow_up_float;
+        }
+        if (title.contains("下移")) {
+            return android.R.drawable.arrow_down_float;
+        }
+        if (title.contains("删除")) {
+            return android.R.drawable.ic_menu_delete;
+        }
+        if (title.contains("悬浮")) {
+            return android.R.drawable.ic_dialog_dialer;
+        }
+        return android.R.drawable.ic_menu_manage;
     }
 
     public void setRunningPosition(String operationId) {

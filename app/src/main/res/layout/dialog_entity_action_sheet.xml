@@ -1,0 +1,115 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/entity_action_scrim"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="#66000000"
+    android:clickable="true"
+    android:focusable="true"
+    android:padding="14dp">
+
+    <LinearLayout
+        android:id="@+id/entity_action_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:background="@drawable/entity_action_panel_bg"
+        android:clickable="true"
+        android:focusable="true"
+        android:maxWidth="360dp"
+        android:orientation="vertical"
+        android:paddingStart="18dp"
+        android:paddingTop="18dp"
+        android:paddingEnd="18dp"
+        android:paddingBottom="16dp">
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/tv_entity_action_title"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="任务操作"
+                android:textColor="#252B36"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/btn_entity_action_close_top"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:gravity="center"
+                android:minWidth="54dp"
+                android:text="关闭"
+                android:textColor="#252B36"
+                android:textSize="15sp" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/tv_entity_action_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:ellipsize="end"
+            android:maxLines="1"
+            android:textColor="#252B36"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/tv_entity_action_hint"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:ellipsize="end"
+            android:maxLines="2"
+            android:textColor="#7C8190"
+            android:textSize="13sp" />
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/rv_entity_action_grid"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:maxHeight="330dp"
+            android:overScrollMode="ifContentScrolls"
+            android:scrollbars="vertical" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="18dp"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <TextView
+                android:id="@+id/btn_entity_action_primary"
+                android:layout_width="0dp"
+                android:layout_height="54dp"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/project_panel_btn_primary"
+                android:gravity="center"
+                android:text="执行"
+                android:textColor="#FFFFFF"
+                android:textSize="16sp" />
+
+            <TextView
+                android:id="@+id/btn_entity_action_close"
+                android:layout_width="0dp"
+                android:layout_height="54dp"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/project_panel_btn_minor"
+                android:gravity="center"
+                android:text="关闭"
+                android:textColor="#252B36"
+                android:textSize="16sp" />
+        </LinearLayout>
+    </LinearLayout>
+</FrameLayout>

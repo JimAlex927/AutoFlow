@@ -9,6 +9,8 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
+import android.graphics.drawable.ColorDrawable;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
 import android.os.Build;
@@ -17,9 +19,11 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.Settings;
 import android.text.TextUtils;
+import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.Window;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -46,6 +50,8 @@ import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.floatwin.FloatWindowService;
 import com.auto.master.floatwin.RecyclerViewOptimizer;
 import com.auto.master.homepanel.HomeProjectRepository;
+import com.auto.master.importer.ProjectImportPickerActivity;
+import com.auto.master.ui.EntityActionSheetAdapter;
 import com.auto.master.utils.BatteryHardeningHelper;
 
 import org.opencv.android.OpenCVLoader;
@@ -121,7 +127,13 @@ public class MainActivity extends AppCompatActivity {
         }
 
         private int getPayloadType() {
-            return payload instanceof HomeProjectRepository.ProjectSummary ? 1 : 0;
+            if (payload instanceof HomeProjectRepository.ProjectSummary) {
+                return 1;
+            }
+            if (payload instanceof HomeProjectRepository.TaskSummary) {
+                return 2;
+            }
+            return 0;
         }
     }
 
@@ -319,6 +331,7 @@ public class MainActivity extends AppCompatActivity {
         public int getItemViewType(int position) {
             EntryItem item = items.get(position);
             return item.payload instanceof HomeProjectRepository.ProjectSummary
+                    || item.payload instanceof HomeProjectRepository.TaskSummary
                     ? TYPE_PROJECT_CARD
                     : TYPE_LIST_ROW;
         }
@@ -352,6 +365,10 @@ public class MainActivity extends AppCompatActivity {
     private TextView navHomePermissions;
     private TextView navHomeLab;
     private TextView navHomeSupport;
+    private View layoutHomeQuickActions;
+    private View layoutPanelHeader;
+    private TextView btnHomeNewScript;
+    private TextView btnHomeImportScript;
     private ImageView btnPanelBack;
     private ImageView btnPanelAdd;
     private ImageView btnPanelRefresh;
@@ -368,8 +385,11 @@ public class MainActivity extends AppCompatActivity {
     private LinearLayoutManager panelLinearLayoutManager;
     private Dialog actionSheetDialog;
     private TextView actionSheetTitleView;
+    private TextView actionSheetNameView;
+    private TextView actionSheetHintView;
     private RecyclerView actionSheetListView;
-    private ActionSheetAdapter actionSheetAdapter;
+    private TextView actionSheetPrimaryButton;
+    private EntityActionSheetAdapter actionSheetAdapter;
 
     private boolean floatEnabled;
     private boolean shouldAutoStartFloat = true;
@@ -453,6 +473,10 @@ public class MainActivity extends AppCompatActivity {
         navHomePermissions = findViewById(R.id.nav_home_permissions);
         navHomeLab = findViewById(R.id.nav_home_lab);
         navHomeSupport = findViewById(R.id.nav_home_support);
+        layoutHomeQuickActions = findViewById(R.id.layout_home_quick_actions);
+        layoutPanelHeader = findViewById(R.id.layout_panel_header);
+        btnHomeNewScript = findViewById(R.id.btn_home_new_script);
+        btnHomeImportScript = findViewById(R.id.btn_home_import_script);
         btnPanelBack = findViewById(R.id.btn_panel_back);
         btnPanelAdd = findViewById(R.id.btn_panel_add);
         btnPanelRefresh = findViewById(R.id.btn_panel_refresh);
@@ -478,15 +502,35 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void setupReusableActionSheet() {
-        View popupView = LayoutInflater.from(this).inflate(R.layout.dialog_node_action_sheet, null, false);
-        actionSheetTitleView = popupView.findViewById(R.id.tv_action_title);
-        actionSheetListView = popupView.findViewById(R.id.rv_action_list);
-        actionSheetListView.setLayoutManager(new LinearLayoutManager(this));
-        actionSheetAdapter = new ActionSheetAdapter();
+        View popupView = LayoutInflater.from(this).inflate(R.layout.dialog_entity_action_sheet, null, false);
+        View scrim = popupView.findViewById(R.id.entity_action_scrim);
+        View panel = popupView.findViewById(R.id.entity_action_panel);
+        actionSheetTitleView = popupView.findViewById(R.id.tv_entity_action_title);
+        actionSheetNameView = popupView.findViewById(R.id.tv_entity_action_name);
+        actionSheetHintView = popupView.findViewById(R.id.tv_entity_action_hint);
+        actionSheetListView = popupView.findViewById(R.id.rv_entity_action_grid);
+        actionSheetPrimaryButton = popupView.findViewById(R.id.btn_entity_action_primary);
+        TextView closeTop = popupView.findViewById(R.id.btn_entity_action_close_top);
+        TextView closeBottom = popupView.findViewById(R.id.btn_entity_action_close);
+        actionSheetListView.setLayoutManager(new GridLayoutManager(this, 3));
+        actionSheetAdapter = new EntityActionSheetAdapter();
         actionSheetListView.setAdapter(actionSheetAdapter);
-        actionSheetDialog = new AlertDialog.Builder(this)
-                .setView(popupView)
-                .create();
+        actionSheetDialog = new Dialog(this);
+        actionSheetDialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+        actionSheetDialog.setContentView(popupView);
+        actionSheetDialog.setCanceledOnTouchOutside(true);
+        View.OnClickListener closeListener = v -> actionSheetDialog.dismiss();
+        scrim.setOnClickListener(closeListener);
+        closeTop.setOnClickListener(closeListener);
+        closeBottom.setOnClickListener(closeListener);
+        panel.setOnClickListener(v -> {
+        });
+        Window window = actionSheetDialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            window.setGravity(Gravity.CENTER);
+        }
     }
 
     private void bindActions() {
@@ -511,6 +555,8 @@ public class MainActivity extends AppCompatActivity {
             selectHomeSupport();
             showSupportDialog();
         });
+        btnHomeNewScript.setOnClickListener(v -> showCreateProjectDialog());
+        btnHomeImportScript.setOnClickListener(v -> importProjectInteractive());
         btnPanelBack.setOnClickListener(v -> navigatePanelBack());
         btnPanelAdd.setOnClickListener(v -> handlePrimaryCreateAction());
         btnPanelRefresh.setOnClickListener(v -> reloadCurrentLevel());
@@ -676,7 +722,7 @@ public class MainActivity extends AppCompatActivity {
         currentProjectDir = null;
         currentTaskDir = null;
         applyPanelLayoutManager(Level.PROJECT);
-        updatePanelChrome("Projects", "主界面 / 项目", "这里直接管理全部项目，不再跳转旧页面。", false, true);
+        updatePanelChrome("脚本", "首页 / 脚本", "仅用于模拟真人自动化办公，严禁制作/传播作弊器、刷评、刷单、外挂等损害其他平台利益的违法违规行为。", false, true);
         loadPanelEntries(Level.PROJECT, null);
     }
 
@@ -722,16 +768,14 @@ public class MainActivity extends AppCompatActivity {
         if (level == Level.PROJECT) {
             List<HomeProjectRepository.ProjectSummary> projects = repository.loadProjects(this);
             for (HomeProjectRepository.ProjectSummary project : projects) {
-                String subtitle = project.taskCount <= 0
-                        ? "暂无 Task"
-                        : project.taskCount + " 个 Task";
-                entries.add(new EntryItem(
-                        R.drawable.ic_folder_colored,
-                        project.name,
-                        subtitle,
-                        null,
-                        true,
-                        project));
+            String subtitle = "脚本文件夹";
+            entries.add(new EntryItem(
+                    R.drawable.ic_folder_colored,
+                    project.name,
+                    subtitle,
+                    null,
+                    true,
+                    project));
             }
             return entries;
         }
@@ -752,7 +796,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void applyPanelLayoutManager(Level level) {
-        RecyclerView.LayoutManager target = level == Level.PROJECT
+        RecyclerView.LayoutManager target = level == Level.PROJECT || level == Level.TASK
                 ? projectGridLayoutManager
                 : panelLinearLayoutManager;
         if (rvProjects.getLayoutManager() != target) {
@@ -761,15 +805,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private int resolveProjectSpanCount() {
-        float widthDp = getResources().getDisplayMetrics().widthPixels / getResources().getDisplayMetrics().density;
-        float contentWidthDp = Math.max(320f, widthDp - 96f);
-        if (contentWidthDp >= 840f) {
-            return 3;
-        }
-        if (contentWidthDp >= 520f) {
-            return 2;
-        }
-        return 1;
+        return 2;
     }
 
     private void selectHomeProjects() {
@@ -793,10 +829,17 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void updatePanelChrome(String title, String breadcrumb, String hint, boolean showBack, boolean showAdd) {
+        if (layoutHomeQuickActions != null) {
+            layoutHomeQuickActions.setVisibility(showBack ? View.GONE : View.VISIBLE);
+        }
+        if (layoutPanelHeader != null) {
+            layoutPanelHeader.setVisibility(showBack ? View.VISIBLE : View.GONE);
+        }
         tvPanelTitle.setText(title);
         tvPanelBreadcrumb.setVisibility(View.VISIBLE);
         tvPanelBreadcrumb.setText(breadcrumb);
         tvPanelHint.setText(hint);
+        tvPanelHint.setVisibility(showBack ? View.GONE : View.VISIBLE);
         btnPanelBack.setVisibility(showBack ? View.VISIBLE : View.GONE);
         btnPanelAdd.setVisibility(showAdd ? View.VISIBLE : View.GONE);
     }
@@ -857,11 +900,11 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         List<ActionSheetItem> items = new ArrayList<>();
-        items.add(new ActionSheetItem(1, "打开项目", "进入这个项目下的 Task 列表", true));
-        items.add(new ActionSheetItem(2, "新建 Task", "在当前项目里新增一个 Task", true));
-        items.add(new ActionSheetItem(3, "重命名项目", "修改当前项目名称", true));
-        items.add(new ActionSheetItem(4, "删除项目", "从本地删除这个项目", true));
-        showActionSheet(projectDir.getName(), items, item -> {
+        items.add(new ActionSheetItem(1, "打开", "查看 Task", true));
+        items.add(new ActionSheetItem(2, "新建 Task", "添加任务", true));
+        items.add(new ActionSheetItem(3, "重命名", "修改名称", true));
+        items.add(new ActionSheetItem(4, "删除", "移除项目", true));
+        showActionSheet("项目操作", projectDir.getName(), "管理当前项目和 Task", items, item -> {
             if (item.id == 1) {
                 showTasks(projectDir);
                 return;
@@ -886,10 +929,10 @@ public class MainActivity extends AppCompatActivity {
             return;
         }
         List<ActionSheetItem> items = new ArrayList<>();
-        items.add(new ActionSheetItem(1, "在悬浮窗打开", "切到这个 Task 的节点页面", true));
-        items.add(new ActionSheetItem(2, "重命名 Task", "修改当前 Task 名称", true));
-        items.add(new ActionSheetItem(3, "删除 Task", "从本地删除这个 Task", true));
-        showActionSheet(taskDir.getName(), items, item -> {
+        items.add(new ActionSheetItem(1, "悬浮窗", "打开节点页", true));
+        items.add(new ActionSheetItem(2, "重命名", "修改名称", true));
+        items.add(new ActionSheetItem(3, "删除", "移除 Task", true));
+        showActionSheet("任务操作", taskDir.getName(), "管理当前 Task", items, item -> {
             if (item.id == 1) {
                 openTaskInFloatPanel(taskDir, true);
                 return;
@@ -1048,16 +1091,78 @@ public class MainActivity extends AppCompatActivity {
                 .show();
     }
 
-    private void showActionSheet(String title, List<ActionSheetItem> items, ActionSheetHandler handler) {
-        if (actionSheetDialog == null || actionSheetTitleView == null || actionSheetAdapter == null) {
+    private void showActionSheet(
+            String title,
+            String name,
+            String hint,
+            List<ActionSheetItem> items,
+            ActionSheetHandler handler
+    ) {
+        if (actionSheetDialog == null
+                || actionSheetTitleView == null
+                || actionSheetNameView == null
+                || actionSheetHintView == null
+                || actionSheetAdapter == null) {
             setupReusableActionSheet();
         }
         actionSheetTitleView.setText(title);
-        actionSheetAdapter.submitItems(items, item -> {
+        actionSheetNameView.setText(name);
+        actionSheetHintView.setText(hint);
+        if (actionSheetPrimaryButton != null) {
+            actionSheetPrimaryButton.setVisibility(View.GONE);
+        }
+        List<EntityActionSheetAdapter.Item> actionItems = new ArrayList<>();
+        for (ActionSheetItem item : items) {
+            actionItems.add(new EntityActionSheetAdapter.Item(
+                    item.id,
+                    resolveActionIcon(item),
+                    item.title,
+                    item.desc,
+                    item.enabled));
+        }
+        actionSheetAdapter.submitItems(actionItems, item -> {
             actionSheetDialog.dismiss();
-            handler.onAction(item);
+            ActionSheetItem actionItem = findActionItem(items, item.id);
+            if (actionItem != null) {
+                handler.onAction(actionItem);
+            }
         });
         actionSheetDialog.show();
+        Window window = actionSheetDialog.getWindow();
+        if (window != null) {
+            window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+            window.setGravity(Gravity.CENTER);
+        }
+    }
+
+    private ActionSheetItem findActionItem(List<ActionSheetItem> items, int id) {
+        for (ActionSheetItem item : items) {
+            if (item.id == id) {
+                return item;
+            }
+        }
+        return null;
+    }
+
+    private int resolveActionIcon(ActionSheetItem item) {
+        String title = item == null ? "" : String.valueOf(item.title);
+        if (title.contains("打开")) {
+            return android.R.drawable.ic_media_play;
+        }
+        if (title.contains("悬浮")) {
+            return android.R.drawable.ic_dialog_dialer;
+        }
+        if (title.contains("新建")) {
+            return android.R.drawable.ic_input_add;
+        }
+        if (title.contains("重命名")) {
+            return android.R.drawable.ic_menu_edit;
+        }
+        if (title.contains("删除")) {
+            return android.R.drawable.ic_menu_delete;
+        }
+        return android.R.drawable.ic_menu_manage;
     }
 
     private void openTaskInFloatPanel(File taskDir, boolean showToast) {
@@ -1078,6 +1183,11 @@ public class MainActivity extends AppCompatActivity {
         startService(intent);
         floatEnabled = true;
         refreshPermissionStatus();
+    }
+
+    private void importProjectInteractive() {
+        Intent intent = new Intent(this, ProjectImportPickerActivity.class);
+        startActivity(intent);
     }
 
     private void maybeShowSupportPrompt() {
