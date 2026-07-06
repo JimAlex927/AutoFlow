@@ -87,7 +87,7 @@
                     android:layout_width="0dp"
                     android:layout_height="44dp"
                     android:layout_weight="1"
-                    android:hint="Idle pause ms"
+                    android:hint="0 = 不暂停 surface"
                     android:inputType="number"
                     android:singleLine="true"
                     android:textColor="#1F2937"

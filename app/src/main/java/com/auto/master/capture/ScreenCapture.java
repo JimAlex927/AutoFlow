@@ -35,6 +35,11 @@ public final class ScreenCapture {
         sResultData = data;
     }
 
+    public static void clearProjectionPermission() {
+        sResultCode = 0;
+        sResultData = null;
+    }
+
     public static boolean hasProjectionPermission() {
         return sResultCode != 0 && sResultData != null;
     }

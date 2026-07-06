@@ -33,6 +33,10 @@
         <item name="android:navigationBarDividerColor">@color/colorOutlineVariant</item>
         <item name="android:windowLightStatusBar" tools:targetApi="23">true</item>
         <item name="android:windowLightNavigationBar" tools:targetApi="27">true</item>
+        <item name="fontFamily">@font/switzerland_bold2</item>
+        <item name="android:fontFamily">@font/switzerland_bold2</item>
+        <item name="android:textViewStyle">@style/Widget.AtomMaster.TextView</item>
+        <item name="android:buttonStyle">@style/Widget.AtomMaster.Button</item>
     </style>
 
     <style name="Theme.AtomMaster" parent="Base.Theme.AtomMaster" />

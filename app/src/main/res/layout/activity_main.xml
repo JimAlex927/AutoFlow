@@ -249,7 +249,7 @@
             android:paddingTop="12dp"
             android:paddingEnd="38dp"
             android:paddingBottom="18dp"
-            android:text="仅用于模拟真人自动化办公，严禁制作/传播作弊器、刷评、刷单、外挂等损害其他平台利益的违法违规行为。"
+            android:text="仅内测使用"
             android:textColor="#A7ADBB"
             android:textSize="14sp" />
     </LinearLayout>

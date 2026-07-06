@@ -701,28 +701,43 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
 
     private int resolveActionIcon(ActionItem action) {
         if (action == null || TextUtils.isEmpty(action.title)) {
-            return android.R.drawable.ic_menu_manage;
+            return R.drawable.ic_action_config;
         }
         String title = action.title;
         if (title.contains("编辑") || title.contains("配置") || title.contains("设计") || title.contains("延迟") || title.contains("绑定")) {
-            return android.R.drawable.ic_menu_edit;
+            if (title.contains("延迟")) {
+                return R.drawable.ic_action_delay;
+            }
+            if (title.contains("绑定")) {
+                return R.drawable.ic_action_session;
+            }
+            if (title.contains("配置")) {
+                return R.drawable.ic_action_config;
+            }
+            return R.drawable.ic_action_edit;
         }
-        if (title.contains("复制") || title.contains("粘贴") || title.contains("插入")) {
-            return android.R.drawable.ic_menu_add;
+        if (title.contains("复制")) {
+            return R.drawable.ic_action_copy;
+        }
+        if (title.contains("粘贴")) {
+            return R.drawable.ic_action_paste_after;
+        }
+        if (title.contains("插入")) {
+            return R.drawable.ic_action_paste_before;
         }
         if (title.contains("上移")) {
-            return android.R.drawable.arrow_up_float;
+            return R.drawable.ic_action_move_up;
         }
         if (title.contains("下移")) {
-            return android.R.drawable.arrow_down_float;
+            return R.drawable.ic_action_move_down;
         }
         if (title.contains("删除")) {
-            return android.R.drawable.ic_menu_delete;
+            return R.drawable.ic_action_delete;
         }
         if (title.contains("悬浮")) {
-            return android.R.drawable.ic_dialog_dialer;
+            return R.drawable.ic_action_float;
         }
-        return android.R.drawable.ic_menu_manage;
+        return R.drawable.ic_action_list;
     }
 
     public void setRunningPosition(String operationId) {

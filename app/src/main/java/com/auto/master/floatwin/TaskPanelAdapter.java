@@ -160,7 +160,7 @@ class TaskPanelAdapter extends RecyclerView.Adapter<TaskPanelAdapter.ViewHolder>
             name.setText(file.getName());
             info.setVisibility(View.GONE);
             if (file.isDirectory()) {
-                icon.setImageResource(R.drawable.ic_folder_colored);
+                icon.setImageResource(R.drawable.ic_task_flow);
                 editIcon.setVisibility(View.GONE);
                 moreOptions.setVisibility(View.VISIBLE);
             } else {

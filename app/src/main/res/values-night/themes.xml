@@ -3,5 +3,9 @@
     <style name="Base.Theme.AtomMaster" parent="Theme.Material3.DayNight.NoActionBar">
         <!-- Customize your dark theme here. -->
         <!-- <item name="colorPrimary">@color/my_dark_primary</item> -->
+        <item name="fontFamily">@font/switzerland_bold2</item>
+        <item name="android:fontFamily">@font/switzerland_bold2</item>
+        <item name="android:textViewStyle">@style/Widget.AtomMaster.TextView</item>
+        <item name="android:buttonStyle">@style/Widget.AtomMaster.Button</item>
     </style>
 </resources>

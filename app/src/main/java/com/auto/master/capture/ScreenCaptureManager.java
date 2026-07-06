@@ -12,6 +12,7 @@ import android.media.Image;
 import android.media.ImageReader;
 import android.media.projection.MediaProjection;
 import android.media.projection.MediaProjectionManager;
+import android.os.Build;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
@@ -69,7 +70,7 @@ public class ScreenCaptureManager {
     // 修改时会自动对齐到 16 的倍数（scale<1.0）或 2 的倍数（scale=1.0），
     // 避免部分设备 MediaProjection size mismatch 问题。
     // 持久化：通过 CaptureScaleHelper 存储到 SharedPreferences。
-    public static volatile float CAPTURE_SCALE = 0.4f;
+    public static volatile float CAPTURE_SCALE = 1.0f;
 
     // ===== 屏幕参数 =====
     private int screenWidth, screenHeight, screenDpi;
@@ -119,22 +120,38 @@ public class ScreenCaptureManager {
     // 若阈值小于常见操作（点击/手势/短延时）的耗时，会导致下次匹配一开始就在等 VD 重建，
     // 消耗大量超时时间，出现"一直拿到 null"的假性卡死。
     // 3000ms：手势/短延时通常 <2s，留足余量避免频繁暂停/恢复。
-    public static volatile long IDLE_PAUSE_THRESHOLD_MS = 5000L;
+    /** 0 表示不自动暂停 VirtualDisplay surface。 */
+    public static volatile long IDLE_PAUSE_THRESHOLD_MS = 0L;
     private static final long FULL_CLEANUP_IDLE_THRESHOLD_MS = 45_000L;
     private static final long RESUME_GRACE_WINDOW_MS = 800L;
     private volatile boolean displayPaused = false;
     private volatile long lastPollMs = 0;
     private volatile long lastResumeAttemptMs = 0L;
     private volatile boolean keepAliveDuringScript = false;
+    private volatile boolean virtualDisplayCreatedForProjection = false;
     private final Runnable idleCheckRunnable = new Runnable() {
         @Override
         public void run() {
             if (!isRunning.get()) return;
+            long pauseThresholdMs = IDLE_PAUSE_THRESHOLD_MS;
+            if (pauseThresholdMs <= 0L) {
+                long now = System.currentTimeMillis();
+                long idleMs = now - lastPollMs;
+                if (idleMs > FULL_CLEANUP_IDLE_THRESHOLD_MS) {
+                    Log.i(TAG, "capture idle too long, cleanup session: " + idleMs + "ms");
+                    cleanup();
+                    return;
+                }
+                if (captureHandler != null) {
+                    captureHandler.postDelayed(this, FULL_CLEANUP_IDLE_THRESHOLD_MS);
+                }
+                return;
+            }
             long now = System.currentTimeMillis();
             if (keepAliveDuringScript) {
                 lastPollMs = now;
                 if (captureHandler != null) {
-                    captureHandler.postDelayed(this, IDLE_PAUSE_THRESHOLD_MS);
+                    captureHandler.postDelayed(this, pauseThresholdMs);
                 }
                 return;
             }
@@ -145,7 +162,7 @@ public class ScreenCaptureManager {
                 return;
             }
             if (!displayPaused && virtualDisplay != null
-                    && idleMs > IDLE_PAUSE_THRESHOLD_MS) {
+                    && idleMs > pauseThresholdMs) {
                 displayPaused = true;
                 try {
                     virtualDisplay.setSurface(null);
@@ -155,7 +172,7 @@ public class ScreenCaptureManager {
                 }
             }
             if (captureHandler != null) {
-                captureHandler.postDelayed(this, IDLE_PAUSE_THRESHOLD_MS);
+                captureHandler.postDelayed(this, pauseThresholdMs);
             }
         }
     };
@@ -249,8 +266,10 @@ public class ScreenCaptureManager {
             mediaProjection = projectionManager.getMediaProjection(resultCode, data);
             if (mediaProjection == null) {
                 Log.e(TAG, "MediaProjection null");
+                ScreenCapture.clearProjectionPermission();
                 return false;
             }
+            virtualDisplayCreatedForProjection = false;
 
             // capture thread 这里单独弄了个 新线程
             captureThread = new HandlerThread("ScreenCaptureThread");
@@ -280,12 +299,16 @@ public class ScreenCaptureManager {
             consecutiveFrameFailures = 0;
             pendingBorderHealthChecks = BORDER_HEALTH_CHECK_WARMUP_PASSES;
             resetScheduled = false;
-            captureHandler.postDelayed(idleCheckRunnable, IDLE_PAUSE_THRESHOLD_MS);
+            long idleCheckDelayMs = IDLE_PAUSE_THRESHOLD_MS > 0L
+                    ? IDLE_PAUSE_THRESHOLD_MS
+                    : FULL_CLEANUP_IDLE_THRESHOLD_MS;
+            captureHandler.postDelayed(idleCheckRunnable, idleCheckDelayMs);
 
             Log.i(TAG, "startCapture ok");
             return true;
         } catch (Throwable t) {
             Log.e(TAG, "startCapture failed", t);
+            ScreenCapture.clearProjectionPermission();
             cleanup();
             return false;
         }
@@ -704,8 +727,6 @@ public class ScreenCaptureManager {
     private void resetVirtualDisplay() {
         if (mediaProjection == null) return;
 
-        cleanupDisplayOnly();
-
         updateScreenMetrics(appContext);
         lastRotation = getCurrentPhysicalRotation(appContext);
         displayPaused = false;
@@ -718,24 +739,43 @@ public class ScreenCaptureManager {
                 + " size=" + screenWidth + "x" + screenHeight);
 
         try {
-            imageReader = ImageReader.newInstance(
+            ImageReader newReader = ImageReader.newInstance(
                     captureWidth, captureHeight,
                     PixelFormat.RGBA_8888,
                     IMAGE_READER_MAX_IMAGES
             );
 
-            virtualDisplay = mediaProjection.createVirtualDisplay(
-                    "ScreenCapture",
-                    captureWidth, captureHeight, screenDpi,
-                    0,
-//                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                    imageReader.getSurface(),
-                    null, captureHandler
-            );
+            if (virtualDisplay == null) {
+                if (virtualDisplayCreatedForProjection) {
+                    newReader.close();
+                    throw new IllegalStateException("MediaProjection session already created a VirtualDisplay; re-authorization required");
+                }
+                virtualDisplay = mediaProjection.createVirtualDisplay(
+                        "ScreenCapture",
+                        captureWidth, captureHeight, screenDpi,
+                        0,
+//                        DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                        newReader.getSurface(),
+                        null, captureHandler
+                );
+                virtualDisplayCreatedForProjection = true;
+                imageReader = newReader;
+            } else {
+                ImageReader oldReader = imageReader;
+                virtualDisplay.resize(captureWidth, captureHeight, screenDpi);
+                virtualDisplay.setSurface(newReader.getSurface());
+                imageReader = newReader;
+                if (oldReader != null) {
+                    oldReader.close();
+                }
+            }
 
             Log.i(TAG, "VirtualDisplay reset ok");
         } catch (Throwable t) {
             Log.e(TAG, "resetVirtualDisplay failed", t);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+                ScreenCapture.clearProjectionPermission();
+            }
             cleanup();
         }
     }
@@ -789,6 +829,7 @@ public class ScreenCaptureManager {
         keepAliveDuringScript = false;
         lastResumeAttemptMs = 0L;
         resetScheduled = false;
+        virtualDisplayCreatedForProjection = false;
         consecutiveFrameFailures = 0;
         lastSuccessfulFrameMs = 0L;
         pendingBorderHealthChecks = BORDER_HEALTH_CHECK_WARMUP_PASSES;

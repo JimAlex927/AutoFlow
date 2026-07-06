@@ -2467,7 +2467,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                                                                   View colorPolling) {
         SystemRuntimeConfig cfg = new SystemRuntimeConfig();
         cfg.captureScale = parseFloatInput(captureScaleInput, "CAPTURE_SCALE", 0.25f, 1.0f);
-        cfg.idlePauseThresholdMs = parseLongInput(idlePauseInput, "IDLE_PAUSE_THRESHOLD_MS", 500L, 120000L);
+        cfg.idlePauseThresholdMs = parseLongInput(idlePauseInput, "IDLE_PAUSE_THRESHOLD_MS", 0L, 120000L);
         cfg.gestureRecordIdleFinishMs = parseLongInput(
                 gestureRecordIdleFinishInput,
                 "手势录制空闲结束",
@@ -4249,11 +4249,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         List<EntityActionSheetAdapter.Item> actionItems = new ArrayList<>();
         actionItems.add(new EntityActionSheetAdapter.Item(
-                1, android.R.drawable.ic_menu_share, "导出", "分享 zip", true));
+                1, R.drawable.ic_action_export, "导出", "分享 zip", true));
         actionItems.add(new EntityActionSheetAdapter.Item(
-                2, android.R.drawable.ic_menu_edit, "重命名", "修改名称", true));
+                2, R.drawable.ic_action_edit, "重命名", "修改名称", true));
         actionItems.add(new EntityActionSheetAdapter.Item(
-                3, android.R.drawable.ic_menu_delete, "删除", "移除项目", true));
+                3, R.drawable.ic_action_delete, "删除", "移除项目", true));
         showEntityActionPanel("项目操作", item.dir.getName(), item.taskCount + " 个 Task", actionItems, action -> {
             if (action.id == 1) {
                 exportProjectAsync(item.dir);
@@ -4312,13 +4312,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         List<EntityActionSheetAdapter.Item> actionItems = new ArrayList<>();
         actionItems.add(new EntityActionSheetAdapter.Item(
-                1, android.R.drawable.ic_media_play, "打开", "节点列表", true));
+                1, R.drawable.ic_action_open, "打开", "节点列表", true));
         actionItems.add(new EntityActionSheetAdapter.Item(
-                2, android.R.drawable.ic_menu_gallery, "模板库", "模板截图", true));
+                2, R.drawable.ic_action_template, "模板库", "模板截图", true));
         actionItems.add(new EntityActionSheetAdapter.Item(
-                3, android.R.drawable.ic_menu_edit, "重命名", "修改名称", true));
+                3, R.drawable.ic_action_gesture, "手势库", "录制文件", true));
         actionItems.add(new EntityActionSheetAdapter.Item(
-                4, android.R.drawable.ic_menu_delete, "删除", "移除 Task", true));
+                4, R.drawable.ic_action_edit, "重命名", "修改名称", true));
+        actionItems.add(new EntityActionSheetAdapter.Item(
+                5, R.drawable.ic_action_delete, "删除", "移除 Task", true));
         showEntityActionPanel("任务操作", taskDir.getName(), "选择要执行的 Task 操作", actionItems, action -> {
             if (action == null || !action.enabled) {
                 return;
@@ -4335,15 +4337,68 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     showTaskTemplateLibraryManagerDialog(taskDir);
                     break;
                 case 3:
-                    promptRenameTask(taskDir);
+                    showTaskGestureLibraryManagerDialog(taskDir);
                     break;
                 case 4:
+                    promptRenameTask(taskDir);
+                    break;
+                case 5:
                     confirmDeleteTask(taskDir);
                     break;
                 default:
                     break;
             }
         }, anchor);
+    }
+
+    private void showTaskGestureLibraryManagerDialog(File taskDir) {
+        if (taskDir == null || !taskDir.isDirectory()) {
+            Toast.makeText(this, "当前 Task 无效", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        currentTaskDir = taskDir;
+        File parent = taskDir.getParentFile();
+        if (parent != null && parent.isDirectory()) {
+            currentProjectDir = parent;
+        }
+
+        List<GestureLibraryAdapter.GestureLibraryItem> items = getCurrentTaskGestureLibraryItems();
+        View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_gesture_library, null);
+        WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(360, true);
+        wm.addView(dialogView, dialogLp);
+
+        TextView titleView = dialogView.findViewById(R.id.tv_library_title);
+        TextView clearButton = dialogView.findViewById(R.id.btn_library_clear);
+        RecyclerView rv = dialogView.findViewById(R.id.rv_library);
+        EditText edtSearch = dialogView.findViewById(R.id.edt_library_search);
+        if (titleView != null) {
+            titleView.setText("手势库 / " + taskDir.getName());
+        }
+        if (clearButton != null) {
+            clearButton.setText("关闭");
+        }
+        rv.setLayoutManager(new LinearLayoutManager(this));
+        GestureLibraryAdapter adapter = new GestureLibraryAdapter(items, item -> {
+            if (item == null || TextUtils.isEmpty(item.fileName)) {
+                return;
+            }
+            playGestureFileByName(dialogView, item.fileName, null);
+        });
+        rv.setAdapter(adapter);
+
+        dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
+        if (clearButton != null) {
+            clearButton.setOnClickListener(v -> safeRemoveView(dialogView));
+        }
+        if (edtSearch != null) {
+            edtSearch.addTextChangedListener(new TextWatcher() {
+                @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+                @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+                    adapter.updateFilter(s == null ? "" : s.toString());
+                }
+                @Override public void afterTextChanged(Editable s) {}
+            });
+        }
     }
 
     private void ensureEntityActionPopup() {

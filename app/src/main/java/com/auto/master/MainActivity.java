@@ -785,7 +785,7 @@ public class MainActivity extends AppCompatActivity {
                     ? task.operationCount + " 个节点 · " + task.assetCount + " 个资源"
                     : task.operationCount + " 个节点";
             entries.add(new EntryItem(
-                    R.drawable.ic_folder,
+                    R.drawable.ic_task_flow,
                     task.name,
                     subtitle,
                     task.operationCount <= 0 ? null : task.operationCount + " 节点",
@@ -1148,21 +1148,21 @@ public class MainActivity extends AppCompatActivity {
     private int resolveActionIcon(ActionSheetItem item) {
         String title = item == null ? "" : String.valueOf(item.title);
         if (title.contains("打开")) {
-            return android.R.drawable.ic_media_play;
+            return R.drawable.ic_action_open;
         }
         if (title.contains("悬浮")) {
-            return android.R.drawable.ic_dialog_dialer;
+            return R.drawable.ic_action_float;
         }
         if (title.contains("新建")) {
-            return android.R.drawable.ic_input_add;
+            return R.drawable.ic_action_add;
         }
         if (title.contains("重命名")) {
-            return android.R.drawable.ic_menu_edit;
+            return R.drawable.ic_action_edit;
         }
         if (title.contains("删除")) {
-            return android.R.drawable.ic_menu_delete;
+            return R.drawable.ic_action_delete;
         }
-        return android.R.drawable.ic_menu_manage;
+        return R.drawable.ic_action_config;
     }
 
     private void openTaskInFloatPanel(File taskDir, boolean showToast) {

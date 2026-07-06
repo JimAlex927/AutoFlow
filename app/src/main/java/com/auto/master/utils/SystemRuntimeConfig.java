@@ -24,8 +24,8 @@ public final class SystemRuntimeConfig {
     private static final String KEY_GESTURE_STEP_INTERVAL_MS = "gesture_step_interval_ms";
     private static final String KEY_RUNTIME_LOG_ENABLED = "runtime_log_enabled";
 
-    public static final float DEFAULT_CAPTURE_SCALE = 0.4f;
-    public static final long DEFAULT_IDLE_PAUSE_THRESHOLD_MS = 5000L;
+    public static final float DEFAULT_CAPTURE_SCALE = 1.0f;
+    public static final long DEFAULT_IDLE_PAUSE_THRESHOLD_MS = 0L;
     public static final long DEFAULT_GESTURE_RECORD_IDLE_FINISH_MS = 2200L;
 
     public float captureScale = DEFAULT_CAPTURE_SCALE;
@@ -52,8 +52,8 @@ public final class SystemRuntimeConfig {
         SharedPreferences prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
         cfg.captureScale = clampFloat(prefs.getFloat(KEY_CAPTURE_SCALE,
                 CaptureScaleHelper.loadScale(context)), 0.25f, 1.0f);
-        cfg.idlePauseThresholdMs = clampLong(prefs.getLong(KEY_IDLE_PAUSE_THRESHOLD_MS,
-                DEFAULT_IDLE_PAUSE_THRESHOLD_MS), 500L, 120000L);
+        cfg.idlePauseThresholdMs = clampIdlePauseThreshold(prefs.getLong(KEY_IDLE_PAUSE_THRESHOLD_MS,
+                DEFAULT_IDLE_PAUSE_THRESHOLD_MS));
         cfg.gestureRecordIdleFinishMs = clampGestureRecordIdleFinish(prefs.getLong(
                 KEY_GESTURE_RECORD_IDLE_FINISH_MS,
                 DEFAULT_GESTURE_RECORD_IDLE_FINISH_MS));
@@ -115,7 +115,7 @@ public final class SystemRuntimeConfig {
 
     public void normalize() {
         captureScale = clampFloat(captureScale, 0.25f, 1.0f);
-        idlePauseThresholdMs = clampLong(idlePauseThresholdMs, 500L, 120000L);
+        idlePauseThresholdMs = clampIdlePauseThreshold(idlePauseThresholdMs);
         gestureRecordIdleFinishMs = clampGestureRecordIdleFinish(gestureRecordIdleFinishMs);
         templateFastMs = clampPolling(templateFastMs);
         templateMediumMs = clampPolling(templateMediumMs);
@@ -133,6 +133,13 @@ public final class SystemRuntimeConfig {
     }
 
     private static long clampGestureRecordIdleFinish(long value) {
+        return clampLong(value, 500L, 120000L);
+    }
+
+    private static long clampIdlePauseThreshold(long value) {
+        if (value <= 0L) {
+            return 0L;
+        }
         return clampLong(value, 500L, 120000L);
     }
 
