@@ -1,125 +1,63 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- 浮球扇形快捷菜单，用 PropertyAnimator 驱动每个按钮动画展开 -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/fan_menu_root"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
+    android:background="@drawable/floating_quick_label_bg"
+    android:elevation="8dp"
+    android:gravity="center_vertical"
     android:orientation="vertical"
-    android:gravity="center_horizontal"
-    android:padding="2dp">
+    android:padding="6dp">
 
-    <!-- 按钮2：收起 -->
-    <LinearLayout
-        android:id="@+id/fan_btn_close"
-        android:layout_width="wrap_content"
+    <TextView
+        android:id="@+id/fan_runtime_summary"
+        android:layout_width="220dp"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
+        android:ellipsize="end"
         android:gravity="center_vertical"
-        android:layout_marginBottom="6dp"
-        android:alpha="0"
-        android:translationY="-40dp">
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="收起"
-            android:textSize="11sp"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold"
-            android:background="@drawable/floating_quick_label_bg"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp"
-            android:layout_marginEnd="6dp" />
-        <FrameLayout
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:background="@drawable/floating_ball_modern_bg"
-            android:elevation="5dp">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="✕"
-                android:textSize="17sp"
-                android:textColor="#FFFFFF"
-                android:textStyle="bold" />
-        </FrameLayout>
-    </LinearLayout>
+        android:maxLines="1"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:paddingBottom="5dp"
+        android:text="运行中"
+        android:textColor="#DCEEFF"
+        android:textSize="10sp"
+        android:textStyle="bold"
+        android:visibility="gone" />
 
     <LinearLayout
-        android:id="@+id/fan_btn_log"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
         android:gravity="center_vertical"
-        android:layout_marginBottom="6dp"
-        android:alpha="0"
-        android:translationY="-30dp">
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="日志"
-            android:textSize="11sp"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold"
-            android:background="@drawable/floating_quick_label_bg"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp"
-            android:layout_marginEnd="6dp" />
-        <FrameLayout
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:background="@drawable/floating_ball_modern_bg"
-            android:elevation="5dp">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="LOG"
-                android:textSize="12sp"
-                android:textColor="#FFFFFF"
-                android:textStyle="bold" />
-        </FrameLayout>
-    </LinearLayout>
+        android:orientation="horizontal">
 
-    <!-- 按钮1：项目面板 -->
-    <LinearLayout
-        android:id="@+id/fan_btn_panel"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_vertical"
-        android:layout_marginBottom="4dp"
-        android:alpha="0"
-        android:translationY="-20dp">
         <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="项目面板"
-            android:textSize="11sp"
-            android:textColor="#FFFFFF"
-            android:textStyle="bold"
-            android:background="@drawable/floating_quick_label_bg"
-            android:paddingStart="8dp"
-            android:paddingEnd="8dp"
-            android:paddingTop="4dp"
-            android:paddingBottom="4dp"
-            android:layout_marginEnd="6dp" />
-        <FrameLayout
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:background="@drawable/floating_ball_modern_bg"
-            android:elevation="5dp">
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_gravity="center"
-                android:text="▦"
-                android:textSize="17sp"
-                android:textColor="#FFFFFF" />
-        </FrameLayout>
-    </LinearLayout>
+            android:id="@+id/fan_btn_panel"
+            style="@style/FloatingQuickActionButton"
+            android:text="面板" />
 
+        <TextView
+            android:id="@+id/fan_btn_log"
+            style="@style/FloatingQuickActionButton"
+            android:text="日志" />
+
+        <TextView
+            android:id="@+id/fan_btn_pause"
+            style="@style/FloatingQuickActionButton"
+            android:text="暂停"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/fan_btn_stop"
+            style="@style/FloatingQuickDangerButton"
+            android:text="停止"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/fan_btn_close"
+            style="@style/FloatingQuickActionButton"
+            android:minWidth="34dp"
+            android:text="×"
+            android:textSize="18sp" />
+    </LinearLayout>
 </LinearLayout>

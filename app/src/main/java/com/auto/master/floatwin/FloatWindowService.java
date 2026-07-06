@@ -1216,8 +1216,15 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 @Override
-                public void togglePauseState() {
+                public void toggleActivePauseState() {
+                    FloatWindowService.this.focusRunningSessionForQuickAction();
                     FloatWindowService.this.togglePauseState();
+                }
+
+                @Override
+                public void stopActiveScriptFromUi() {
+                    FloatWindowService.this.focusRunningSessionForQuickAction();
+                    FloatWindowService.this.stopScriptFromUi();
                 }
 
                 @Override
@@ -1532,6 +1539,38 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     private void stopScriptFromUi() {
         runtimeTransitionCoordinator.stopScriptFromUi();
+    }
+
+    private void focusRunningSessionForQuickAction() {
+        ScriptSessionSnapshot current = TextUtils.isEmpty(selectedScriptSessionId)
+                ? null
+                : ScriptRunner.getSessionSnapshot(selectedScriptSessionId);
+        if (isQuickActionRunnableSession(current)) {
+            return;
+        }
+        String activeSessionId = ScriptRunner.getActiveSessionId();
+        ScriptSessionSnapshot active = TextUtils.isEmpty(activeSessionId)
+                ? null
+                : ScriptRunner.getSessionSnapshot(activeSessionId);
+        if (isQuickActionRunnableSession(active)) {
+            bindScriptSession(active.sessionId);
+            return;
+        }
+        for (ScriptSessionSnapshot snapshot : ScriptRunner.listSessionSnapshots()) {
+            if (isQuickActionRunnableSession(snapshot)) {
+                bindScriptSession(snapshot.sessionId);
+                return;
+            }
+        }
+    }
+
+    private boolean isQuickActionRunnableSession(@Nullable ScriptSessionSnapshot snapshot) {
+        if (snapshot == null || snapshot.state == null) {
+            return false;
+        }
+        return snapshot.state == ScriptSession.State.QUEUED
+                || snapshot.state == ScriptSession.State.RUNNING
+                || snapshot.state == ScriptSession.State.PAUSED;
     }
 
     private void showProjectPanel() {

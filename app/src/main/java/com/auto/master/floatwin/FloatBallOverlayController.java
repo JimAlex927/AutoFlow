@@ -3,6 +3,7 @@ package com.auto.master.floatwin;
 import android.content.Context;
 import android.graphics.PixelFormat;
 import android.os.Build;
+import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
@@ -12,6 +13,8 @@ import android.widget.TextView;
 
 import com.auto.master.R;
 import com.auto.master.auto.ScriptRunner;
+import com.auto.master.auto.ScriptSession;
+import com.auto.master.auto.ScriptSessionSnapshot;
 
 final class FloatBallOverlayController {
     interface Host {
@@ -22,7 +25,8 @@ final class FloatBallOverlayController {
         int[] getScreenSizePx();
         void hideProjectPanelDock();
         void showRuntimeAwareProjectPanel();
-        void togglePauseState();
+        void toggleActivePauseState();
+        void stopActiveScriptFromUi();
         void removeProjectPanel();
         void showProjectPanel();
         void toggleRuntimeLogPanel();
@@ -103,8 +107,11 @@ final class FloatBallOverlayController {
 
         View.OnClickListener ballClickListener = v -> {
             if (ScriptRunner.isCurrentScriptRunning()) {
-                host.hideProjectPanelDock();
-                host.showRuntimeAwareProjectPanel();
+                if (fanMenuView != null) {
+                    hideFanMenu();
+                } else {
+                    showFanMenu();
+                }
             } else if (ballCollapsedToEdge) {
                 expandIdleBallFromEdge();
             } else if (fanMenuView != null) {
@@ -115,7 +122,7 @@ final class FloatBallOverlayController {
         };
         View.OnLongClickListener ballLongClickListener = v -> {
             if (ScriptRunner.isCurrentScriptRunning()) {
-                host.togglePauseState();
+                host.toggleActivePauseState();
             } else {
                 hideFanMenu();
                 host.removeProjectPanel();
@@ -437,29 +444,50 @@ final class FloatBallOverlayController {
         );
         fanMenuLp.gravity = Gravity.TOP | Gravity.START;
         fanMenuLp.x = ballLp.x;
-        fanMenuLp.y = Math.max(0, ballLp.y - host.dp(160));
+        fanMenuLp.y = Math.max(0, ballLp.y - host.dp(ScriptRunner.isCurrentScriptRunning() ? 74 : 48));
 
         View btnPanel = fanMenuView.findViewById(R.id.fan_btn_panel);
         View btnLog = fanMenuView.findViewById(R.id.fan_btn_log);
+        View btnPause = fanMenuView.findViewById(R.id.fan_btn_pause);
+        View btnStop = fanMenuView.findViewById(R.id.fan_btn_stop);
         View btnClose = fanMenuView.findViewById(R.id.fan_btn_close);
 
+        refreshFanMenuRuntimeState();
         btnPanel.setOnClickListener(v -> {
             hideFanMenu();
-            host.showProjectPanel();
+            if (ScriptRunner.isCurrentScriptRunning()) {
+                host.hideProjectPanelDock();
+                host.showRuntimeAwareProjectPanel();
+            } else {
+                host.showProjectPanel();
+            }
         });
         btnLog.setOnClickListener(v -> {
             hideFanMenu();
             host.toggleRuntimeLogPanel();
         });
+        btnPause.setOnClickListener(v -> {
+            host.toggleActivePauseState();
+            refreshFanMenuRuntimeState();
+        });
+        btnStop.setOnClickListener(v -> {
+            hideFanMenu();
+            host.stopActiveScriptFromUi();
+        });
         btnClose.setOnClickListener(v -> hideFanMenu());
 
         host.getWindowManager().addView(fanMenuView, fanMenuLp);
         animateFanButton(btnPanel, 0);
-        animateFanButton(btnLog, 80);
+        animateFanButton(btnLog, 40);
+        animateFanButton(btnPause, 80);
+        animateFanButton(btnStop, 120);
         animateFanButton(btnClose, 160);
     }
 
     private void animateFanButton(View btn, long delayMs) {
+        if (btn == null || btn.getVisibility() != View.VISIBLE) {
+            return;
+        }
         btn.setAlpha(0f);
         btn.setTranslationY(btn.getTranslationY());
         btn.animate()
@@ -471,24 +499,110 @@ final class FloatBallOverlayController {
                 .start();
     }
 
+    private void refreshFanMenuRuntimeState() {
+        if (fanMenuView == null) {
+            return;
+        }
+        boolean running = ScriptRunner.isCurrentScriptRunning();
+        TextView summary = fanMenuView.findViewById(R.id.fan_runtime_summary);
+        TextView pause = fanMenuView.findViewById(R.id.fan_btn_pause);
+        View stop = fanMenuView.findViewById(R.id.fan_btn_stop);
+        if (summary != null) {
+            summary.setVisibility(running ? View.VISIBLE : View.GONE);
+            if (running) {
+                summary.setText(buildRuntimeSummary());
+            }
+        }
+        if (pause != null) {
+            pause.setVisibility(running ? View.VISIBLE : View.GONE);
+            ScriptSessionSnapshot snapshot = findQuickActionSession();
+            pause.setText(snapshot != null && snapshot.state == ScriptSession.State.PAUSED ? "继续" : "暂停");
+        }
+        if (stop != null) {
+            stop.setVisibility(running ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private String buildRuntimeSummary() {
+        ScriptSessionSnapshot snapshot = findQuickActionSession();
+        if (snapshot == null) {
+            return "运行中";
+        }
+        String state = snapshot.state == ScriptSession.State.PAUSED ? "已暂停" : "运行中";
+        String session = TextUtils.isEmpty(snapshot.sessionName) ? "会话" : snapshot.sessionName;
+        String node = TextUtils.isEmpty(snapshot.operationName) ? snapshot.operationId : snapshot.operationName;
+        if (TextUtils.isEmpty(node)) {
+            return state + " · " + session;
+        }
+        return state + " · " + session + " · " + node;
+    }
+
+    private ScriptSessionSnapshot findQuickActionSession() {
+        String activeSessionId = ScriptRunner.getActiveSessionId();
+        ScriptSessionSnapshot active = TextUtils.isEmpty(activeSessionId)
+                ? null
+                : ScriptRunner.getSessionSnapshot(activeSessionId);
+        if (isQuickActionSession(active)) {
+            return active;
+        }
+        for (ScriptSessionSnapshot snapshot : ScriptRunner.listSessionSnapshots()) {
+            if (isQuickActionSession(snapshot)) {
+                return snapshot;
+            }
+        }
+        return active;
+    }
+
+    private boolean isQuickActionSession(ScriptSessionSnapshot snapshot) {
+        if (snapshot == null || snapshot.state == null) {
+            return false;
+        }
+        return snapshot.state == ScriptSession.State.QUEUED
+                || snapshot.state == ScriptSession.State.RUNNING
+                || snapshot.state == ScriptSession.State.PAUSED
+                || snapshot.state == ScriptSession.State.STOPPING;
+    }
+
     private void hideFanMenu() {
         if (fanMenuView == null) {
             return;
         }
-        View btnPanel = fanMenuView.findViewById(R.id.fan_btn_panel);
-        View btnLog = fanMenuView.findViewById(R.id.fan_btn_log);
-        View btnClose = fanMenuView.findViewById(R.id.fan_btn_close);
+        View[] buttons = new View[]{
+                fanMenuView.findViewById(R.id.fan_btn_close),
+                fanMenuView.findViewById(R.id.fan_btn_stop),
+                fanMenuView.findViewById(R.id.fan_btn_pause),
+                fanMenuView.findViewById(R.id.fan_btn_log),
+                fanMenuView.findViewById(R.id.fan_btn_panel)
+        };
         View toRemove = fanMenuView;
-        btnClose.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(0).start();
-        btnLog.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(60).start();
-        btnPanel.animate().alpha(0f).translationY(-20).setDuration(100).setStartDelay(120)
-                .withEndAction(() -> {
-                    try {
-                        host.getWindowManager().removeView(toRemove);
-                    } catch (Exception ignored) {
-                    }
-                }).start();
         fanMenuView = null;
         fanMenuLp = null;
+        boolean animated = false;
+        long delay = 0L;
+        for (View button : buttons) {
+            if (button == null || button.getVisibility() != View.VISIBLE) {
+                continue;
+            }
+            animated = true;
+            button.animate()
+                    .alpha(0f)
+                    .translationY(-12)
+                    .setDuration(90)
+                    .setStartDelay(delay)
+                    .start();
+            delay += 30L;
+        }
+        if (!animated) {
+            removeFanMenuView(toRemove);
+            return;
+        }
+        toRemove.postDelayed(() -> removeFanMenuView(toRemove), delay + 120L);
+    }
+
+    private void removeFanMenuView(View view) {
+        try {
+            host.getWindowManager().removeView(view);
+        } catch (Exception ignored) {
+        }
     }
 }
