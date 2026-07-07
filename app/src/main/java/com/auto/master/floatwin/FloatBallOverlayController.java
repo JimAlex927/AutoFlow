@@ -7,8 +7,10 @@ import android.text.TextUtils;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import com.auto.master.R;
@@ -56,6 +58,10 @@ final class FloatBallOverlayController {
 
     private View fanMenuView;
     private WindowManager.LayoutParams fanMenuLp;
+    private boolean fanMenuAttached = false;
+    private boolean fanMenuShowing = false;
+    private boolean fanMenuDragged = false;
+    private boolean fanMenuWasRuntimeMode = false;
 
     private int lastIdleBallX = 50;
     private int lastIdleBallY = 300;
@@ -107,14 +113,14 @@ final class FloatBallOverlayController {
 
         View.OnClickListener ballClickListener = v -> {
             if (ScriptRunner.isCurrentScriptRunning()) {
-                if (fanMenuView != null) {
+                if (isFanMenuShowing()) {
                     hideFanMenu();
                 } else {
                     showFanMenu();
                 }
             } else if (ballCollapsedToEdge) {
-                expandIdleBallFromEdge();
-            } else if (fanMenuView != null) {
+                showFanMenu();
+            } else if (isFanMenuShowing()) {
                 hideFanMenu();
             } else {
                 showFanMenu();
@@ -152,7 +158,7 @@ final class FloatBallOverlayController {
     }
 
     void remove() {
-        hideFanMenu();
+        detachFanMenu();
         host.hideProjectPanelDock();
         if (ballView == null) {
             return;
@@ -198,6 +204,7 @@ final class FloatBallOverlayController {
     }
 
     void refreshPresentation() {
+        syncFanMenuWithRuntimeState();
         applyBallPresentation();
     }
 
@@ -220,6 +227,10 @@ final class FloatBallOverlayController {
 
     void restoreAfterRun() {
         if (ballView == null || ballLp == null) {
+            return;
+        }
+        if (isFanMenuShowing() && !ScriptRunner.isCurrentScriptRunning()) {
+            hideFanMenu();
             return;
         }
         ballCollapsedForRunning = false;
@@ -401,6 +412,11 @@ final class FloatBallOverlayController {
         if (ballView == null) {
             return;
         }
+        if (isFanMenuShowing()) {
+            syncFanMenuWithRuntimeState();
+            ballView.setVisibility(View.INVISIBLE);
+            return;
+        }
         boolean running = ballCollapsedForRunning || ScriptRunner.isCurrentScriptRunning();
         boolean collapsed = running || ballCollapsedToEdge;
         if (ballCoreView != null) {
@@ -425,16 +441,41 @@ final class FloatBallOverlayController {
     }
 
     private void showFanMenu() {
-        if (fanMenuView != null || ballView == null || ballLp == null) {
+        if (ballView == null || ballLp == null || isFanMenuShowing()) {
             return;
         }
+        ensureFanMenu();
+        if (fanMenuView == null || fanMenuLp == null) {
+            return;
+        }
+        fanMenuDragged = false;
+        refreshFanMenuRuntimeState();
+        fanMenuWasRuntimeMode = ScriptRunner.isCurrentScriptRunning();
+        positionFanMenuNearBall();
+        updateFanMenuLayout();
+        fanMenuShowing = true;
+        ballView.setVisibility(View.INVISIBLE);
+        fanMenuView.animate().cancel();
+        fanMenuView.setScaleX(0.96f);
+        fanMenuView.setScaleY(0.96f);
+        fanMenuView.setAlpha(0f);
+        fanMenuView.setVisibility(View.VISIBLE);
+        fanMenuView.animate()
+                .alpha(1f)
+                .scaleX(1f)
+                .scaleY(1f)
+                .setDuration(110)
+                .start();
+    }
 
+    private void ensureFanMenu() {
+        if (fanMenuView != null && fanMenuAttached) {
+            return;
+        }
         fanMenuView = LayoutInflater.from(host.getContext()).inflate(R.layout.floating_action_menu, null);
-
         int type = (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
                 ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
                 : WindowManager.LayoutParams.TYPE_PHONE;
-
         fanMenuLp = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
@@ -443,18 +484,15 @@ final class FloatBallOverlayController {
                 PixelFormat.TRANSLUCENT
         );
         fanMenuLp.gravity = Gravity.TOP | Gravity.START;
-        fanMenuLp.x = ballLp.x;
-        fanMenuLp.y = Math.max(0, ballLp.y - host.dp(ScriptRunner.isCurrentScriptRunning() ? 74 : 48));
 
         View btnPanel = fanMenuView.findViewById(R.id.fan_btn_panel);
         View btnLog = fanMenuView.findViewById(R.id.fan_btn_log);
+        View btnSession = fanMenuView.findViewById(R.id.fan_btn_session);
         View btnPause = fanMenuView.findViewById(R.id.fan_btn_pause);
         View btnStop = fanMenuView.findViewById(R.id.fan_btn_stop);
         View btnClose = fanMenuView.findViewById(R.id.fan_btn_close);
-
-        refreshFanMenuRuntimeState();
+        bindFanMenuDrag(fanMenuView, btnPanel, btnLog, btnSession, btnPause, btnStop, btnClose);
         btnPanel.setOnClickListener(v -> {
-            hideFanMenu();
             if (ScriptRunner.isCurrentScriptRunning()) {
                 host.hideProjectPanelDock();
                 host.showRuntimeAwareProjectPanel();
@@ -462,10 +500,8 @@ final class FloatBallOverlayController {
                 host.showProjectPanel();
             }
         });
-        btnLog.setOnClickListener(v -> {
-            hideFanMenu();
-            host.toggleRuntimeLogPanel();
-        });
+        btnLog.setOnClickListener(v -> host.toggleRuntimeLogPanel());
+        btnSession.setOnClickListener(v -> host.showScriptSessionDialog());
         btnPause.setOnClickListener(v -> {
             host.toggleActivePauseState();
             refreshFanMenuRuntimeState();
@@ -475,134 +511,343 @@ final class FloatBallOverlayController {
             host.stopActiveScriptFromUi();
         });
         btnClose.setOnClickListener(v -> hideFanMenu());
-
+        fanMenuView.setAlpha(0f);
+        fanMenuView.setVisibility(View.INVISIBLE);
+        positionFanMenuNearBall();
         host.getWindowManager().addView(fanMenuView, fanMenuLp);
-        animateFanButton(btnPanel, 0);
-        animateFanButton(btnLog, 40);
-        animateFanButton(btnPause, 80);
-        animateFanButton(btnStop, 120);
-        animateFanButton(btnClose, 160);
-    }
-
-    private void animateFanButton(View btn, long delayMs) {
-        if (btn == null || btn.getVisibility() != View.VISIBLE) {
-            return;
-        }
-        btn.setAlpha(0f);
-        btn.setTranslationY(btn.getTranslationY());
-        btn.animate()
-                .alpha(1f)
-                .translationY(0f)
-                .setStartDelay(delayMs)
-                .setDuration(200)
-                .setInterpolator(new android.view.animation.OvershootInterpolator(1.2f))
-                .start();
+        fanMenuAttached = true;
     }
 
     private void refreshFanMenuRuntimeState() {
         if (fanMenuView == null) {
             return;
         }
-        boolean running = ScriptRunner.isCurrentScriptRunning();
-        TextView summary = fanMenuView.findViewById(R.id.fan_runtime_summary);
-        TextView pause = fanMenuView.findViewById(R.id.fan_btn_pause);
+        boolean running = hasInteractiveRuntimeSession();
+        fanMenuWasRuntimeMode = fanMenuWasRuntimeMode || running;
+        View pause = fanMenuView.findViewById(R.id.fan_btn_pause);
+        ImageView pauseIcon = fanMenuView.findViewById(R.id.fan_icon_pause);
         View stop = fanMenuView.findViewById(R.id.fan_btn_stop);
-        if (summary != null) {
-            summary.setVisibility(running ? View.VISIBLE : View.GONE);
-            if (running) {
-                summary.setText(buildRuntimeSummary());
-            }
-        }
+        ScriptSessionSnapshot snapshot = findInteractiveQuickActionSession();
         if (pause != null) {
             pause.setVisibility(running ? View.VISIBLE : View.GONE);
-            ScriptSessionSnapshot snapshot = findQuickActionSession();
-            pause.setText(snapshot != null && snapshot.state == ScriptSession.State.PAUSED ? "继续" : "暂停");
+        }
+        if (pauseIcon != null) {
+            boolean paused = snapshot != null && snapshot.state == ScriptSession.State.PAUSED;
+            pauseIcon.setImageResource(paused ? R.drawable.ic_float_menu_play : R.drawable.ic_float_menu_pause);
         }
         if (stop != null) {
             stop.setVisibility(running ? View.VISIBLE : View.GONE);
         }
     }
 
-    private String buildRuntimeSummary() {
-        ScriptSessionSnapshot snapshot = findQuickActionSession();
-        if (snapshot == null) {
-            return "运行中";
+    private void syncFanMenuWithRuntimeState() {
+        if (fanMenuView == null) {
+            return;
         }
-        String state = snapshot.state == ScriptSession.State.PAUSED ? "已暂停" : "运行中";
-        String session = TextUtils.isEmpty(snapshot.sessionName) ? "会话" : snapshot.sessionName;
-        String node = TextUtils.isEmpty(snapshot.operationName) ? snapshot.operationId : snapshot.operationName;
-        if (TextUtils.isEmpty(node)) {
-            return state + " · " + session;
+        boolean running = hasInteractiveRuntimeSession();
+        refreshFanMenuRuntimeState();
+        if (isFanMenuShowing() && fanMenuWasRuntimeMode && !running) {
+            ballCollapsedForRunning = false;
+            ballCollapsedToEdge = false;
+            hideFanMenu();
         }
-        return state + " · " + session + " · " + node;
     }
 
-    private ScriptSessionSnapshot findQuickActionSession() {
+    private ScriptSessionSnapshot findInteractiveQuickActionSession() {
         String activeSessionId = ScriptRunner.getActiveSessionId();
         ScriptSessionSnapshot active = TextUtils.isEmpty(activeSessionId)
                 ? null
                 : ScriptRunner.getSessionSnapshot(activeSessionId);
-        if (isQuickActionSession(active)) {
+        if (isInteractiveRuntimeSession(active)) {
             return active;
         }
         for (ScriptSessionSnapshot snapshot : ScriptRunner.listSessionSnapshots()) {
-            if (isQuickActionSession(snapshot)) {
+            if (isInteractiveRuntimeSession(snapshot)) {
                 return snapshot;
             }
         }
-        return active;
+        return null;
     }
 
-    private boolean isQuickActionSession(ScriptSessionSnapshot snapshot) {
+    private boolean hasInteractiveRuntimeSession() {
+        for (ScriptSessionSnapshot snapshot : ScriptRunner.listSessionSnapshots()) {
+            if (isInteractiveRuntimeSession(snapshot)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isInteractiveRuntimeSession(ScriptSessionSnapshot snapshot) {
         if (snapshot == null || snapshot.state == null) {
             return false;
         }
         return snapshot.state == ScriptSession.State.QUEUED
                 || snapshot.state == ScriptSession.State.RUNNING
-                || snapshot.state == ScriptSession.State.PAUSED
-                || snapshot.state == ScriptSession.State.STOPPING;
+                || snapshot.state == ScriptSession.State.PAUSED;
+    }
+
+    private void positionFanMenuNearBall() {
+        if (fanMenuView == null || fanMenuLp == null || ballLp == null) {
+            return;
+        }
+        int[] screen = host.getScreenSizePx();
+        int[] ballSize = measureFloatingBallSize();
+        int widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        fanMenuView.measure(widthSpec, heightSpec);
+        int menuW = Math.max(fanMenuView.getMeasuredWidth(), host.dp(64));
+        int menuH = Math.max(fanMenuView.getMeasuredHeight(), host.dp(144));
+        int ballCenterX = ballLp.x + ballSize[0] / 2;
+        int ballCenterY = ballLp.y + ballSize[1] / 2;
+        int targetX;
+        int edge = resolveDockEdge(ballLp.x, ballLp.y, false);
+        if (edge == BALL_DOCK_EDGE_LEFT) {
+            targetX = 0;
+        } else if (edge == BALL_DOCK_EDGE_RIGHT) {
+            targetX = screen[0] - menuW;
+        } else {
+            targetX = ballCenterX - menuW / 2;
+        }
+        int targetY = ballCenterY - menuH / 2;
+        fanMenuLp.x = clampBallAxis(targetX, 0, Math.max(0, screen[0] - menuW));
+        fanMenuLp.y = clampBallAxis(targetY, 0, Math.max(0, screen[1] - menuH));
+    }
+
+    private void bindFanMenuDrag(View... targets) {
+        View.OnTouchListener dragListener = createFanMenuDragListener();
+        for (View target : targets) {
+            if (target != null) {
+                target.setOnTouchListener(dragListener);
+            }
+        }
+    }
+
+    private View.OnTouchListener createFanMenuDragListener() {
+        return new View.OnTouchListener() {
+            private int startX;
+            private int startY;
+            private float downRawX;
+            private float downRawY;
+            private boolean dragging;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                if (fanMenuLp == null || fanMenuView == null) {
+                    return false;
+                }
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        startX = fanMenuLp.x;
+                        startY = fanMenuLp.y;
+                        downRawX = event.getRawX();
+                        downRawY = event.getRawY();
+                        dragging = false;
+                        return false;
+                    case MotionEvent.ACTION_MOVE:
+                        int dx = Math.round(event.getRawX() - downRawX);
+                        int dy = Math.round(event.getRawY() - downRawY);
+                        if (!dragging && Math.abs(dx) < host.dp(3) && Math.abs(dy) < host.dp(3)) {
+                            return false;
+                        }
+                        dragging = true;
+                        fanMenuDragged = true;
+                        moveFanMenuTo(startX + dx, startY + dy);
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                    case MotionEvent.ACTION_CANCEL:
+                        if (dragging) {
+                            collapseFanMenuToEdgeIfClose();
+                        }
+                        return dragging;
+                    default:
+                        return false;
+                }
+            }
+        };
+    }
+
+    private void moveFanMenuTo(int x, int y) {
+        if (fanMenuView == null || fanMenuLp == null) {
+            return;
+        }
+        int[] screen = host.getScreenSizePx();
+        int menuW = Math.max(fanMenuView.getWidth(), fanMenuView.getMeasuredWidth());
+        int menuH = Math.max(fanMenuView.getHeight(), fanMenuView.getMeasuredHeight());
+        if (menuW <= 0) {
+            menuW = host.dp(64);
+        }
+        if (menuH <= 0) {
+            menuH = host.dp(144);
+        }
+        fanMenuLp.x = clampBallAxis(x, 0, Math.max(0, screen[0] - menuW));
+        fanMenuLp.y = clampBallAxis(y, 0, Math.max(0, screen[1] - menuH));
+        try {
+            host.getWindowManager().updateViewLayout(fanMenuView, fanMenuLp);
+        } catch (Exception e) {
+            Log.w(TAG, "move fan menu failed", e);
+        }
+    }
+
+    private boolean collapseFanMenuToEdgeIfClose() {
+        if (fanMenuView == null || fanMenuLp == null) {
+            return false;
+        }
+        int[] screen = host.getScreenSizePx();
+        int menuW = Math.max(fanMenuView.getWidth(), host.dp(64));
+        int menuH = Math.max(fanMenuView.getHeight(), host.dp(144));
+        int threshold = host.dp(BALL_AUTO_DOCK_THRESHOLD_DP);
+        int left = fanMenuLp.x;
+        int right = screen[0] - menuW - fanMenuLp.x;
+        int bottom = screen[1] - menuH - fanMenuLp.y;
+        int min = Math.min(left, Math.min(right, bottom));
+        if (min > threshold) {
+            return false;
+        }
+        if (min == left) {
+            collapseFanMenuToDockHandle(BALL_DOCK_EDGE_LEFT, fanMenuLp.y + menuH / 2);
+        } else if (min == right) {
+            collapseFanMenuToDockHandle(BALL_DOCK_EDGE_RIGHT, fanMenuLp.y + menuH / 2);
+        } else {
+            collapseFanMenuToDockHandle(BALL_DOCK_EDGE_BOTTOM, fanMenuLp.x + menuW / 2);
+        }
+        return true;
+    }
+
+    private void collapseFanMenuToDockHandle(int edge, int anchor) {
+        if (ballView == null || ballLp == null || fanMenuView == null) {
+            return;
+        }
+        fanMenuView.animate().cancel();
+        fanMenuView.setAlpha(0f);
+        fanMenuView.setScaleX(0.96f);
+        fanMenuView.setScaleY(0.96f);
+        fanMenuView.setVisibility(View.INVISIBLE);
+        fanMenuShowing = false;
+        fanMenuDragged = false;
+        ballView.setVisibility(View.VISIBLE);
+        ballView.setAlpha(1f);
+        ballDockEdge = edge;
+        if (ScriptRunner.isCurrentScriptRunning() || ballCollapsedForRunning) {
+            ballCollapsedForRunning = true;
+            ballCollapsedToEdge = false;
+        } else {
+            ballCollapsedForRunning = false;
+            ballCollapsedToEdge = true;
+        }
+        int[] screen = host.getScreenSizePx();
+        int[] ballSize = measureFloatingBallSize();
+        int anchorX = edge == BALL_DOCK_EDGE_RIGHT
+                ? Math.max(0, screen[0] - ballSize[0])
+                : edge == BALL_DOCK_EDGE_BOTTOM
+                        ? clampBallAxis(anchor - ballSize[0] / 2, 0, Math.max(0, screen[0] - ballSize[0]))
+                        : 0;
+        int anchorY = edge == BALL_DOCK_EDGE_BOTTOM
+                ? Math.max(0, screen[1] - ballSize[1])
+                : clampBallAxis(anchor - ballSize[1] / 2, 0, Math.max(0, screen[1] - ballSize[1]));
+        applyBallPresentation();
+        applyDockedBallPosition(anchorX, anchorY);
+    }
+
+    private void updateFanMenuLayout() {
+        if (fanMenuView == null || fanMenuLp == null || !fanMenuAttached) {
+            return;
+        }
+        try {
+            host.getWindowManager().updateViewLayout(fanMenuView, fanMenuLp);
+        } catch (Exception e) {
+            Log.w(TAG, "update fan menu layout failed", e);
+        }
     }
 
     private void hideFanMenu() {
-        if (fanMenuView == null) {
+        if (!isFanMenuShowing()) {
             return;
         }
-        View[] buttons = new View[]{
-                fanMenuView.findViewById(R.id.fan_btn_close),
-                fanMenuView.findViewById(R.id.fan_btn_stop),
-                fanMenuView.findViewById(R.id.fan_btn_pause),
-                fanMenuView.findViewById(R.id.fan_btn_log),
-                fanMenuView.findViewById(R.id.fan_btn_panel)
-        };
-        View toRemove = fanMenuView;
-        fanMenuView = null;
-        fanMenuLp = null;
-        boolean animated = false;
-        long delay = 0L;
-        for (View button : buttons) {
-            if (button == null || button.getVisibility() != View.VISIBLE) {
-                continue;
-            }
-            animated = true;
-            button.animate()
-                    .alpha(0f)
-                    .translationY(-12)
-                    .setDuration(90)
-                    .setStartDelay(delay)
-                    .start();
-            delay += 30L;
-        }
-        if (!animated) {
-            removeFanMenuView(toRemove);
-            return;
-        }
-        toRemove.postDelayed(() -> removeFanMenuView(toRemove), delay + 120L);
+        WindowManager.LayoutParams closingLp = fanMenuLp;
+        boolean moved = fanMenuDragged;
+        fanMenuShowing = false;
+        fanMenuDragged = false;
+        View hidingView = fanMenuView;
+        hidingView.animate().cancel();
+        hidingView.animate()
+                .alpha(0f)
+                .scaleX(0.96f)
+                .scaleY(0.96f)
+                .setDuration(90)
+                .withEndAction(() -> {
+                    hidingView.setVisibility(View.INVISIBLE);
+                    restoreBallAfterFanMenu(hidingView, closingLp, moved);
+                })
+                .start();
     }
 
-    private void removeFanMenuView(View view) {
-        try {
-            host.getWindowManager().removeView(view);
-        } catch (Exception ignored) {
+    private boolean isFanMenuShowing() {
+        return fanMenuView != null && fanMenuShowing && fanMenuView.getVisibility() == View.VISIBLE;
+    }
+
+    private void detachFanMenu() {
+        if (fanMenuView == null || !fanMenuAttached) {
+            return;
         }
+        fanMenuView.animate().cancel();
+        try {
+            host.getWindowManager().removeView(fanMenuView);
+        } catch (Exception e) {
+            Log.w(TAG, "detach fan menu failed", e);
+        }
+        fanMenuView = null;
+        fanMenuLp = null;
+        fanMenuAttached = false;
+        fanMenuShowing = false;
+        fanMenuDragged = false;
+        fanMenuWasRuntimeMode = false;
+    }
+
+    private void restoreBallAfterFanMenu(View removedMenu, WindowManager.LayoutParams menuLp, boolean moved) {
+        if (ballView == null || ballLp == null) {
+            return;
+        }
+        if (moved && menuLp != null) {
+            moveBallNearMenu(removedMenu, menuLp);
+        }
+        ballView.setVisibility(View.VISIBLE);
+        ballView.setAlpha(1f);
+        applyBallPresentation();
+        try {
+            host.getWindowManager().updateViewLayout(ballView, ballLp);
+        } catch (Exception e) {
+            Log.w(TAG, "restore ball after fan menu failed", e);
+        }
+    }
+
+    private void moveBallNearMenu(View menu, WindowManager.LayoutParams menuLp) {
+        int[] screen = host.getScreenSizePx();
+        int[] ballSize = measureFloatingBallSize();
+        int menuW = Math.max(menu.getWidth(), menu.getMeasuredWidth());
+        int menuH = Math.max(menu.getHeight(), menu.getMeasuredHeight());
+        if (menuW <= 0) {
+            menuW = host.dp(64);
+        }
+        if (menuH <= 0) {
+            menuH = host.dp(144);
+        }
+        int menuCenterX = menuLp.x + menuW / 2;
+        int menuCenterY = menuLp.y + menuH / 2;
+        if (ScriptRunner.isCurrentScriptRunning() || ballCollapsedForRunning) {
+            int anchorX = menuCenterX < screen[0] / 2 ? 0 : Math.max(0, screen[0] - ballSize[0]);
+            dockForRunning(anchorX, menuCenterY - ballSize[1] / 2);
+            return;
+        }
+        int margin = host.dp(BALL_EDGE_MARGIN_DP);
+        int targetX = clampBallAxis(menuCenterX - ballSize[0] / 2,
+                margin,
+                Math.max(margin, screen[0] - ballSize[0] - margin));
+        int targetY = clampBallAxis(menuCenterY - ballSize[1] / 2,
+                margin,
+                Math.max(margin, screen[1] - ballSize[1] - margin));
+        ballLp.x = targetX;
+        ballLp.y = targetY;
+        rememberIdleBallPosition(targetX, targetY);
     }
 }
