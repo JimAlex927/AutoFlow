@@ -8,7 +8,16 @@
     android:padding="4dp">
 
     <LinearLayout
-        android:id="@+id/fan_menu_card"
+        android:id="@+id/fan_menu_content"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:clipChildren="false"
+        android:clipToPadding="false"
+        android:gravity="center_vertical"
+        android:orientation="horizontal">
+
+        <LinearLayout
+            android:id="@+id/fan_menu_card"
         android:layout_width="56dp"
         android:layout_height="wrap_content"
         android:background="@drawable/floating_menu_card_bg"
@@ -46,6 +55,15 @@
         </FrameLayout>
 
         <FrameLayout
+            android:id="@+id/fan_btn_tools"
+            style="@style/FloatingPillMenuButton">
+
+            <ImageView
+                style="@style/FloatingPillMenuIcon"
+                android:src="@drawable/ic_float_menu_tools" />
+        </FrameLayout>
+
+        <FrameLayout
             android:id="@+id/fan_btn_pause"
             style="@style/FloatingPillMenuButton"
             android:visibility="gone">
@@ -74,5 +92,46 @@
                 style="@style/FloatingPillMenuIcon"
                 android:src="@drawable/ic_float_menu_close" />
         </FrameLayout>
+    </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/fan_tools_dock"
+            android:layout_width="wrap_content"
+            android:layout_height="56dp"
+            android:background="@drawable/floating_tool_dock_bg"
+            android:elevation="10dp"
+            android:gravity="center"
+            android:orientation="horizontal"
+            android:paddingStart="7dp"
+            android:paddingEnd="7dp"
+            android:visibility="gone">
+
+            <FrameLayout
+                android:id="@+id/fan_tool_capture"
+                style="@style/FloatingDockMenuButton">
+
+                <ImageView
+                    style="@style/FloatingPillMenuIcon"
+                    android:src="@drawable/ic_float_tool_capture" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:id="@+id/fan_tool_back"
+                style="@style/FloatingDockMenuButton">
+
+                <ImageView
+                    style="@style/FloatingPillMenuIcon"
+                    android:src="@drawable/ic_float_tool_back" />
+            </FrameLayout>
+
+            <FrameLayout
+                android:id="@+id/fan_tool_close"
+                style="@style/FloatingDockMenuButton">
+
+                <ImageView
+                    style="@style/FloatingPillMenuIcon"
+                    android:src="@drawable/ic_float_menu_close" />
+            </FrameLayout>
+        </LinearLayout>
     </LinearLayout>
 </FrameLayout>

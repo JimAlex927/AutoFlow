@@ -33,6 +33,8 @@ final class FloatBallOverlayController {
         void showProjectPanel();
         void toggleRuntimeLogPanel();
         void showScriptSessionDialog();
+        void captureToolScreenshot();
+        void performBackAction();
         void showToast(String message);
         boolean isPaused();
     }
@@ -62,6 +64,7 @@ final class FloatBallOverlayController {
     private boolean fanMenuShowing = false;
     private boolean fanMenuDragged = false;
     private boolean fanMenuWasRuntimeMode = false;
+    private boolean toolsDockVisible = false;
 
     private int lastIdleBallX = 50;
     private int lastIdleBallY = 300;
@@ -488,10 +491,16 @@ final class FloatBallOverlayController {
         View btnPanel = fanMenuView.findViewById(R.id.fan_btn_panel);
         View btnLog = fanMenuView.findViewById(R.id.fan_btn_log);
         View btnSession = fanMenuView.findViewById(R.id.fan_btn_session);
+        View btnTools = fanMenuView.findViewById(R.id.fan_btn_tools);
         View btnPause = fanMenuView.findViewById(R.id.fan_btn_pause);
         View btnStop = fanMenuView.findViewById(R.id.fan_btn_stop);
         View btnClose = fanMenuView.findViewById(R.id.fan_btn_close);
-        bindFanMenuDrag(fanMenuView, btnPanel, btnLog, btnSession, btnPause, btnStop, btnClose);
+        View toolsDock = fanMenuView.findViewById(R.id.fan_tools_dock);
+        View toolCapture = fanMenuView.findViewById(R.id.fan_tool_capture);
+        View toolBack = fanMenuView.findViewById(R.id.fan_tool_back);
+        View toolClose = fanMenuView.findViewById(R.id.fan_tool_close);
+        bindFanMenuDrag(fanMenuView, btnPanel, btnLog, btnSession, btnTools, btnPause, btnStop,
+                btnClose, toolsDock, toolCapture, toolBack, toolClose);
         btnPanel.setOnClickListener(v -> {
             if (ScriptRunner.isCurrentScriptRunning()) {
                 host.hideProjectPanelDock();
@@ -502,6 +511,10 @@ final class FloatBallOverlayController {
         });
         btnLog.setOnClickListener(v -> host.toggleRuntimeLogPanel());
         btnSession.setOnClickListener(v -> host.showScriptSessionDialog());
+        btnTools.setOnClickListener(v -> toggleToolsDock());
+        toolCapture.setOnClickListener(v -> host.captureToolScreenshot());
+        toolBack.setOnClickListener(v -> host.performBackAction());
+        toolClose.setOnClickListener(v -> setToolsDockVisible(false));
         btnPause.setOnClickListener(v -> {
             host.toggleActivePauseState();
             refreshFanMenuRuntimeState();
@@ -537,6 +550,65 @@ final class FloatBallOverlayController {
         }
         if (stop != null) {
             stop.setVisibility(running ? View.VISIBLE : View.GONE);
+        }
+        applyMenuModeVisibility(false);
+    }
+
+    private void toggleToolsDock() {
+        setToolsDockVisible(!toolsDockVisible);
+    }
+
+    private void setToolsDockVisible(boolean visible) {
+        if (fanMenuView == null) {
+            toolsDockVisible = visible;
+            return;
+        }
+        toolsDockVisible = visible;
+        applyMenuModeVisibility(true);
+        fanMenuView.post(() -> {
+            clampFanMenuInsideScreen();
+            updateFanMenuLayout();
+        });
+    }
+
+    private void applyMenuModeVisibility(boolean animate) {
+        if (fanMenuView == null) {
+            return;
+        }
+        View menuCard = fanMenuView.findViewById(R.id.fan_menu_card);
+        View toolsDock = fanMenuView.findViewById(R.id.fan_tools_dock);
+        if (menuCard != null) {
+            menuCard.animate().cancel();
+            if (toolsDockVisible) {
+                menuCard.setVisibility(View.GONE);
+            } else {
+                menuCard.setAlpha(1f);
+                menuCard.setScaleX(1f);
+                menuCard.setVisibility(View.VISIBLE);
+            }
+        }
+        if (toolsDock != null) {
+            toolsDock.animate().cancel();
+            if (toolsDockVisible) {
+                toolsDock.setAlpha(0f);
+                toolsDock.setScaleX(0.96f);
+                toolsDock.setVisibility(View.VISIBLE);
+                if (animate) {
+                    toolsDock.animate().alpha(1f).scaleX(1f).setDuration(110).start();
+                } else {
+                    toolsDock.setAlpha(1f);
+                    toolsDock.setScaleX(1f);
+                }
+            } else if (animate && toolsDock.getVisibility() == View.VISIBLE) {
+                toolsDock.animate()
+                        .alpha(0f)
+                        .scaleX(0.96f)
+                        .setDuration(90)
+                        .withEndAction(() -> toolsDock.setVisibility(View.GONE))
+                        .start();
+            } else {
+                toolsDock.setVisibility(View.GONE);
+            }
         }
     }
 
@@ -758,6 +830,20 @@ final class FloatBallOverlayController {
         } catch (Exception e) {
             Log.w(TAG, "update fan menu layout failed", e);
         }
+    }
+
+    private void clampFanMenuInsideScreen() {
+        if (fanMenuView == null || fanMenuLp == null) {
+            return;
+        }
+        int[] screen = host.getScreenSizePx();
+        int widthSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        int heightSpec = View.MeasureSpec.makeMeasureSpec(0, View.MeasureSpec.UNSPECIFIED);
+        fanMenuView.measure(widthSpec, heightSpec);
+        int menuW = Math.max(fanMenuView.getMeasuredWidth(), host.dp(64));
+        int menuH = Math.max(fanMenuView.getMeasuredHeight(), host.dp(144));
+        fanMenuLp.x = clampBallAxis(fanMenuLp.x, 0, Math.max(0, screen[0] - menuW));
+        fanMenuLp.y = clampBallAxis(fanMenuLp.y, 0, Math.max(0, screen[1] - menuH));
     }
 
     private void hideFanMenu() {

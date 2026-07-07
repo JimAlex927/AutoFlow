@@ -1248,6 +1248,16 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 @Override
+                public void captureToolScreenshot() {
+                    FloatWindowService.this.captureToolScreenshot();
+                }
+
+                @Override
+                public void performBackAction() {
+                    FloatWindowService.this.performBackAction();
+                }
+
+                @Override
                 public void showToast(String message) {
                     Toast.makeText(FloatWindowService.this, message, Toast.LENGTH_SHORT).show();
                 }
@@ -1539,6 +1549,41 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     private void stopScriptFromUi() {
         runtimeTransitionCoordinator.stopScriptFromUi();
+    }
+
+    private void captureToolScreenshot() {
+        Toast.makeText(this, "正在截图...", Toast.LENGTH_SHORT).show();
+        runAfterScreenCaptureReady("工具截图", () -> panelDataExecutor.execute(() -> {
+            Bitmap bitmap = captureFreshScreenBitmap();
+            if (bitmap == null || bitmap.isRecycled()) {
+                postToUi(() -> Toast.makeText(this, "截图失败", Toast.LENGTH_SHORT).show());
+                return;
+            }
+            String fileName = "tool_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+                    .format(new Date()) + ".png";
+            File out = com.auto.master.capture.FileUtil.makeCaptureFile(this, fileName);
+            try (FileOutputStream fos = new FileOutputStream(out)) {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
+                postToUi(() -> Toast.makeText(this,
+                        "截图已保存: " + out.getName(),
+                        Toast.LENGTH_SHORT).show());
+            } catch (Exception e) {
+                Log.w(TAG, "工具截图保存失败", e);
+                postToUi(() -> Toast.makeText(this,
+                        "截图保存失败: " + e.getMessage(),
+                        Toast.LENGTH_SHORT).show());
+            }
+        }), null);
+    }
+
+    private void performBackAction() {
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) {
+            Toast.makeText(this, "请先开启无障碍服务", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        boolean success = svc.performGlobalAction(android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_BACK);
+        Toast.makeText(this, success ? "已返回上一级" : "返回失败", Toast.LENGTH_SHORT).show();
     }
 
     private void focusRunningSessionForQuickAction() {
