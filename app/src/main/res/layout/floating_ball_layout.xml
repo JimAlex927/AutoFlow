@@ -43,7 +43,7 @@
                 android:layout_height="40dp"
                 android:layout_gravity="center"
                 android:contentDescription="floating ball"
-                android:src="@drawable/logo_mech_guardian" />
+                android:src="@drawable/logo_seven_manifold_foreground" />
         </FrameLayout>
 
         <TextView

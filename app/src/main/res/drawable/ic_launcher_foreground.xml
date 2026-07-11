@@ -3,4 +3,4 @@
     android:insetRight="0dp"
     android:insetTop="0dp"
     android:insetBottom="0dp"
-    android:drawable="@drawable/logo_mech_guardian" />
+    android:drawable="@drawable/logo_seven_manifold_foreground" />
