@@ -22,7 +22,7 @@ public class SetScreenBrightnessOperationHandler extends OperationHandler {
     @Override
     public boolean handle(MetaOperation obj, OperationContext ctx) {
         Map<String, Object> inputMap = obj.getInputMap();
-        int percent = MetaOperation.DEFAULT_RESTORE_BRIGHTNESS_PERCENT;
+        int percent = MetaOperation.DEFAULT_SCREEN_BRIGHTNESS_PERCENT;
         if (inputMap != null) {
             Object v = inputMap.get(MetaOperation.BRIGHTNESS_PERCENT);
             if (v != null) {
@@ -43,13 +43,6 @@ public class SetScreenBrightnessOperationHandler extends OperationHandler {
             ctx.lastOperation = obj;
         }
         return true;
-    }
-
-    /**
-     * 脚本停止/结束时统一调用，把亮度恢复到默认 50%。
-     */
-    public static void restoreDefaultBrightness(Context context) {
-        applyBrightness(context, MetaOperation.DEFAULT_RESTORE_BRIGHTNESS_PERCENT);
     }
 
     private static boolean applyBrightness(Context context, int percent) {

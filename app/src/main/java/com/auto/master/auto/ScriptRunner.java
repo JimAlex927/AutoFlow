@@ -20,7 +20,6 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.SystemClock;
-import android.provider.Settings;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.View;
@@ -52,7 +51,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import com.auto.master.Task.Handler.OperationHandler.LoadImgToMatOperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.OperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.OperationHandlerManager;
-import com.auto.master.Task.Handler.OperationHandler.SetScreenBrightnessOperationHandler;
 import com.auto.master.Task.Handler.OperationHandler.RuntimeOperationLogFormatter;
 import com.auto.master.Task.Handler.ResponseHandler.DefaultResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.ResponseHandlerManager;
@@ -841,12 +839,6 @@ public final class ScriptRunner {
                             ScreenCaptureManager.getInstance().setKeepAliveDuringScript(false);
                         }
                         OpenCVHelper.releaseCurrentThreadBuffers();
-                        if (!SESSION_MANAGER.isAnyRunning()) {
-                            AutoAccessibilityService brightnessSvc = AutoAccessibilityService.get();
-                            if (brightnessSvc != null) {
-                                SetScreenBrightnessOperationHandler.restoreDefaultBrightness(brightnessSvc.getApplicationContext());
-                            }
-                        }
 //                        if (wakeLock != null && wakeLock.isHeld()) {
 //                            wakeLock.release();
 //                        }

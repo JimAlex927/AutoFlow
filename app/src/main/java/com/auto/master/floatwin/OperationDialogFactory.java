@@ -9032,7 +9032,7 @@ public class OperationDialogFactory {
         android.widget.TextView tvValue        = dialogView.findViewById(R.id.tv_brightness_value);
         android.widget.AutoCompleteTextView edtNext = dialogView.findViewById(R.id.edt_next_operation);
 
-        int initialPercent = MetaOperation.DEFAULT_RESTORE_BRIGHTNESS_PERCENT;
+        int initialPercent = MetaOperation.DEFAULT_SCREEN_BRIGHTNESS_PERCENT;
 
         if (operationObject != null) {
             try {

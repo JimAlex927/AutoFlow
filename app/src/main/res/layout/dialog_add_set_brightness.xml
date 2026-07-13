@@ -60,7 +60,7 @@
             <TextView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:text="通过无障碍服务修改系统屏幕亮度（需要先授予“修改系统设置”权限）。脚本停止后会自动恢复到 50%。"
+                android:text="通过无障碍服务修改系统屏幕亮度（需要先授予“修改系统设置”权限）。亮度会保持为该节点设置的值，直到用户或其他应用再次调整。"
                 android:textSize="12sp"
                 android:textColor="#6a7682"
                 android:layout_marginBottom="10dp"/>

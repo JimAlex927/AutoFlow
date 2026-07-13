@@ -610,7 +610,14 @@ public class MainActivity extends AppCompatActivity {
     private void updateFloatToggleButton() {
         btnToggleFloat.setText(floatEnabled ? "关闭悬浮窗" : "启动悬浮窗");
         btnToggleFloat.setBackgroundResource(
-                floatEnabled ? R.drawable.project_panel_btn_secondary : R.drawable.project_panel_btn_primary
+                floatEnabled ? R.drawable.home_float_active_bg : R.drawable.home_float_inactive_bg
+        );
+        btnToggleFloat.setCompoundDrawablesRelativeWithIntrinsicBounds(
+                ContextCompat.getDrawable(this,
+                        floatEnabled ? R.drawable.ic_float_menu_stop : R.drawable.ic_float_menu_play),
+                null,
+                null,
+                null
         );
         btnToggleFloat.setTextColor(ContextCompat.getColor(
                 this,
@@ -805,7 +812,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private int resolveProjectSpanCount() {
-        return 2;
+        return 1;
     }
 
     private void selectHomeProjects() {
