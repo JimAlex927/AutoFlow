@@ -5233,9 +5233,12 @@ public class OperationDialogFactory {
 
         EditText edtName = dialogView.findViewById(R.id.edt_name);
         AutoCompleteTextView edtStart = dialogView.findViewById(R.id.edt_repeat_start);
-        CheckBox cbInfinite = dialogView.findViewById(R.id.cb_repeat_infinite);
+        AutoCompleteTextView edtMode = dialogView.findViewById(R.id.edt_repeat_mode);
         EditText edtCount = dialogView.findViewById(R.id.edt_repeat_count);
-        TextView countLabel = dialogView.findViewById(R.id.tv_repeat_count_label);
+        EditText edtExpression = dialogView.findViewById(R.id.edt_repeat_expression);
+        AutoCompleteTextView edtNext = dialogView.findViewById(R.id.edt_next_operation);
+        View countSection = dialogView.findViewById(R.id.ly_repeat_count);
+        View expressionSection = dialogView.findViewById(R.id.ly_repeat_expression);
         TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
         boolean editing = !TextUtils.isEmpty(operationId);
         if (editing) {
@@ -5247,10 +5250,12 @@ public class OperationDialogFactory {
         if (nextOpBinder != null) {
             nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
         }
-        cbInfinite.setOnCheckedChangeListener((buttonView, isChecked) -> {
-            edtCount.setEnabled(!isChecked);
-            edtCount.setAlpha(isChecked ? 0.5f : 1f);
-            countLabel.setAlpha(isChecked ? 0.5f : 1f);
+        dialogHelpers.bindDropdownSelect(edtMode, java.util.Arrays.asList(
+                "无限循环", "指定循环次数", "变量表达式"));
+        edtMode.setText("指定循环次数", false);
+        edtMode.setOnItemClickListener((parent, view, position, id) -> {
+            updateRepeatExecutionModeFields(normalizeRepeatExecutionMode(safeText(edtMode)),
+                    countSection, expressionSection);
         });
 
         if (operationObject != null) {
@@ -5259,15 +5264,19 @@ public class OperationDialogFactory {
             if (input != null) {
                 setOperationReferenceText(edtStart,
                         input.optString(MetaOperation.REPEAT_START_OPERATION_ID, ""));
-                boolean infinite = input.optBoolean(MetaOperation.REPEAT_INFINITE, false);
-                cbInfinite.setChecked(infinite);
+                String mode = normalizeRepeatExecutionMode(input.optString(MetaOperation.REPEAT_MODE,
+                        input.optBoolean(MetaOperation.REPEAT_INFINITE, false)
+                                ? MetaOperation.REPEAT_MODE_INFINITE : MetaOperation.REPEAT_MODE_COUNT));
+                edtMode.setText(repeatExecutionModeLabel(mode), false);
                 edtCount.setText(String.valueOf(Math.max(1,
                         input.optInt(MetaOperation.REPEAT_COUNT, 2))));
+                edtExpression.setText(input.optString(MetaOperation.REPEAT_EXPRESSION, ""));
+                setOperationReferenceText(edtNext,
+                        input.optString(MetaOperation.NEXT_OPERATION_ID, ""));
             }
         }
-        edtCount.setEnabled(!cbInfinite.isChecked());
-        edtCount.setAlpha(cbInfinite.isChecked() ? 0.5f : 1f);
-        countLabel.setAlpha(cbInfinite.isChecked() ? 0.5f : 1f);
+        updateRepeatExecutionModeFields(normalizeRepeatExecutionMode(safeText(edtMode)),
+                countSection, expressionSection);
 
         dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
                 dialogHelpers.safeRemoveView(dialogView));
@@ -5278,11 +5287,18 @@ public class OperationDialogFactory {
                 showOperationPickerForField("选择循环起始节点", operationId, edtStart);
             }
         });
+        dialogView.findViewById(R.id.btn_pick_next).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择循环结束后的下一节点", operationId, edtNext);
+            }
+        });
 
         btnConfirm.setOnClickListener(v -> {
             String name = safeText(edtName);
             String startId = safeText(edtStart);
-            boolean infinite = cbInfinite.isChecked();
+            String mode = normalizeRepeatExecutionMode(safeText(edtMode));
+            String expression = safeText(edtExpression);
+            String nextId = safeText(edtNext);
             int count = 2;
             if (TextUtils.isEmpty(name)) {
                 edtName.setError("请填写操作名称");
@@ -5296,7 +5312,7 @@ public class OperationDialogFactory {
                 edtStart.setError("起始节点不能是循环节点自身");
                 return;
             }
-            if (!infinite) {
+            if (MetaOperation.REPEAT_MODE_COUNT.equals(mode)) {
                 try {
                     count = Integer.parseInt(safeText(edtCount));
                     if (count < 1 || count > 100000) {
@@ -5306,6 +5322,10 @@ public class OperationDialogFactory {
                     edtCount.setError("请输入 1 到 100000 的次数");
                     return;
                 }
+            }
+            if (MetaOperation.REPEAT_MODE_EXPRESSION.equals(mode) && TextUtils.isEmpty(expression)) {
+                edtExpression.setError("请输入变量表达式");
+                return;
             }
             if (!editing && idGenerator == null) {
                 host.showToast("节点 ID 生成器不可用");
@@ -5319,8 +5339,16 @@ public class OperationDialogFactory {
                 operation.put("responseType", 1);
                 JSONObject input = new JSONObject();
                 input.put(MetaOperation.REPEAT_START_OPERATION_ID, startId);
-                input.put(MetaOperation.REPEAT_INFINITE, infinite);
+                input.put(MetaOperation.REPEAT_MODE, mode);
+                input.put(MetaOperation.REPEAT_INFINITE,
+                        MetaOperation.REPEAT_MODE_INFINITE.equals(mode));
                 input.put(MetaOperation.REPEAT_COUNT, count);
+                if (MetaOperation.REPEAT_MODE_EXPRESSION.equals(mode)) {
+                    input.put(MetaOperation.REPEAT_EXPRESSION, expression);
+                }
+                if (!TextUtils.isEmpty(nextId)) {
+                    input.put(MetaOperation.NEXT_OPERATION_ID, nextId);
+                }
                 operation.put("inputMap", input);
 
                 if (editing) {
@@ -5340,6 +5368,39 @@ public class OperationDialogFactory {
                 host.showToast("保存循环执行节点失败: " + e.getMessage());
             }
         });
+    }
+
+    private static String normalizeRepeatExecutionMode(String rawMode) {
+        if (MetaOperation.REPEAT_MODE_INFINITE.equals(rawMode) || "无限循环".equals(rawMode)) {
+            return MetaOperation.REPEAT_MODE_INFINITE;
+        }
+        if (MetaOperation.REPEAT_MODE_EXPRESSION.equals(rawMode) || "变量表达式".equals(rawMode)) {
+            return MetaOperation.REPEAT_MODE_EXPRESSION;
+        }
+        return MetaOperation.REPEAT_MODE_COUNT;
+    }
+
+    private static String repeatExecutionModeLabel(String mode) {
+        if (MetaOperation.REPEAT_MODE_INFINITE.equals(mode)) {
+            return "无限循环";
+        }
+        if (MetaOperation.REPEAT_MODE_EXPRESSION.equals(mode)) {
+            return "变量表达式";
+        }
+        return "指定循环次数";
+    }
+
+    private static void updateRepeatExecutionModeFields(String mode,
+                                                        View countSection,
+                                                        View expressionSection) {
+        if (countSection != null) {
+            countSection.setVisibility(MetaOperation.REPEAT_MODE_COUNT.equals(mode)
+                    ? View.VISIBLE : View.GONE);
+        }
+        if (expressionSection != null) {
+            expressionSection.setVisibility(MetaOperation.REPEAT_MODE_EXPRESSION.equals(mode)
+                    ? View.VISIBLE : View.GONE);
+        }
     }
 
     // ==================== MTry Operation ====================

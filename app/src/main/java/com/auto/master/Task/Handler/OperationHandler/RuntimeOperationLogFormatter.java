@@ -113,10 +113,19 @@ public final class RuntimeOperationLogFormatter {
                         + appendIfPresent(" var=", inputText(input, MetaOperation.LOOP_CONDITION_VAR))
                         + appendIfPresent(" value=", valueText(response, MetaOperation.RESULT));
             case 32:
+                String repeatMode = inputText(input, MetaOperation.REPEAT_MODE);
+                if (TextUtils.isEmpty(repeatMode)) {
+                    repeatMode = bool(input, MetaOperation.REPEAT_INFINITE, false)
+                            ? MetaOperation.REPEAT_MODE_INFINITE : MetaOperation.REPEAT_MODE_COUNT;
+                }
+                String repeatDetail = MetaOperation.REPEAT_MODE_INFINITE.equals(repeatMode)
+                        ? "无限循环"
+                        : MetaOperation.REPEAT_MODE_EXPRESSION.equals(repeatMode)
+                        ? "表达式=" + inputText(input, MetaOperation.REPEAT_EXPRESSION)
+                        : "共 " + inputText(input, MetaOperation.REPEAT_COUNT) + " 轮";
                 return "循环执行: 从 " + inputText(input, MetaOperation.REPEAT_START_OPERATION_ID)
-                        + (bool(input, MetaOperation.REPEAT_INFINITE, false)
-                        ? " 开始无限循环"
-                        : " 开始，共 " + inputText(input, MetaOperation.REPEAT_COUNT) + " 轮");
+                        + " 开始，" + repeatDetail
+                        + appendIfPresent(" next=", inputText(input, MetaOperation.NEXT_OPERATION_ID));
             case 17:
                 return "返回键: 已触发";
             case 18:

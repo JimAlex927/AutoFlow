@@ -147,6 +147,11 @@ public abstract class MetaOperation {
     public static String REPEAT_START_OPERATION_ID = "REPEAT_START_OPERATION_ID";
     public static String REPEAT_INFINITE = "REPEAT_INFINITE";
     public static String REPEAT_COUNT = "REPEAT_COUNT";
+    public static String REPEAT_MODE = "REPEAT_MODE";
+    public static String REPEAT_EXPRESSION = "REPEAT_EXPRESSION";
+    public static final String REPEAT_MODE_INFINITE = "infinite";
+    public static final String REPEAT_MODE_COUNT = "count";
+    public static final String REPEAT_MODE_EXPRESSION = "expression";
 
     // MTry 包装节点参数
     public static String MTRY_WRAPPED_OPERATION_ID = "MTRY_WRAPPED_OPERATION_ID";

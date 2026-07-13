@@ -700,16 +700,24 @@ public final class ScriptRunner {
                                         }
                                     }
 
-                                    MetaOperation repeatStart = scriptExecuteContext.advanceRepeatExecutionAtTaskEnd();
-                                    if (repeatStart != null) {
-                                        int completedRounds = scriptExecuteContext.getRepeatCompletedRounds();
-                                        String totalRounds = scriptExecuteContext.isRepeatExecutionInfinite()
-                                                ? "infinite"
-                                                : String.valueOf(scriptExecuteContext.getRepeatTotalRounds());
-                                        Log.i(TAG, "循环执行完成第 " + completedRounds + " 轮，重新开始: "
-                                                + repeatStart.getId() + " (total=" + totalRounds + ")");
-                                        scriptExecuteContext.tobeHandledOperation = repeatStart;
-                                        continue;
+                                    ScriptExecuteContext.RepeatAdvanceResult repeatResult =
+                                            scriptExecuteContext.advanceRepeatExecutionAtTaskEnd();
+                                    if (repeatResult != null) {
+                                        String totalRounds = MetaOperation.REPEAT_MODE_INFINITE.equals(repeatResult.mode)
+                                                ? "infinite" : String.valueOf(repeatResult.totalRounds);
+                                        if (repeatResult.restarting) {
+                                            Log.i(TAG, "循环执行完成第 " + repeatResult.completedRounds + " 轮，重新开始: "
+                                                    + repeatResult.nextOperation.getId() + " (total=" + totalRounds + ")");
+                                        } else {
+                                            Log.i(TAG, "循环执行完成第 " + repeatResult.completedRounds
+                                                    + " 轮，" + (repeatResult.nextOperation == null
+                                                    ? "未配置下一节点，结束脚本"
+                                                    : "继续下一节点: " + repeatResult.nextOperation.getId()));
+                                        }
+                                        if (repeatResult.nextOperation != null) {
+                                            scriptExecuteContext.tobeHandledOperation = repeatResult.nextOperation;
+                                            continue;
+                                        }
                                     }
 
                                     scriptExecuteContext.running = false;

@@ -72,45 +72,44 @@ public class ScriptExecuteContext {
 
     public void beginRepeatExecution(MetaOperation startOperation,
                                      String controllerOperationId,
-                                     boolean infinite,
-                                     int totalRounds) {
+                                     MetaOperation nextOperation,
+                                     String mode,
+                                     int totalRounds,
+                                     String expression) {
         repeatExecutionState = new RepeatExecutionState(
                 startOperation,
                 controllerOperationId,
-                infinite,
-                Math.max(1, totalRounds));
+                nextOperation,
+                mode,
+                Math.max(1, totalRounds),
+                expression);
     }
 
     /**
-     * Called only when the current Task has naturally reached its terminal node.
-     * Returns the configured start node when another round should begin.
+     * Called when a repeat round reaches its boundary. The result records whether
+     * the selected start node should run again or the configured next node should
+     * receive control after the loop has completed.
      */
-    public MetaOperation advanceRepeatExecutionAtTaskEnd() {
+    public RepeatAdvanceResult advanceRepeatExecutionAtTaskEnd() {
         RepeatExecutionState state = repeatExecutionState;
         if (state == null || state.startOperation == null) {
             return null;
         }
         state.completedRounds++;
-        if (!state.infinite && state.completedRounds >= state.totalRounds) {
-            repeatExecutionState = null;
-            return null;
+        boolean continueRepeat = MetaOperation.REPEAT_MODE_INFINITE.equals(state.mode);
+        if (MetaOperation.REPEAT_MODE_COUNT.equals(state.mode)) {
+            continueRepeat = state.completedRounds < state.totalRounds;
+        } else if (MetaOperation.REPEAT_MODE_EXPRESSION.equals(state.mode)) {
+            continueRepeat = RepeatExpressionEvaluator.shouldContinue(state.expression,
+                    sharedContext == null ? null : sharedContext.variables);
         }
-        return state.startOperation;
-    }
-
-    public int getRepeatCompletedRounds() {
-        RepeatExecutionState state = repeatExecutionState;
-        return state == null ? 0 : state.completedRounds;
-    }
-
-    public int getRepeatTotalRounds() {
-        RepeatExecutionState state = repeatExecutionState;
-        return state == null ? 0 : state.totalRounds;
-    }
-
-    public boolean isRepeatExecutionInfinite() {
-        RepeatExecutionState state = repeatExecutionState;
-        return state != null && state.infinite;
+        if (continueRepeat) {
+            return new RepeatAdvanceResult(state.startOperation, true, state.completedRounds,
+                    state.totalRounds, state.mode);
+        }
+        repeatExecutionState = null;
+        return new RepeatAdvanceResult(state.nextOperation, false, state.completedRounds,
+                state.totalRounds, state.mode);
     }
 
     public boolean isRepeatExecutionActiveFor(String controllerOperationId) {
@@ -119,21 +118,47 @@ public class ScriptExecuteContext {
                 && controllerOperationId.equals(state.controllerOperationId);
     }
 
+    public static final class RepeatAdvanceResult {
+        public final MetaOperation nextOperation;
+        public final boolean restarting;
+        public final int completedRounds;
+        public final int totalRounds;
+        public final String mode;
+
+        RepeatAdvanceResult(MetaOperation nextOperation,
+                            boolean restarting,
+                            int completedRounds,
+                            int totalRounds,
+                            String mode) {
+            this.nextOperation = nextOperation;
+            this.restarting = restarting;
+            this.completedRounds = completedRounds;
+            this.totalRounds = totalRounds;
+            this.mode = mode;
+        }
+    }
+
     private static final class RepeatExecutionState {
         final MetaOperation startOperation;
         final String controllerOperationId;
-        final boolean infinite;
+        final MetaOperation nextOperation;
+        final String mode;
         final int totalRounds;
+        final String expression;
         int completedRounds;
 
         RepeatExecutionState(MetaOperation startOperation,
                              String controllerOperationId,
-                             boolean infinite,
-                             int totalRounds) {
+                             MetaOperation nextOperation,
+                             String mode,
+                             int totalRounds,
+                             String expression) {
             this.startOperation = startOperation;
             this.controllerOperationId = controllerOperationId;
-            this.infinite = infinite;
+            this.nextOperation = nextOperation;
+            this.mode = mode;
             this.totalRounds = totalRounds;
+            this.expression = expression;
         }
     }
 }

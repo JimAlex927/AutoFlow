@@ -24,8 +24,9 @@ public class RepeatExecutionResponseHandler extends DefaultResponseHandler {
             return;
         }
         if (scriptExecuteContext.isRepeatExecutionActiveFor(controller.getId())) {
-            scriptExecuteContext.tobeHandledOperation =
+            ScriptExecuteContext.RepeatAdvanceResult result =
                     scriptExecuteContext.advanceRepeatExecutionAtTaskEnd();
+            scriptExecuteContext.tobeHandledOperation = result == null ? null : result.nextOperation;
             return;
         }
         String startId = text(controller.getInputMap().get(MetaOperation.REPEAT_START_OPERATION_ID));
@@ -49,9 +50,14 @@ public class RepeatExecutionResponseHandler extends DefaultResponseHandler {
             return;
         }
 
-        boolean infinite = bool(controller.getInputMap().get(MetaOperation.REPEAT_INFINITE));
+        String mode = repeatMode(controller.getInputMap());
         int count = positiveInt(controller.getInputMap().get(MetaOperation.REPEAT_COUNT), 2);
-        scriptExecuteContext.beginRepeatExecution(startOperation, controller.getId(), infinite, count);
+        String expression = text(controller.getInputMap().get(MetaOperation.REPEAT_EXPRESSION));
+        String nextId = text(controller.getInputMap().get(MetaOperation.NEXT_OPERATION_ID));
+        MetaOperation nextOperation = TextUtils.isEmpty(nextId) || task == null || task.getOperationMap() == null
+                ? null : task.getOperationMap().get(nextId);
+        scriptExecuteContext.beginRepeatExecution(startOperation, controller.getId(), nextOperation,
+                mode, count, expression);
         scriptExecuteContext.tobeHandledOperation = startOperation;
     }
 
@@ -73,5 +79,16 @@ public class RepeatExecutionResponseHandler extends DefaultResponseHandler {
         } catch (Exception ignored) {
             return fallback;
         }
+    }
+
+    private static String repeatMode(Map<String, Object> input) {
+        String mode = text(input == null ? null : input.get(MetaOperation.REPEAT_MODE));
+        if (MetaOperation.REPEAT_MODE_INFINITE.equals(mode)
+                || MetaOperation.REPEAT_MODE_COUNT.equals(mode)
+                || MetaOperation.REPEAT_MODE_EXPRESSION.equals(mode)) {
+            return mode;
+        }
+        return bool(input == null ? null : input.get(MetaOperation.REPEAT_INFINITE))
+                ? MetaOperation.REPEAT_MODE_INFINITE : MetaOperation.REPEAT_MODE_COUNT;
     }
 }

@@ -22,16 +22,24 @@ public class RepeatExecutionOperationHandler extends OperationHandler {
         }
         Map<String, Object> input = obj.getInputMap();
         String startId = stringValue(input, MetaOperation.REPEAT_START_OPERATION_ID);
-        boolean infinite = booleanValue(input, MetaOperation.REPEAT_INFINITE);
+        String mode = repeatMode(input);
         int count = positiveInt(input, MetaOperation.REPEAT_COUNT, 2);
+        String expression = stringValue(input, MetaOperation.REPEAT_EXPRESSION);
         if (TextUtils.isEmpty(startId)) {
+            return false;
+        }
+        if (MetaOperation.REPEAT_MODE_EXPRESSION.equals(mode) && TextUtils.isEmpty(expression)) {
             return false;
         }
 
         Map<String, Object> response = new HashMap<>();
         response.put(MetaOperation.REPEAT_START_OPERATION_ID, startId);
-        response.put(MetaOperation.REPEAT_INFINITE, infinite);
+        response.put(MetaOperation.REPEAT_MODE, mode);
+        response.put(MetaOperation.REPEAT_INFINITE, MetaOperation.REPEAT_MODE_INFINITE.equals(mode));
         response.put(MetaOperation.REPEAT_COUNT, count);
+        response.put(MetaOperation.REPEAT_EXPRESSION, expression);
+        response.put(MetaOperation.NEXT_OPERATION_ID,
+                stringValue(input, MetaOperation.NEXT_OPERATION_ID));
         ctx.currentResponse = response;
         ctx.lastOperation = obj;
         ctx.currentOperation = obj;
@@ -55,6 +63,17 @@ public class RepeatExecutionOperationHandler extends OperationHandler {
         }
         String text = String.valueOf(value).trim();
         return "1".equals(text) || "true".equalsIgnoreCase(text);
+    }
+
+    private static String repeatMode(Map<String, Object> input) {
+        String mode = stringValue(input, MetaOperation.REPEAT_MODE);
+        if (MetaOperation.REPEAT_MODE_INFINITE.equals(mode)
+                || MetaOperation.REPEAT_MODE_EXPRESSION.equals(mode)
+                || MetaOperation.REPEAT_MODE_COUNT.equals(mode)) {
+            return mode;
+        }
+        return booleanValue(input, MetaOperation.REPEAT_INFINITE)
+                ? MetaOperation.REPEAT_MODE_INFINITE : MetaOperation.REPEAT_MODE_COUNT;
     }
 
     private static int positiveInt(Map<String, Object> input, String key, int fallback) {
