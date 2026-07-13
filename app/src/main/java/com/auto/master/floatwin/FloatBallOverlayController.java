@@ -53,9 +53,9 @@ final class FloatBallOverlayController {
     private View ballView;
     private WindowManager.LayoutParams ballLp;
     private View ballCoreView;
-    private TextView ballDockHandleLeft;
-    private TextView ballDockHandleRight;
-    private TextView ballDockHandleBottom;
+    private View ballDockHandleLeft;
+    private View ballDockHandleRight;
+    private View ballDockHandleBottom;
     private TextView ballStatusText;
 
     private View fanMenuView;
@@ -428,17 +428,13 @@ final class FloatBallOverlayController {
         if (ballStatusText != null) {
             ballStatusText.setVisibility(View.GONE);
         }
-        String handleLabel = running ? (host.isPaused() ? "停" : "运") : "A";
         if (ballDockHandleLeft != null) {
-            ballDockHandleLeft.setText(handleLabel);
             ballDockHandleLeft.setVisibility(collapsed && ballDockEdge == BALL_DOCK_EDGE_LEFT ? View.VISIBLE : View.GONE);
         }
         if (ballDockHandleRight != null) {
-            ballDockHandleRight.setText(handleLabel);
             ballDockHandleRight.setVisibility(collapsed && ballDockEdge == BALL_DOCK_EDGE_RIGHT ? View.VISIBLE : View.GONE);
         }
         if (ballDockHandleBottom != null) {
-            ballDockHandleBottom.setText(handleLabel);
             ballDockHandleBottom.setVisibility(collapsed && ballDockEdge == BALL_DOCK_EDGE_BOTTOM ? View.VISIBLE : View.GONE);
         }
     }

@@ -6,9 +6,11 @@ import com.auto.master.Task.Handler.ResponseHandler.DefaultResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.JumpTaskResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.JumpToNextOperationResponseHandler;
 import com.auto.master.Task.Handler.ResponseHandler.MatchTemplateDynamicJumpResponseHandler;
+import com.auto.master.Task.Handler.ResponseHandler.RepeatExecutionResponseHandler;
 import com.auto.master.Task.Operation.AccessibilityNodeOperation;
 import com.auto.master.Task.Operation.AiDetectOperation;
 import com.auto.master.Task.Operation.PlayAudioOperation;
+import com.auto.master.Task.Operation.RepeatExecutionOperation;
 import com.auto.master.Task.Operation.SetScreenBrightnessOperation;
 import com.auto.master.Task.Operation.SetSystemParamOperation;
 import com.auto.master.Task.Operation.AppCloseOperation;
@@ -89,6 +91,8 @@ public class OperationHandlerManager {
                 "log_output", "log", "print_log");
         register(OperationType.SET_SCREEN_BRIGHTNESS, SetScreenBrightnessOperation.class, SetScreenBrightnessOperation::new, SetScreenBrightnessOperationHandler::new,
                 "set_brightness", "brightness", "screen_brightness");
+        register(OperationType.REPEAT_EXECUTION, RepeatExecutionOperation.class, RepeatExecutionOperation::new, RepeatExecutionOperationHandler::new,
+                "repeat_execution", "repeat", "repeat_task");
 
         registerResponse(OperationType.CLICK.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.DELAY.getCode(), 1, JumpToNextOperationResponseHandler::new);
@@ -123,6 +127,7 @@ public class OperationHandlerManager {
         registerResponse(OperationType.SET_SYSTEM_PARAM.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.LOG_OUTPUT.getCode(), 1, JumpToNextOperationResponseHandler::new);
         registerResponse(OperationType.SET_SCREEN_BRIGHTNESS.getCode(), 1, JumpToNextOperationResponseHandler::new);
+        registerResponse(OperationType.REPEAT_EXECUTION.getCode(), 1, RepeatExecutionResponseHandler::new);
     }
 
     /**

@@ -63,15 +63,27 @@
         android:visibility="gone" />
 
     <ImageView
+        android:id="@+id/iv_share"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_alignParentBottom="true"
+        android:layout_toStartOf="@id/iv_more"
+        android:layout_marginEnd="6dp"
+        android:contentDescription="分享项目"
+        android:padding="6dp"
+        android:src="@android:drawable/ic_menu_share"
+        android:tint="@color/colorOnSurface"
+        android:visibility="gone" />
+
+    <ImageView
         android:id="@+id/iv_more"
-        android:layout_width="34dp"
-        android:layout_height="34dp"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
         android:layout_alignParentEnd="true"
         android:layout_alignParentBottom="true"
-        android:background="@drawable/project_panel_toolbar_icon_bg"
         android:contentDescription="项目管理"
-        android:padding="9dp"
-        android:src="@drawable/ic_action_config"
-        android:tint="@color/colorOnSurfaceVariant"
+        android:padding="6dp"
+        android:src="@drawable/ic_more_horiz"
+        android:tint="@color/colorOnSurface"
         android:visibility="gone" />
 </RelativeLayout>

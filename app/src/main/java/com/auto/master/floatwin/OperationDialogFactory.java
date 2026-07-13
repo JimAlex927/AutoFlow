@@ -5213,6 +5213,135 @@ public class OperationDialogFactory {
         });
     }
 
+    // ==================== Repeat Execution Operation ====================
+
+    public void showAddRepeatExecutionDialog() {
+        showRepeatExecutionDialog(null, null);
+    }
+
+    public void showEditRepeatExecutionDialog(String operationId, JSONObject operationObject) {
+        showRepeatExecutionDialog(operationId, operationObject);
+    }
+
+    private void showRepeatExecutionDialog(String operationId, JSONObject operationObject) {
+        View dialogView = LayoutInflater.from(host.getContext())
+                .inflate(R.layout.dialog_add_repeat_execution, null);
+        WindowManager.LayoutParams dialogLp = dialogHelpers.buildDialogLayoutParams(360, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.76f, 0.82f);
+        wm.addView(dialogView, dialogLp);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 410, null);
+
+        EditText edtName = dialogView.findViewById(R.id.edt_name);
+        AutoCompleteTextView edtStart = dialogView.findViewById(R.id.edt_repeat_start);
+        CheckBox cbInfinite = dialogView.findViewById(R.id.cb_repeat_infinite);
+        EditText edtCount = dialogView.findViewById(R.id.edt_repeat_count);
+        TextView countLabel = dialogView.findViewById(R.id.tv_repeat_count_label);
+        TextView btnConfirm = dialogView.findViewById(R.id.btn_confirm);
+        boolean editing = !TextUtils.isEmpty(operationId);
+        if (editing) {
+            btnConfirm.setText("保存");
+        } else {
+            edtName.setText("循环执行");
+        }
+
+        if (nextOpBinder != null) {
+            nextOpBinder.bindNextOperationSuggestions(dialogView, operationId);
+        }
+        cbInfinite.setOnCheckedChangeListener((buttonView, isChecked) -> {
+            edtCount.setEnabled(!isChecked);
+            edtCount.setAlpha(isChecked ? 0.5f : 1f);
+            countLabel.setAlpha(isChecked ? 0.5f : 1f);
+        });
+
+        if (operationObject != null) {
+            JSONObject input = operationObject.optJSONObject("inputMap");
+            edtName.setText(operationObject.optString("name", "循环执行"));
+            if (input != null) {
+                setOperationReferenceText(edtStart,
+                        input.optString(MetaOperation.REPEAT_START_OPERATION_ID, ""));
+                boolean infinite = input.optBoolean(MetaOperation.REPEAT_INFINITE, false);
+                cbInfinite.setChecked(infinite);
+                edtCount.setText(String.valueOf(Math.max(1,
+                        input.optInt(MetaOperation.REPEAT_COUNT, 2))));
+            }
+        }
+        edtCount.setEnabled(!cbInfinite.isChecked());
+        edtCount.setAlpha(cbInfinite.isChecked() ? 0.5f : 1f);
+        countLabel.setAlpha(cbInfinite.isChecked() ? 0.5f : 1f);
+
+        dialogView.findViewById(R.id.btn_close_top).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_cancel).setOnClickListener(v ->
+                dialogHelpers.safeRemoveView(dialogView));
+        dialogView.findViewById(R.id.btn_pick_repeat_start).setOnClickListener(v -> {
+            if (operationPickerLauncher != null) {
+                showOperationPickerForField("选择循环起始节点", operationId, edtStart);
+            }
+        });
+
+        btnConfirm.setOnClickListener(v -> {
+            String name = safeText(edtName);
+            String startId = safeText(edtStart);
+            boolean infinite = cbInfinite.isChecked();
+            int count = 2;
+            if (TextUtils.isEmpty(name)) {
+                edtName.setError("请填写操作名称");
+                return;
+            }
+            if (TextUtils.isEmpty(startId)) {
+                edtStart.setError("请选择循环起始节点");
+                return;
+            }
+            if (startId.equals(operationId)) {
+                edtStart.setError("起始节点不能是循环节点自身");
+                return;
+            }
+            if (!infinite) {
+                try {
+                    count = Integer.parseInt(safeText(edtCount));
+                    if (count < 1 || count > 100000) {
+                        throw new NumberFormatException();
+                    }
+                } catch (Exception ignored) {
+                    edtCount.setError("请输入 1 到 100000 的次数");
+                    return;
+                }
+            }
+            if (!editing && idGenerator == null) {
+                host.showToast("节点 ID 生成器不可用");
+                return;
+            }
+            try {
+                JSONObject operation = new JSONObject();
+                operation.put("id", editing ? operationId : idGenerator.generateId());
+                operation.put("name", name);
+                operation.put("type", 32);
+                operation.put("responseType", 1);
+                JSONObject input = new JSONObject();
+                input.put(MetaOperation.REPEAT_START_OPERATION_ID, startId);
+                input.put(MetaOperation.REPEAT_INFINITE, infinite);
+                input.put(MetaOperation.REPEAT_COUNT, count);
+                operation.put("inputMap", input);
+
+                if (editing) {
+                    if (operationUpdater != null && operationUpdater.saveOperationJson(operationId, operation.toString(2))) {
+                        dialogHelpers.safeRemoveView(dialogView);
+                        if (updateListener != null) updateListener.onOperationUpdated();
+                    }
+                    return;
+                }
+                JSONArray operations = crudHelper.readOperationsArray();
+                operations.put(operation);
+                crudHelper.writeOperationsArray(operations, "已添加循环执行节点", () -> {
+                    dialogHelpers.safeRemoveView(dialogView);
+                    if (addListener != null) addListener.onOperationAdded();
+                });
+            } catch (Exception e) {
+                host.showToast("保存循环执行节点失败: " + e.getMessage());
+            }
+        });
+    }
+
     // ==================== MTry Operation ====================
 
     public void showAddMtryDialog() {

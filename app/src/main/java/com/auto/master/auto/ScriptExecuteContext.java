@@ -14,6 +14,8 @@ public class ScriptExecuteContext {
 
     public volatile int repeatedTimes = 0;
 
+    private volatile RepeatExecutionState repeatExecutionState;
+
     /**
      * 这个currentoperation放在了 operationContext里面 所以这里不需要了 注释掉即可
      */
@@ -65,6 +67,73 @@ public class ScriptExecuteContext {
         running = false;
         synchronized (pauseLock) {
             pauseLock.notifyAll();
+        }
+    }
+
+    public void beginRepeatExecution(MetaOperation startOperation,
+                                     String controllerOperationId,
+                                     boolean infinite,
+                                     int totalRounds) {
+        repeatExecutionState = new RepeatExecutionState(
+                startOperation,
+                controllerOperationId,
+                infinite,
+                Math.max(1, totalRounds));
+    }
+
+    /**
+     * Called only when the current Task has naturally reached its terminal node.
+     * Returns the configured start node when another round should begin.
+     */
+    public MetaOperation advanceRepeatExecutionAtTaskEnd() {
+        RepeatExecutionState state = repeatExecutionState;
+        if (state == null || state.startOperation == null) {
+            return null;
+        }
+        state.completedRounds++;
+        if (!state.infinite && state.completedRounds >= state.totalRounds) {
+            repeatExecutionState = null;
+            return null;
+        }
+        return state.startOperation;
+    }
+
+    public int getRepeatCompletedRounds() {
+        RepeatExecutionState state = repeatExecutionState;
+        return state == null ? 0 : state.completedRounds;
+    }
+
+    public int getRepeatTotalRounds() {
+        RepeatExecutionState state = repeatExecutionState;
+        return state == null ? 0 : state.totalRounds;
+    }
+
+    public boolean isRepeatExecutionInfinite() {
+        RepeatExecutionState state = repeatExecutionState;
+        return state != null && state.infinite;
+    }
+
+    public boolean isRepeatExecutionActiveFor(String controllerOperationId) {
+        RepeatExecutionState state = repeatExecutionState;
+        return state != null && controllerOperationId != null
+                && controllerOperationId.equals(state.controllerOperationId);
+    }
+
+    private static final class RepeatExecutionState {
+        final MetaOperation startOperation;
+        final String controllerOperationId;
+        final boolean infinite;
+        final int totalRounds;
+        int completedRounds;
+
+        RepeatExecutionState(MetaOperation startOperation,
+                             String controllerOperationId,
+                             boolean infinite,
+                             int totalRounds) {
+            this.startOperation = startOperation;
+            this.controllerOperationId = controllerOperationId;
+            this.infinite = infinite;
+            this.totalRounds = totalRounds;
         }
     }
 }

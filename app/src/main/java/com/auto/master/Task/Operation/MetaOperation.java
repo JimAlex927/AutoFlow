@@ -143,6 +143,11 @@ public abstract class MetaOperation {
     public static String LOOP_BODY_NEXT = "LOOP_BODY_NEXT";
     public static String LOOP_EXIT_NEXT = "LOOP_EXIT_NEXT";
 
+    // REPEAT_EXECUTION 参数
+    public static String REPEAT_START_OPERATION_ID = "REPEAT_START_OPERATION_ID";
+    public static String REPEAT_INFINITE = "REPEAT_INFINITE";
+    public static String REPEAT_COUNT = "REPEAT_COUNT";
+
     // MTry 包装节点参数
     public static String MTRY_WRAPPED_OPERATION_ID = "MTRY_WRAPPED_OPERATION_ID";
     public static String MTRY_ATTEMPTS = "MTRY_ATTEMPTS";

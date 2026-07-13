@@ -11,6 +11,8 @@ import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
 import android.content.ClipData;
+import android.content.ContentResolver;
+import android.content.ContentValues;
 import android.content.res.Configuration;
 import android.content.Context;
 import android.content.Intent;
@@ -32,6 +34,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.Settings;
+import android.provider.MediaStore;
 import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
@@ -62,6 +65,7 @@ import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.text.SimpleDateFormat;
@@ -1552,28 +1556,318 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void captureToolScreenshot() {
-        Toast.makeText(this, "正在截图...", Toast.LENGTH_SHORT).show();
-        runAfterScreenCaptureReady("工具截图", () -> panelDataExecutor.execute(() -> {
-            Bitmap bitmap = captureFreshScreenBitmap();
-            if (bitmap == null || bitmap.isRecycled()) {
-                postToUi(() -> Toast.makeText(this, "截图失败", Toast.LENGTH_SHORT).show());
-                return;
+        AutoAccessibilityService svc = AutoAccessibilityService.get();
+        if (svc == null) {
+            Toast.makeText(this, "请先开启无障碍服务", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Toast.makeText(this, "正在准备截图...", Toast.LENGTH_SHORT).show();
+        setBallVisible(false);
+        Runnable restorePanels = hideViewsForCapture(
+                projectPanelView, runtimeLogPanelView, scriptSessionPanelView);
+        Runnable restoreAll = () -> {
+            restorePanels.run();
+            setBallVisible(true);
+        };
+        runAfterScreenCaptureReady("工具截图", () -> postToUiDelayed(() -> {
+            try {
+                Bitmap fullBitmap = captureFreshScreenBitmap();
+                if (fullBitmap == null || fullBitmap.isRecycled()) {
+                    restoreAll.run();
+                    Toast.makeText(this, "截图失败", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                showToolScreenshotEditor(svc, fullBitmap, restoreAll);
+            } catch (Exception e) {
+                restoreAll.run();
+                Log.w(TAG, "工具截图启动失败", e);
+                Toast.makeText(this, "截图启动失败", Toast.LENGTH_SHORT).show();
             }
-            String fileName = "tool_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
-                    .format(new Date()) + ".png";
-            File out = com.auto.master.capture.FileUtil.makeCaptureFile(this, fileName);
-            try (FileOutputStream fos = new FileOutputStream(out)) {
-                bitmap.compress(Bitmap.CompressFormat.PNG, 100, fos);
-                postToUi(() -> Toast.makeText(this,
-                        "截图已保存: " + out.getName(),
+        }, CAPTURE_OVERLAY_LAUNCH_DELAY_MS), restoreAll);
+    }
+
+    private void showToolScreenshotEditor(AutoAccessibilityService svc,
+                                          Bitmap fullBitmap,
+                                          Runnable restoreViews) {
+        WindowManager overlayWm = (WindowManager) svc.getSystemService(Context.WINDOW_SERVICE);
+        if (overlayWm == null) {
+            recycleBitmap(fullBitmap);
+            restoreViews.run();
+            Toast.makeText(this, "截图编辑器不可用", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        WindowManager.LayoutParams lp = new WindowManager.LayoutParams(
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.MATCH_PARENT,
+                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS
+                        | WindowManager.LayoutParams.FLAG_LAYOUT_INSET_DECOR,
+                PixelFormat.TRANSLUCENT);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            lp.layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
+        }
+        SelectionOverlayView overlay = new SelectionOverlayView(svc);
+        overlay.setFrozenBackground(fullBitmap, true);
+        overlay.setListener(new SelectionOverlayView.Listener() {
+            @Override
+            public void onConfirm(Rect rectInOverlay, Bitmap ignored) {
+                Bitmap cropped = cropToolScreenshot(
+                        fullBitmap, rectInOverlay, overlay.getWidth(), overlay.getHeight());
+                safeRemoveView(overlayWm, overlay);
+                recycleBitmap(fullBitmap);
+                restoreViews.run();
+                if (cropped == null || cropped.isRecycled()) {
+                    Toast.makeText(FloatWindowService.this, "选区无效，未保存", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                showToolScreenshotSaveChoice(cropped, rectInOverlay);
+            }
+
+            @Override
+            public void onCancel() {
+                safeRemoveView(overlayWm, overlay);
+                recycleBitmap(fullBitmap);
+                restoreViews.run();
+            }
+        });
+        try {
+            overlayWm.addView(overlay, lp);
+            Toast.makeText(this, "请框选截图区域，确认后保存", Toast.LENGTH_SHORT).show();
+        } catch (Throwable t) {
+            recycleBitmap(fullBitmap);
+            restoreViews.run();
+            Toast.makeText(this, "截图编辑器打开失败", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    @Nullable
+    private Bitmap cropToolScreenshot(Bitmap source, Rect overlayRect, int overlayWidth, int overlayHeight) {
+        if (source == null || source.isRecycled() || overlayRect == null
+                || overlayWidth <= 0 || overlayHeight <= 0) {
+            return null;
+        }
+        Rect normalized = new Rect(overlayRect);
+        normalized.sort();
+        if (normalized.width() <= 1 || normalized.height() <= 1) {
+            return null;
+        }
+        float scaleX = source.getWidth() / (float) overlayWidth;
+        float scaleY = source.getHeight() / (float) overlayHeight;
+        int left = Math.max(0, Math.min(source.getWidth() - 1, Math.round(normalized.left * scaleX)));
+        int top = Math.max(0, Math.min(source.getHeight() - 1, Math.round(normalized.top * scaleY)));
+        int right = Math.max(left + 1, Math.min(source.getWidth(), Math.round(normalized.right * scaleX)));
+        int bottom = Math.max(top + 1, Math.min(source.getHeight(), Math.round(normalized.bottom * scaleY)));
+        try {
+            return Bitmap.createBitmap(source, left, top, right - left, bottom - top);
+        } catch (Exception e) {
+            Log.w(TAG, "工具截图裁剪失败", e);
+            return null;
+        }
+    }
+
+    private void showToolScreenshotSaveChoice(Bitmap bitmap, Rect screenRect) {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(16), dp(14), dp(16), dp(14));
+        root.setBackground(makeToolSaveBackground(0xF6FFFFFF, dp(12), 0xFFE2E8F0));
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+            root.setElevation(dp(10));
+        }
+
+        TextView title = new TextView(this);
+        title.setText("保存截图");
+        title.setTextColor(0xFF0F172A);
+        title.setTextSize(18);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        root.addView(title, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT));
+
+        TextView hint = new TextView(this);
+        hint.setText("选择保存到系统相册，或保存为当前 Task 的模板。");
+        hint.setTextColor(0xFF64748B);
+        hint.setTextSize(12);
+        LinearLayout.LayoutParams hintParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        hintParams.setMargins(0, dp(5), 0, dp(10));
+        root.addView(hint, hintParams);
+
+        EditText nameInput = new EditText(this);
+        nameInput.setSingleLine(true);
+        nameInput.setText(defaultToolScreenshotName());
+        nameInput.setSelectAllOnFocus(true);
+        nameInput.setHint("文件名");
+        root.addView(nameInput, new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, dp(44)));
+
+        LinearLayout actions = new LinearLayout(this);
+        actions.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams actionParams = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        actionParams.setMargins(0, dp(14), 0, 0);
+        root.addView(actions, actionParams);
+
+        TextView albumButton = buildToolSaveButton("相册", 0xFF2563EB, 0xFFFFFFFF);
+        TextView templateButton = buildToolSaveButton("模板库", 0xFF0F766E, 0xFFFFFFFF);
+        TextView cancelButton = buildToolSaveButton("取消", 0xFFE2E8F0, 0xFF334155);
+        LinearLayout.LayoutParams first = new LinearLayout.LayoutParams(0, dp(40), 1f);
+        first.setMargins(0, 0, dp(8), 0);
+        LinearLayout.LayoutParams second = new LinearLayout.LayoutParams(0, dp(40), 1f);
+        second.setMargins(0, 0, dp(8), 0);
+        actions.addView(albumButton, first);
+        actions.addView(templateButton, second);
+        actions.addView(cancelButton, new LinearLayout.LayoutParams(0, dp(40), 1f));
+
+        final boolean[] completed = {false};
+        Runnable close = () -> {
+            completed[0] = true;
+            safeRemoveView(root);
+        };
+        albumButton.setOnClickListener(v -> {
+            if (completed[0]) return;
+            close.run();
+            saveToolScreenshotToAlbum(bitmap, normalizeToolScreenshotFileName(nameInput.getText()));
+        });
+        templateButton.setOnClickListener(v -> {
+            if (completed[0]) return;
+            close.run();
+            saveToolScreenshotToTemplateLibrary(
+                    bitmap, normalizeToolScreenshotFileName(nameInput.getText()), screenRect);
+        });
+        cancelButton.setOnClickListener(v -> {
+            if (completed[0]) return;
+            completed[0] = true;
+            safeRemoveView(root);
+            recycleBitmap(bitmap);
+        });
+
+        WindowManager.LayoutParams lp = buildDialogLayoutParams(320, true);
+        dialogHelpers.applyAdaptiveDialogViewport(lp, 340, 0.52f, 0.68f);
+        try {
+            wm.addView(root, lp);
+        } catch (Exception e) {
+            recycleBitmap(bitmap);
+            Toast.makeText(this, "保存选择面板打开失败", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private TextView buildToolSaveButton(String text, int backgroundColor, int textColor) {
+        TextView button = new TextView(this);
+        button.setText(text);
+        button.setTextColor(textColor);
+        button.setTextSize(14);
+        button.setGravity(Gravity.CENTER);
+        button.setTypeface(null, android.graphics.Typeface.BOLD);
+        button.setBackground(makeToolSaveBackground(backgroundColor, dp(9), 0));
+        button.setClickable(true);
+        return button;
+    }
+
+    private GradientDrawable makeToolSaveBackground(int color, int radius, int strokeColor) {
+        GradientDrawable drawable = new GradientDrawable();
+        drawable.setColor(color);
+        drawable.setCornerRadius(radius);
+        if (strokeColor != 0) {
+            drawable.setStroke(dp(1), strokeColor);
+        }
+        return drawable;
+    }
+
+    private String defaultToolScreenshotName() {
+        return "tool_" + new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US)
+                .format(new Date()) + ".png";
+    }
+
+    private String normalizeToolScreenshotFileName(Editable editable) {
+        String name = editable == null ? "" : editable.toString().trim();
+        if (TextUtils.isEmpty(name)) {
+            return defaultToolScreenshotName();
+        }
+        int extensionStart = name.lastIndexOf('.');
+        if (extensionStart > 0) {
+            name = name.substring(0, extensionStart);
+        }
+        return name + ".png";
+    }
+
+    private void saveToolScreenshotToAlbum(Bitmap bitmap, String fileName) {
+        panelDataExecutor.execute(() -> {
+            Uri uri = null;
+            try {
+                ContentResolver resolver = getContentResolver();
+                ContentValues values = new ContentValues();
+                values.put(MediaStore.Images.Media.DISPLAY_NAME, fileName);
+                values.put(MediaStore.Images.Media.MIME_TYPE, "image/png");
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    values.put(MediaStore.Images.Media.RELATIVE_PATH, "Pictures/AutoMaster");
+                    values.put(MediaStore.Images.Media.IS_PENDING, 1);
+                }
+                uri = resolver.insert(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, values);
+                if (uri == null) {
+                    throw new IOException("无法创建相册文件");
+                }
+                try (OutputStream output = resolver.openOutputStream(uri)) {
+                    if (output == null || !bitmap.compress(Bitmap.CompressFormat.PNG, 100, output)) {
+                        throw new IOException("写入图片失败");
+                    }
+                }
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    ContentValues completed = new ContentValues();
+                    completed.put(MediaStore.Images.Media.IS_PENDING, 0);
+                    resolver.update(uri, completed, null, null);
+                }
+                postToUi(() -> Toast.makeText(this, "已保存到相册: " + fileName,
                         Toast.LENGTH_SHORT).show());
             } catch (Exception e) {
-                Log.w(TAG, "工具截图保存失败", e);
-                postToUi(() -> Toast.makeText(this,
-                        "截图保存失败: " + e.getMessage(),
+                Log.w(TAG, "工具截图保存到相册失败", e);
+                if (uri != null) {
+                    try {
+                        getContentResolver().delete(uri, null, null);
+                    } catch (Exception ignored) {
+                    }
+                }
+                postToUi(() -> Toast.makeText(this, "保存到相册失败: " + e.getMessage(),
                         Toast.LENGTH_SHORT).show());
+            } finally {
+                recycleBitmap(bitmap);
             }
-        }), null);
+        });
+    }
+
+    private void saveToolScreenshotToTemplateLibrary(Bitmap bitmap, String fileName, Rect screenRect) {
+        panelDataExecutor.execute(() -> {
+            try {
+                if (currentTaskDir == null || !currentTaskDir.isDirectory()) {
+                    throw new IOException("请先在项目面板中进入目标 Task");
+                }
+                File imgDir = new File(currentTaskDir, "img");
+                File scaleDir = CaptureScaleHelper.getOrCreateScaleImgDir(
+                        imgDir, ScreenCaptureManager.CAPTURE_SCALE);
+                if (scaleDir == null || (!scaleDir.exists() && !scaleDir.mkdirs())) {
+                    throw new IOException("无法创建模板目录");
+                }
+                File output = new File(scaleDir, fileName);
+                BitmapManager.getInstance().removeBitmap(output.getAbsolutePath());
+                Template.clearTaskSingleMatCache(
+                        currentProjectDir == null ? "" : currentProjectDir.getName(),
+                        currentTaskDir.getName(), fileName);
+                try (FileOutputStream stream = new FileOutputStream(output, false)) {
+                    if (!bitmap.compress(Bitmap.CompressFormat.PNG, 100, stream)) {
+                        throw new IOException("写入图片失败");
+                    }
+                }
+                postToUi(() -> Toast.makeText(this, "已保存到模板库: " + fileName,
+                        Toast.LENGTH_SHORT).show());
+            } catch (Exception e) {
+                Log.w(TAG, "工具截图保存到模板库失败", e);
+                postToUi(() -> Toast.makeText(this, "保存到模板库失败: " + e.getMessage(),
+                        Toast.LENGTH_SHORT).show());
+            } finally {
+                recycleBitmap(bitmap);
+            }
+        });
     }
 
     private void performBackAction() {
@@ -2048,6 +2342,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
             if (type == 31) {
                 dialogFactory.showEditSetBrightnessDialog(selected.id, operationObject);
+                return;
+            }
+            if (type == 32) {
+                dialogFactory.showEditRepeatExecutionDialog(selected.id, operationObject);
                 return;
             }
         } catch (Exception e) {
@@ -2920,6 +3218,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 Arrays.asList(
                         new AddOperationMenuAdapter.MenuItem("jump_task", "跳转任务", "切换到目标任务或节点", "跳", R.color.op_jump_task, true),
                         new AddOperationMenuAdapter.MenuItem("mtry", "多次尝试节点", "包裹节点并重试，接管成功/失败流向", "试", R.color.op_mtry, true),
+                        new AddOperationMenuAdapter.MenuItem("repeat_execution", "循环执行", "从指定节点连续执行到 Task 结束后重复", "循", R.color.op_repeat_execution, true),
                         new AddOperationMenuAdapter.MenuItem("switch_branch", "分支判断", "根据条件选择不同路径", "支", R.color.op_condition, true),
                         new AddOperationMenuAdapter.MenuItem("loop", "二分之", "二分之判断", "二", R.color.op_condition, true)
                 )));
@@ -3018,6 +3317,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             case "mtry":
                 dialogFactory.showAddMtryDialog();
+                return;
+            case "repeat_execution":
+                dialogFactory.showAddRepeatExecutionDialog();
                 return;
             case "switch_branch":
                 dialogFactory.showAddSwitchBranchDialog();

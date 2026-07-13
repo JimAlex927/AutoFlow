@@ -252,13 +252,21 @@ public class MainActivity extends AppCompatActivity {
             void onMore(EntryItem item, View anchor);
         }
 
+        interface OnShareClickListener {
+            void onShare(EntryItem item, View anchor);
+        }
+
         private final List<EntryItem> items = new ArrayList<>();
         private final OnItemClickListener clickListener;
         private final OnMoreClickListener moreClickListener;
+        private final OnShareClickListener shareClickListener;
 
-        EntryAdapter(OnItemClickListener clickListener, OnMoreClickListener moreClickListener) {
+        EntryAdapter(OnItemClickListener clickListener,
+                     OnMoreClickListener moreClickListener,
+                     OnShareClickListener shareClickListener) {
             this.clickListener = clickListener;
             this.moreClickListener = moreClickListener;
+            this.shareClickListener = shareClickListener;
             setHasStableIds(true);
         }
 
@@ -315,6 +323,11 @@ public class MainActivity extends AppCompatActivity {
             holder.more.setVisibility(item.showMore ? View.VISIBLE : View.GONE);
             holder.itemView.setOnClickListener(v -> clickListener.onClick(item));
             holder.more.setOnClickListener(v -> moreClickListener.onMore(item, v));
+            if (holder.share != null) {
+                boolean showShare = item.payload instanceof HomeProjectRepository.ProjectSummary;
+                holder.share.setVisibility(showShare ? View.VISIBLE : View.GONE);
+                holder.share.setOnClickListener(v -> shareClickListener.onShare(item, v));
+            }
         }
 
         @Override
@@ -342,6 +355,7 @@ public class MainActivity extends AppCompatActivity {
             final TextView subtitle;
             final TextView badge;
             final ImageView more;
+            final ImageView share;
 
             ViewHolder(@NonNull View itemView) {
                 super(itemView);
@@ -350,6 +364,7 @@ public class MainActivity extends AppCompatActivity {
                 subtitle = itemView.findViewById(R.id.tv_subtitle);
                 badge = itemView.findViewById(R.id.tv_badge);
                 more = itemView.findViewById(R.id.iv_more);
+                share = itemView.findViewById(R.id.iv_share);
             }
         }
     }
@@ -494,7 +509,10 @@ public class MainActivity extends AppCompatActivity {
     private void setupPanelList() {
         projectGridLayoutManager = new GridLayoutManager(this, resolveProjectSpanCount());
         panelLinearLayoutManager = new LinearLayoutManager(this);
-        entryAdapter = new EntryAdapter(this::handleEntryClick, this::handleEntryMore);
+        entryAdapter = new EntryAdapter(
+                this::handleEntryClick,
+                this::handleEntryMore,
+                (item, anchor) -> Toast.makeText(this, "项目分享功能即将推出", Toast.LENGTH_SHORT).show());
         rvProjects.setLayoutManager(projectGridLayoutManager);
         rvProjects.setAdapter(entryAdapter);
         RecyclerViewOptimizer.optimize(rvProjects, false);

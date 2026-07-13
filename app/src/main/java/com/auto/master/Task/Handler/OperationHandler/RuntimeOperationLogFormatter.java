@@ -112,6 +112,11 @@ public final class RuntimeOperationLogFormatter {
                 return "循环判断: " + status
                         + appendIfPresent(" var=", inputText(input, MetaOperation.LOOP_CONDITION_VAR))
                         + appendIfPresent(" value=", valueText(response, MetaOperation.RESULT));
+            case 32:
+                return "循环执行: 从 " + inputText(input, MetaOperation.REPEAT_START_OPERATION_ID)
+                        + (bool(input, MetaOperation.REPEAT_INFINITE, false)
+                        ? " 开始无限循环"
+                        : " 开始，共 " + inputText(input, MetaOperation.REPEAT_COUNT) + " 轮");
             case 17:
                 return "返回键: 已触发";
             case 18:

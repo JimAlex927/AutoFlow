@@ -7,17 +7,16 @@
     android:clipToPadding="false"
     android:padding="0dp">
 
-    <TextView
+    <ImageView
         android:id="@+id/ball_dock_handle_left"
-        android:layout_width="18dp"
+        android:layout_width="24dp"
         android:layout_height="42dp"
         android:layout_gravity="center"
         android:background="@drawable/floating_ball_dock_handle_left"
+        android:contentDescription="展开悬浮球"
         android:gravity="center"
-        android:text="运"
-        android:textColor="#EAF4FF"
-        android:textSize="12sp"
-        android:textStyle="bold"
+        android:padding="5dp"
+        android:src="@drawable/ic_dock_chevron_right"
         android:visibility="gone" />
 
     <LinearLayout
@@ -68,30 +67,28 @@
             android:visibility="gone" />
     </LinearLayout>
 
-    <TextView
+    <ImageView
         android:id="@+id/ball_dock_handle_right"
-        android:layout_width="18dp"
+        android:layout_width="24dp"
         android:layout_height="42dp"
         android:layout_gravity="center"
         android:background="@drawable/floating_ball_dock_handle_right"
+        android:contentDescription="展开悬浮球"
         android:gravity="center"
-        android:text="运"
-        android:textColor="#EAF4FF"
-        android:textSize="12sp"
-        android:textStyle="bold"
+        android:padding="5dp"
+        android:src="@drawable/ic_dock_chevron_left"
         android:visibility="gone" />
 
-    <TextView
+    <ImageView
         android:id="@+id/ball_dock_handle_bottom"
         android:layout_width="42dp"
-        android:layout_height="18dp"
+        android:layout_height="24dp"
         android:layout_gravity="center"
         android:background="@drawable/floating_ball_dock_handle_bottom"
+        android:contentDescription="展开悬浮球"
         android:gravity="center"
-        android:text="运"
-        android:textColor="#EAF4FF"
-        android:textSize="11sp"
-        android:textStyle="bold"
+        android:padding="5dp"
+        android:src="@drawable/ic_dock_chevron_up"
         android:visibility="gone" />
 
 </FrameLayout>

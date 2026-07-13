@@ -34,7 +34,8 @@ public enum OperationType {
     PLAY_AUDIO(28, "播放音频", "play_audio"),
     SET_SYSTEM_PARAM(29, "修改系统参数", "set_sys_param"),
     LOG_OUTPUT(30, "日志输出", "log_output"),
-    SET_SCREEN_BRIGHTNESS(31, "修改屏幕亮度", "set_brightness");
+    SET_SCREEN_BRIGHTNESS(31, "修改屏幕亮度", "set_brightness"),
+    REPEAT_EXECUTION(32, "循环执行", "repeat_execution");
 
     private final int code;
     private final String displayName;

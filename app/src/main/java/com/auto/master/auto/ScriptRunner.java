@@ -700,6 +700,18 @@ public final class ScriptRunner {
                                         }
                                     }
 
+                                    MetaOperation repeatStart = scriptExecuteContext.advanceRepeatExecutionAtTaskEnd();
+                                    if (repeatStart != null) {
+                                        int completedRounds = scriptExecuteContext.getRepeatCompletedRounds();
+                                        String totalRounds = scriptExecuteContext.isRepeatExecutionInfinite()
+                                                ? "infinite"
+                                                : String.valueOf(scriptExecuteContext.getRepeatTotalRounds());
+                                        Log.i(TAG, "循环执行完成第 " + completedRounds + " 轮，重新开始: "
+                                                + repeatStart.getId() + " (total=" + totalRounds + ")");
+                                        scriptExecuteContext.tobeHandledOperation = repeatStart;
+                                        continue;
+                                    }
+
                                     scriptExecuteContext.running = false;
                                     break;
                                 }
