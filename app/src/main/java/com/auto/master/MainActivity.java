@@ -516,6 +516,10 @@ public class MainActivity extends AppCompatActivity {
         rvProjects.setLayoutManager(projectGridLayoutManager);
         rvProjects.setAdapter(entryAdapter);
         RecyclerViewOptimizer.optimize(rvProjects, false);
+        // SwipeRefreshLayout wraps a FrameLayout, so it cannot infer the nested
+        // RecyclerView scroll position by itself. Only allow refresh at list top.
+        swipeRefreshLayout.setOnChildScrollUpCallback((parent, child) ->
+                rvProjects != null && rvProjects.canScrollVertically(-1));
         swipeRefreshLayout.setOnRefreshListener(this::reloadCurrentLevel);
     }
 
