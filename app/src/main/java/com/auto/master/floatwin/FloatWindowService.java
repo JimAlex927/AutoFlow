@@ -167,8 +167,12 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private static final String ACTION_STOP_SELF = "com.auto.master.floatwin.action.STOP_SELF";
     private static final String ACTION_REFRESH_PROJECTS = "com.auto.master.floatwin.action.REFRESH_PROJECTS";
     public static final String ACTION_OPEN_TASK_PANEL = "com.auto.master.floatwin.action.OPEN_TASK_PANEL";
+    public static final String ACTION_OPEN_TASK_LIBRARY = "com.auto.master.floatwin.action.OPEN_TASK_LIBRARY";
     public static final String EXTRA_PROJECT_PATH = "project_path";
     public static final String EXTRA_TASK_PATH = "task_path";
+    public static final String EXTRA_TASK_LIBRARY_KIND = "task_library_kind";
+    public static final String TASK_LIBRARY_TEMPLATE = "template";
+    public static final String TASK_LIBRARY_GESTURE = "gesture";
     private static final long TASK_REMOVED_RESTART_DELAY_MS = 600L;
     private static final String CONFIG_UI_DRAG_LABEL = "config_ui_component";
     private WindowManager wm;
@@ -1359,6 +1363,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (intent != null && ACTION_OPEN_TASK_PANEL.equals(intent.getAction())) {
             handleOpenTaskPanelIntent(intent);
         }
+        if (intent != null && ACTION_OPEN_TASK_LIBRARY.equals(intent.getAction())) {
+            handleOpenTaskLibraryIntent(intent);
+        }
         return START_STICKY;
     }
 
@@ -1832,6 +1839,35 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         Toast.LENGTH_SHORT).show());
             } finally {
                 recycleBitmap(bitmap);
+            }
+        });
+    }
+
+    private void handleOpenTaskLibraryIntent(@NonNull Intent intent) {
+        String taskPath = intent.getStringExtra(EXTRA_TASK_PATH);
+        if (TextUtils.isEmpty(taskPath)) {
+            return;
+        }
+        File taskDir = new File(taskPath);
+        File projectDir = taskDir.getParentFile();
+        String explicitProjectPath = intent.getStringExtra(EXTRA_PROJECT_PATH);
+        if (!TextUtils.isEmpty(explicitProjectPath)) {
+            projectDir = new File(explicitProjectPath);
+        }
+        if (projectDir == null || !projectDir.isDirectory() || !taskDir.isDirectory()) {
+            Toast.makeText(this, "Task 路径无效，无法打开资源库", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        final File targetProjectDir = projectDir;
+        final File targetTaskDir = taskDir;
+        final String libraryKind = intent.getStringExtra(EXTRA_TASK_LIBRARY_KIND);
+        uiHandler.post(() -> {
+            currentProjectDir = targetProjectDir;
+            currentTaskDir = targetTaskDir;
+            if (TASK_LIBRARY_GESTURE.equals(libraryKind)) {
+                showTaskGestureLibraryManagerDialog(targetTaskDir);
+            } else {
+                showTaskTemplateLibraryManagerDialog(targetTaskDir);
             }
         });
     }

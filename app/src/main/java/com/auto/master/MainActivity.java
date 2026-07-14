@@ -955,18 +955,28 @@ public class MainActivity extends AppCompatActivity {
         }
         List<ActionSheetItem> items = new ArrayList<>();
         items.add(new ActionSheetItem(1, "悬浮窗", "打开节点页", true));
-        items.add(new ActionSheetItem(2, "重命名", "修改名称", true));
-        items.add(new ActionSheetItem(3, "删除", "移除 Task", true));
-        showActionSheet("任务操作", taskDir.getName(), "管理当前 Task", items, item -> {
+        items.add(new ActionSheetItem(2, "模板库", "管理模板图片", true));
+        items.add(new ActionSheetItem(3, "手势库", "查看录制手势", true));
+        items.add(new ActionSheetItem(4, "重命名", "修改名称", true));
+        items.add(new ActionSheetItem(5, "删除", "移除 Task", true));
+        showActionSheet("任务操作", taskDir.getName(), "管理当前 Task 的节点和资源", items, item -> {
             if (item.id == 1) {
                 openTaskInFloatPanel(taskDir, true);
                 return;
             }
             if (item.id == 2) {
-                showRenameTaskDialog(taskDir);
+                openTaskLibrary(taskDir, FloatWindowService.TASK_LIBRARY_TEMPLATE);
                 return;
             }
             if (item.id == 3) {
+                openTaskLibrary(taskDir, FloatWindowService.TASK_LIBRARY_GESTURE);
+                return;
+            }
+            if (item.id == 4) {
+                showRenameTaskDialog(taskDir);
+                return;
+            }
+            if (item.id == 5) {
                 showDeleteTaskDialog(taskDir);
             }
         });
@@ -1156,6 +1166,8 @@ public class MainActivity extends AppCompatActivity {
         Window window = actionSheetDialog.getWindow();
         if (window != null) {
             window.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+            window.clearFlags(android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            window.setDimAmount(0f);
             window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
             window.setGravity(Gravity.CENTER);
         }
@@ -1177,6 +1189,12 @@ public class MainActivity extends AppCompatActivity {
         }
         if (title.contains("悬浮")) {
             return R.drawable.ic_action_float;
+        }
+        if (title.contains("模板")) {
+            return R.drawable.ic_action_template;
+        }
+        if (title.contains("手势")) {
+            return R.drawable.ic_action_gesture;
         }
         if (title.contains("新建")) {
             return R.drawable.ic_action_add;
@@ -1205,6 +1223,27 @@ public class MainActivity extends AppCompatActivity {
             intent.putExtra(FloatWindowService.EXTRA_PROJECT_PATH, currentProjectDir.getAbsolutePath());
         }
         intent.putExtra(FloatWindowService.EXTRA_TASK_PATH, taskDir.getAbsolutePath());
+        startService(intent);
+        floatEnabled = true;
+        refreshPermissionStatus();
+    }
+
+    private void openTaskLibrary(File taskDir, String libraryKind) {
+        if (taskDir == null || !taskDir.isDirectory()) {
+            Toast.makeText(this, "Task 不存在，无法打开资源库", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!canDrawOverlays()) {
+            requestOverlayPermission();
+            return;
+        }
+        Intent intent = new Intent(this, FloatWindowService.class);
+        intent.setAction(FloatWindowService.ACTION_OPEN_TASK_LIBRARY);
+        if (currentProjectDir != null) {
+            intent.putExtra(FloatWindowService.EXTRA_PROJECT_PATH, currentProjectDir.getAbsolutePath());
+        }
+        intent.putExtra(FloatWindowService.EXTRA_TASK_PATH, taskDir.getAbsolutePath());
+        intent.putExtra(FloatWindowService.EXTRA_TASK_LIBRARY_KIND, libraryKind);
         startService(intent);
         floatEnabled = true;
         refreshPermissionStatus();
