@@ -4,6 +4,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.graphics.*;
+import android.graphics.drawable.ColorDrawable;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Build;
@@ -13,6 +14,7 @@ import android.view.*;
 import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.LinearLayout;
+import android.widget.PopupWindow;
 import android.os.SystemClock;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
@@ -72,14 +74,13 @@ public class SelectionOverlayView extends FrameLayout {
     // buttons
     private LinearLayout actionBar;
     private LinearLayout actionContentRow;
-    private LinearLayout moreMenuPanel;
+    private PopupWindow moreMenuPopup;
     private Button btnOk;
     private Button btnMore;
     private Button btnReset;
     private Button btnFull;
     private Button btnRefine;
     private Button btnCancel;
-    private boolean moreMenuExpanded = false;
 
     // magnifier (Android 9+)
     private android.widget.Magnifier magnifier;
@@ -161,7 +162,7 @@ public class SelectionOverlayView extends FrameLayout {
         // 预览式工具条
         actionBar = new LinearLayout(context);
         actionBar.setOrientation(LinearLayout.VERTICAL);
-        actionBar.setPadding(dp(4), dp(4), dp(4), dp(4));
+        actionBar.setPadding(dp(3), dp(3), dp(3), dp(3));
         actionBar.setBackground(makeToolbarBackground());
         actionBar.setVisibility(GONE);
         actionBar.setClickable(true);
@@ -176,7 +177,8 @@ public class SelectionOverlayView extends FrameLayout {
         btnOk = new Button(context);
         btnOk.setText("确认");
         btnMore = new Button(context);
-        btnMore.setText("更多");
+        btnMore.setText("");
+        btnMore.setContentDescription("更多");
         btnReset = new Button(context);
         btnReset.setText("重选");
         btnFull = new Button(context);
@@ -188,41 +190,21 @@ public class SelectionOverlayView extends FrameLayout {
 
         styleCaptureActionButton(btnOk, true, R.drawable.ic_overlay_check);
         styleCaptureActionButton(btnMore, false, R.drawable.ic_more_vert);
-        styleSecondaryMenuButton(btnReset);
-        styleSecondaryMenuButton(btnFull);
-        styleSecondaryMenuButton(btnRefine);
-        styleSecondaryMenuButton(btnCancel);
+        stylePopupMenuButton(btnReset, R.drawable.ic_action_edit);
+        stylePopupMenuButton(btnFull, R.drawable.ic_fullscreen);
+        stylePopupMenuButton(btnRefine, R.drawable.ic_action_template);
+        stylePopupMenuButton(btnCancel, R.drawable.ic_close);
 
-        actionContentRow.addView(btnOk, new LinearLayout.LayoutParams(dp(68), dp(30)));
-        LinearLayout.LayoutParams moreLp = new LinearLayout.LayoutParams(dp(58), dp(30));
-        moreLp.leftMargin = dp(4);
+        actionContentRow.addView(btnOk, new LinearLayout.LayoutParams(dp(56), dp(28)));
+        LinearLayout.LayoutParams moreLp = new LinearLayout.LayoutParams(dp(32), dp(28));
+        moreLp.leftMargin = dp(3);
         actionContentRow.addView(btnMore, moreLp);
-
-        moreMenuPanel = new LinearLayout(context);
-        moreMenuPanel.setOrientation(LinearLayout.VERTICAL);
-        moreMenuPanel.setVisibility(GONE);
-        LinearLayout.LayoutParams menuLp = new LinearLayout.LayoutParams(
-                LayoutParams.MATCH_PARENT,
-                LayoutParams.WRAP_CONTENT
-        );
-        menuLp.topMargin = dp(6);
-        moreMenuPanel.addView(btnReset, new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(32)));
-        LinearLayout.LayoutParams fullLp = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(32));
-        fullLp.topMargin = dp(4);
-        moreMenuPanel.addView(btnFull, fullLp);
-        LinearLayout.LayoutParams refineLp = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(32));
-        refineLp.topMargin = dp(4);
-        moreMenuPanel.addView(btnRefine, refineLp);
-        LinearLayout.LayoutParams cancelLp = new LinearLayout.LayoutParams(LayoutParams.MATCH_PARENT, dp(32));
-        cancelLp.topMargin = dp(4);
-        moreMenuPanel.addView(btnCancel, cancelLp);
         btnRefine.setVisibility(refineEnabled ? VISIBLE : GONE);
 
         actionBar.addView(actionContentRow, new LinearLayout.LayoutParams(
                 LayoutParams.WRAP_CONTENT,
                 LayoutParams.WRAP_CONTENT
         ));
-        actionBar.addView(moreMenuPanel, menuLp);
 
         LayoutParams actionLp = new LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT);
         addView(actionBar, actionLp);
@@ -706,7 +688,7 @@ public class SelectionOverlayView extends FrameLayout {
         }
     }
 
-    private void styleSecondaryMenuButton(Button button) {
+    private void stylePopupMenuButton(Button button, int iconRes) {
         button.setMinHeight(0);
         button.setMinimumHeight(0);
         button.setMinWidth(0);
@@ -715,25 +697,69 @@ public class SelectionOverlayView extends FrameLayout {
         button.setGravity(Gravity.CENTER_VERTICAL);
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12);
         button.setTextColor(0xFFF8FAFC);
-        button.setBackground(makeRoundBg(0xFF223041, dp(9)));
-        button.setPadding(dp(10), 0, dp(10), 0);
+        button.setBackground(makeRoundBg(0x00000000, dp(7)));
+        button.setPadding(dp(11), 0, dp(8), 0);
+        Drawable icon = ContextCompat.getDrawable(getContext(), iconRes);
+        if (icon != null) {
+            icon = icon.mutate();
+            icon.setTint(0xFFDDE7F3);
+            icon.setBounds(0, 0, dp(15), dp(15));
+            button.setCompoundDrawablesRelative(icon, null, null, null);
+            button.setCompoundDrawablePadding(dp(9));
+        }
     }
 
     private void toggleMoreMenu() {
-        moreMenuExpanded = !moreMenuExpanded;
-        moreMenuPanel.setVisibility(moreMenuExpanded ? VISIBLE : GONE);
-        btnMore.setText(moreMenuExpanded ? "收起" : "更多");
-        positionActionBarNearSelection();
+        if (moreMenuPopup != null && moreMenuPopup.isShowing()) {
+            hideMoreMenu();
+            return;
+        }
+
+        LinearLayout menu = new LinearLayout(getContext());
+        menu.setOrientation(LinearLayout.VERTICAL);
+        menu.setPadding(dp(4), dp(5), dp(4), dp(5));
+        menu.setBackground(makeToolbarBackground());
+        int menuWidth = dp(132);
+        addPopupMenuItem(menu, btnReset);
+        addPopupMenuItem(menu, btnFull);
+        if (refineEnabled) addPopupMenuItem(menu, btnRefine);
+        addPopupMenuItem(menu, btnCancel);
+
+        moreMenuPopup = new PopupWindow(menu, menuWidth,
+                LayoutParams.WRAP_CONTENT, false);
+        moreMenuPopup.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
+        moreMenuPopup.setOutsideTouchable(true);
+        moreMenuPopup.setElevation(dp(10));
+        moreMenuPopup.setOnDismissListener(() -> moreMenuPopup = null);
+
+        menu.measure(MeasureSpec.makeMeasureSpec(menuWidth, MeasureSpec.EXACTLY),
+                MeasureSpec.makeMeasureSpec(getHeight(), MeasureSpec.AT_MOST));
+        int menuHeight = menu.getMeasuredHeight();
+        int margin = dp(6);
+        int x = actionBar.getLeft() + btnMore.getLeft() + btnMore.getWidth() - menuWidth;
+        int y = actionBar.getBottom() + margin;
+        if (y + menuHeight > getHeight() - margin) {
+            y = actionBar.getTop() - menuHeight - margin;
+        }
+        x = Math.max(margin, Math.min(x, getWidth() - menuWidth - margin));
+        y = Math.max(margin, Math.min(y, getHeight() - menuHeight - margin));
+        moreMenuPopup.showAtLocation(this, Gravity.TOP | Gravity.START, x, y);
     }
 
     private void hideMoreMenu() {
-        moreMenuExpanded = false;
-        if (moreMenuPanel != null) {
-            moreMenuPanel.setVisibility(GONE);
+        if (moreMenuPopup != null) {
+            moreMenuPopup.dismiss();
+            moreMenuPopup = null;
         }
-        if (btnMore != null) {
-            btnMore.setText("更多");
+    }
+
+    private void addPopupMenuItem(LinearLayout menu, Button button) {
+        if (button.getParent() instanceof ViewGroup) {
+            ((ViewGroup) button.getParent()).removeView(button);
         }
+        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                LayoutParams.MATCH_PARENT, dp(36));
+        menu.addView(button, params);
     }
 
     private void resetSelection() {

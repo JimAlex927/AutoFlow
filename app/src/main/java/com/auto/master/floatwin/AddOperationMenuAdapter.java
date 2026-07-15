@@ -1,18 +1,17 @@
 package com.auto.master.floatwin;
 
 import android.content.Context;
-import android.graphics.drawable.Drawable;
-import android.graphics.drawable.GradientDrawable;
 import android.text.TextUtils;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.GridLayout;
+import android.widget.ImageView;
 import android.widget.TextView;
 
 import androidx.annotation.ColorRes;
 import androidx.annotation.NonNull;
 import androidx.core.content.ContextCompat;
-import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.RecyclerView;
 
 import com.auto.master.R;
@@ -20,7 +19,8 @@ import com.auto.master.R;
 import java.util.ArrayList;
 import java.util.List;
 
-final class AddOperationMenuAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
+/** A scrollable catalogue of operation categories with independently collapsible sections. */
+final class AddOperationMenuAdapter extends RecyclerView.Adapter<AddOperationMenuAdapter.SectionViewHolder> {
 
     interface OnItemSelectedListener {
         void onItemSelected(@NonNull MenuItem item);
@@ -30,7 +30,7 @@ final class AddOperationMenuAdapter extends RecyclerView.Adapter<RecyclerView.Vi
         final String title;
         final String description;
         final List<MenuItem> items;
-        boolean expanded;
+        boolean expanded = true;
 
         MenuSection(@NonNull String title, String description, @NonNull List<MenuItem> items) {
             this.title = title;
@@ -62,44 +62,37 @@ final class AddOperationMenuAdapter extends RecyclerView.Adapter<RecyclerView.Vi
         }
     }
 
-    private static final int VIEW_TYPE_SECTION = 0;
-    private static final int VIEW_TYPE_ITEM = 1;
-
     private final LayoutInflater inflater;
     private final List<MenuSection> sections = new ArrayList<>();
-    private final List<Row> rows = new ArrayList<>();
     private final OnItemSelectedListener itemSelectedListener;
     private String selectedItemId;
 
     AddOperationMenuAdapter(@NonNull Context context,
                             @NonNull List<MenuSection> sections,
                             OnItemSelectedListener itemSelectedListener) {
-        this.inflater = LayoutInflater.from(context);
+        inflater = LayoutInflater.from(context);
+        this.sections.addAll(sections);
         this.itemSelectedListener = itemSelectedListener;
         setHasStableIds(true);
-        this.sections.addAll(sections);
-        rebuildRows();
     }
 
     void setSelectedItem(@NonNull MenuItem item) {
-        String nextId = item.id;
-        if (TextUtils.equals(selectedItemId, nextId)) {
+        if (TextUtils.equals(selectedItemId, item.id)) {
             return;
         }
-        ensureSectionExpanded(item.id);
-        int previousPosition = findItemPosition(selectedItemId);
-        int nextPosition = findItemPosition(nextId);
-        selectedItemId = nextId;
-        if (previousPosition >= 0) {
-            notifyItemChanged(previousPosition);
-        }
-        if (nextPosition >= 0 && previousPosition != nextPosition) {
-            notifyItemChanged(nextPosition);
-        }
+        selectedItemId = item.id;
+        notifyDataSetChanged();
     }
 
     MenuItem getSelectedItem() {
-        return findItemById(selectedItemId);
+        for (MenuSection section : sections) {
+            for (MenuItem item : section.items) {
+                if (TextUtils.equals(item.id, selectedItemId)) {
+                    return item;
+                }
+            }
+        }
+        return null;
     }
 
     MenuItem findFirstEnabledItem() {
@@ -115,294 +108,95 @@ final class AddOperationMenuAdapter extends RecyclerView.Adapter<RecyclerView.Vi
 
     @Override
     public long getItemId(int position) {
-        return rows.get(position).stableId;
-    }
-
-    @Override
-    public int getItemViewType(int position) {
-        return rows.get(position).viewType;
+        return ("section:" + sections.get(position).title).hashCode();
     }
 
     @NonNull
     @Override
-    public RecyclerView.ViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
-        if (viewType == VIEW_TYPE_SECTION) {
-            View view = inflater.inflate(R.layout.item_add_operation_section, parent, false);
-            return new SectionViewHolder(view);
-        }
-        View view = inflater.inflate(R.layout.item_add_operation_option, parent, false);
-        return new ItemViewHolder(view);
+    public SectionViewHolder onCreateViewHolder(@NonNull ViewGroup parent, int viewType) {
+        return new SectionViewHolder(inflater.inflate(R.layout.item_add_operation_section, parent, false));
     }
 
     @Override
-    public void onBindViewHolder(@NonNull RecyclerView.ViewHolder holder, int position) {
-        Row row = rows.get(position);
-        if (holder instanceof SectionViewHolder) {
-            ((SectionViewHolder) holder).bind((SectionRow) row);
-            return;
-        }
-        ((ItemViewHolder) holder).bind((ItemRow) row, position);
+    public void onBindViewHolder(@NonNull SectionViewHolder holder, int position) {
+        holder.bind(sections.get(position));
     }
 
     @Override
     public int getItemCount() {
-        return rows.size();
+        return sections.size();
     }
 
-    void collapseAllExcept(@NonNull String itemId) {
-        for (MenuSection section : sections) {
-            section.expanded = containsItem(section, itemId);
-        }
-        applyRebuiltRows();
-    }
-
-    void toggleSection(@NonNull MenuSection targetSection) {
-        boolean shouldExpand = !targetSection.expanded;
-        boolean changed = false;
-        for (MenuSection section : sections) {
-            boolean nextExpanded = section == targetSection && shouldExpand;
-            if (section.expanded != nextExpanded) {
-                section.expanded = nextExpanded;
-                changed = true;
-            }
-        }
-        if (!changed) {
-            return;
-        }
-        applyRebuiltRows();
-    }
-
-    private void applyRebuiltRows() {
-        List<Row> newRows = buildRowsSnapshot();
-        DiffUtil.DiffResult diffResult = DiffUtil.calculateDiff(new RowDiffCallback(rows, newRows));
-        rows.clear();
-        rows.addAll(newRows);
-        diffResult.dispatchUpdatesTo(this);
-    }
-
-    private void rebuildRows() {
-        rows.clear();
-        rows.addAll(buildRowsSnapshot());
-    }
-
-    private List<Row> buildRowsSnapshot() {
-        List<Row> snapshot = new ArrayList<>();
-        for (MenuSection section : sections) {
-            snapshot.add(new SectionRow(section));
-            if (section.expanded) {
-                for (MenuItem item : section.items) {
-                    snapshot.add(new ItemRow(item));
-                }
-            }
-        }
-        return snapshot;
-    }
-
-    private int findItemPosition(String itemId) {
-        if (TextUtils.isEmpty(itemId)) {
-            return -1;
-        }
-        for (int i = 0; i < rows.size(); i++) {
-            Row row = rows.get(i);
-            if (row instanceof ItemRow) {
-                MenuItem item = ((ItemRow) row).item;
-                if (TextUtils.equals(item.id, itemId)) {
-                    return i;
-                }
-            }
-        }
-        return -1;
-    }
-
-    private void ensureSectionExpanded(@NonNull String itemId) {
-        boolean changed = false;
-        for (MenuSection section : sections) {
-            if (containsItem(section, itemId) && !section.expanded) {
-                section.expanded = true;
-                changed = true;
-            }
-        }
-        if (changed) {
-            rebuildRows();
-        }
-    }
-
-    private boolean containsItem(@NonNull MenuSection section, @NonNull String itemId) {
-        for (MenuItem item : section.items) {
-            if (TextUtils.equals(item.id, itemId)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    private MenuItem findItemById(String itemId) {
-        if (TextUtils.isEmpty(itemId)) {
-            return null;
-        }
-        for (MenuSection section : sections) {
-            for (MenuItem item : section.items) {
-                if (TextUtils.equals(item.id, itemId)) {
-                    return item;
-                }
-            }
-        }
-        return null;
-    }
-
-    private abstract static class Row {
-        final int viewType;
-        final long stableId;
-
-        Row(int viewType, long stableId) {
-            this.viewType = viewType;
-            this.stableId = stableId;
-        }
-    }
-
-    private static final class SectionRow extends Row {
-        final MenuSection section;
-
-        SectionRow(@NonNull MenuSection section) {
-            super(VIEW_TYPE_SECTION, ("section:" + section.title).hashCode());
-            this.section = section;
-        }
-    }
-
-    private static final class ItemRow extends Row {
-        final MenuItem item;
-
-        ItemRow(@NonNull MenuItem item) {
-            super(VIEW_TYPE_ITEM, ("item:" + item.id).hashCode());
-            this.item = item;
-        }
-    }
-
-    private static final class RowDiffCallback extends DiffUtil.Callback {
-        private final List<Row> oldRows;
-        private final List<Row> newRows;
-
-        RowDiffCallback(@NonNull List<Row> oldRows, @NonNull List<Row> newRows) {
-            this.oldRows = oldRows;
-            this.newRows = newRows;
-        }
-
-        @Override
-        public int getOldListSize() {
-            return oldRows.size();
-        }
-
-        @Override
-        public int getNewListSize() {
-            return newRows.size();
-        }
-
-        @Override
-        public boolean areItemsTheSame(int oldItemPosition, int newItemPosition) {
-            return oldRows.get(oldItemPosition).stableId == newRows.get(newItemPosition).stableId;
-        }
-
-        @Override
-        public boolean areContentsTheSame(int oldItemPosition, int newItemPosition) {
-            Row oldRow = oldRows.get(oldItemPosition);
-            Row newRow = newRows.get(newItemPosition);
-            if (oldRow.viewType != newRow.viewType) {
-                return false;
-            }
-            if (oldRow instanceof SectionRow && newRow instanceof SectionRow) {
-                MenuSection oldSection = ((SectionRow) oldRow).section;
-                MenuSection newSection = ((SectionRow) newRow).section;
-                return TextUtils.equals(oldSection.title, newSection.title)
-                        && TextUtils.equals(oldSection.description, newSection.description)
-                        && oldSection.expanded == newSection.expanded;
-            }
-            if (oldRow instanceof ItemRow && newRow instanceof ItemRow) {
-                MenuItem oldItem = ((ItemRow) oldRow).item;
-                MenuItem newItem = ((ItemRow) newRow).item;
-                return TextUtils.equals(oldItem.id, newItem.id)
-                        && TextUtils.equals(oldItem.label, newItem.label)
-                        && TextUtils.equals(oldItem.description, newItem.description)
-                        && TextUtils.equals(oldItem.badgeText, newItem.badgeText)
-                        && oldItem.colorRes == newItem.colorRes
-                        && oldItem.enabled == newItem.enabled;
-            }
-            return false;
-        }
-    }
-
-    private final class SectionViewHolder extends RecyclerView.ViewHolder {
+    final class SectionViewHolder extends RecyclerView.ViewHolder {
         private final TextView titleView;
         private final TextView descView;
         private final TextView toggleView;
+        private final View headerView;
+        private final GridLayout gridView;
 
         SectionViewHolder(@NonNull View itemView) {
             super(itemView);
             titleView = itemView.findViewById(R.id.tv_section_title);
             descView = itemView.findViewById(R.id.tv_section_desc);
             toggleView = itemView.findViewById(R.id.tv_section_toggle);
+            headerView = itemView.findViewById(R.id.section_header);
+            gridView = itemView.findViewById(R.id.grid_section_items);
         }
 
-        void bind(@NonNull SectionRow row) {
-            MenuSection section = row.section;
+        void bind(@NonNull MenuSection section) {
             titleView.setText(section.title);
             if (TextUtils.isEmpty(section.description)) {
                 descView.setVisibility(View.GONE);
             } else {
-                descView.setVisibility(View.VISIBLE);
                 descView.setText(section.description);
+                descView.setVisibility(View.VISIBLE);
             }
-            toggleView.setText(section.expanded ? "收起" : "展开");
-            itemView.setOnClickListener(v -> toggleSection(section));
+            toggleView.setText(section.expanded ? "⌃" : "⌄");
+            gridView.setVisibility(section.expanded ? View.VISIBLE : View.GONE);
+            headerView.setOnClickListener(v -> {
+                section.expanded = !section.expanded;
+                int position = getAdapterPosition();
+                if (position != RecyclerView.NO_POSITION) {
+                    notifyItemChanged(position);
+                }
+            });
+
+            if (!section.expanded) {
+                gridView.removeAllViews();
+                return;
+            }
+            gridView.removeAllViews();
+            for (MenuItem item : section.items) {
+                View optionView = inflater.inflate(R.layout.item_add_operation_option, gridView, false);
+                GridLayout.LayoutParams params = new GridLayout.LayoutParams();
+                params.width = 0;
+                params.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+                params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f);
+                int margin = Math.round(2f * optionView.getResources().getDisplayMetrics().density);
+                params.setMargins(margin, margin, margin, margin);
+                optionView.setLayoutParams(params);
+                bindOption(optionView, item);
+                gridView.addView(optionView);
+            }
         }
-    }
 
-    private final class ItemViewHolder extends RecyclerView.ViewHolder {
-        private final View rootView;
-        private final TextView badgeView;
-        private final TextView labelView;
-        private final TextView descView;
-        private final TextView selectionIndexView;
-
-        ItemViewHolder(@NonNull View itemView) {
-            super(itemView);
-            rootView = itemView.findViewById(R.id.item_root);
-            badgeView = itemView.findViewById(R.id.tv_badge);
-            labelView = itemView.findViewById(R.id.tv_label);
-            descView = itemView.findViewById(R.id.tv_desc);
-            selectionIndexView = itemView.findViewById(R.id.tv_selection_index);
-        }
-
-        void bind(@NonNull ItemRow row, int position) {
-            MenuItem item = row.item;
+        private void bindOption(@NonNull View optionView, @NonNull MenuItem item) {
+            View rootView = optionView.findViewById(R.id.item_root);
+            ImageView iconView = optionView.findViewById(R.id.iv_operation_icon);
+            TextView labelView = optionView.findViewById(R.id.tv_label);
+            TextView descView = optionView.findViewById(R.id.tv_desc);
+            TextView selectedView = optionView.findViewById(R.id.tv_selection_index);
             boolean selected = TextUtils.equals(selectedItemId, item.id);
+
             rootView.setSelected(selected);
             rootView.setEnabled(item.enabled);
-            rootView.setAlpha(item.enabled ? 1f : 0.45f);
-
-            badgeView.setText(item.badgeText);
+            rootView.setAlpha(item.enabled ? 1f : 0.42f);
+            iconView.setImageResource(resolveIcon(item.id));
+            iconView.setColorFilter(ContextCompat.getColor(optionView.getContext(), R.color.addOperationMenuText));
             labelView.setText(item.label);
-            if (TextUtils.isEmpty(item.description)) {
-                descView.setVisibility(View.GONE);
-            } else {
-                descView.setVisibility(View.VISIBLE);
-                descView.setText(item.description);
-            }
-
-            Drawable badgeBackground = badgeView.getBackground();
-            if (badgeBackground instanceof GradientDrawable) {
-                badgeBackground = badgeBackground.mutate();
-                ((GradientDrawable) badgeBackground)
-                        .setColor(ContextCompat.getColor(itemView.getContext(), item.colorRes));
-                badgeView.setBackground(badgeBackground);
-            }
-
-            int badgeTextColor = ContextCompat.getColor(itemView.getContext(), R.color.colorOnPrimary);
-            badgeView.setTextColor(badgeTextColor);
-
-            selectionIndexView.setVisibility(selected ? View.VISIBLE : View.GONE);
-            if (selected) {
-                selectionIndexView.setText("1");
-            }
+            descView.setVisibility(View.GONE);
+            selectedView.setVisibility(selected ? View.VISIBLE : View.GONE);
+            selectedView.setText("✓");
 
             rootView.setOnClickListener(v -> {
                 if (!item.enabled) {
@@ -413,6 +207,59 @@ final class AddOperationMenuAdapter extends RecyclerView.Adapter<RecyclerView.Vi
                     itemSelectedListener.onItemSelected(item);
                 }
             });
+        }
+
+        private int resolveIcon(@NonNull String operationId) {
+            switch (operationId) {
+                case "click":
+                    return R.drawable.ic_op_touch;
+                case "gesture":
+                    return R.drawable.ic_action_gesture;
+                case "delay":
+                case "dynamic_delay":
+                    return R.drawable.ic_op_clock;
+                case "back_key":
+                    return R.drawable.ic_back;
+                case "match_template":
+                case "match_map_template":
+                case "ai_detect":
+                case "crop_region":
+                    return R.drawable.ic_file_image;
+                case "ocr_text":
+                    return R.drawable.ic_add_operation_ocr;
+                case "color_match":
+                case "color_search":
+                    return R.drawable.ic_add_operation_color;
+                case "jump_task":
+                    return R.drawable.ic_add_operation_jump;
+                case "mtry":
+                case "repeat_execution":
+                case "loop":
+                    return R.drawable.ic_add_operation_repeat;
+                case "switch_branch":
+                    return R.drawable.ic_add_operation_branch;
+                case "variable_script":
+                case "variable_math":
+                case "variable_template":
+                    return R.drawable.ic_file_script;
+                case "launch_app":
+                case "close_app":
+                    return R.drawable.ic_add_operation_app;
+                case "a11y_node":
+                    return R.drawable.ic_add_operation_accessibility;
+                case "log_output":
+                    return R.drawable.ic_float_menu_log;
+                case "http_request":
+                    return R.drawable.ic_add_operation_network;
+                case "play_audio":
+                    return R.drawable.ic_add_operation_audio;
+                case "set_sys_param":
+                    return R.drawable.ic_add_operation_settings;
+                case "set_brightness":
+                    return R.drawable.ic_add_operation_brightness;
+                default:
+                    return R.drawable.ic_operation;
+            }
         }
     }
 }

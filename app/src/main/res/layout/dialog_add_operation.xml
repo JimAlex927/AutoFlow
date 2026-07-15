@@ -10,7 +10,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:orientation="vertical"
+        android:orientation="horizontal"
         android:paddingStart="24dp"
         android:paddingTop="20dp"
         android:paddingEnd="24dp"
@@ -22,15 +22,17 @@
             android:layout_height="wrap_content"
             android:text="选择功能"
             android:textColor="@color/addOperationMenuText"
-            android:textSize="16sp"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
         <TextView
             android:id="@+id/tv_menu_subtitle"
-            android:layout_width="wrap_content"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="新增节点"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:gravity="end"
+            android:text="选择节点"
             android:textColor="@color/addOperationMenuTextSecondary"
             android:textSize="11sp" />
     </LinearLayout>
@@ -46,8 +48,8 @@
         android:layout_height="0dp"
         android:layout_weight="1"
         android:clipToPadding="false"
-        android:paddingTop="10dp"
-        android:paddingBottom="6dp"
+        android:paddingTop="4dp"
+        android:paddingBottom="8dp"
         android:scrollbars="none" />
 
     <LinearLayout
@@ -69,7 +71,7 @@
             android:background="@drawable/add_operation_menu_button_secondary"
             android:gravity="center"
             android:text="取消"
-            android:textColor="@color/addOperationMenuText"
+            android:textColor="@color/colorOnSurface"
             android:textSize="13sp"
             android:textStyle="bold" />
 

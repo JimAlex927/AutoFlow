@@ -13,8 +13,10 @@ import android.text.Editable;
 import android.text.TextUtils;
 import android.text.TextWatcher;
 import android.view.LayoutInflater;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 import android.view.WindowManager;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityWindowInfo;
@@ -142,6 +144,9 @@ public class AccessibilityNodeScannerOverlay {
     private List<String>   selectedAvailModes;   // 选中节点的可用模式
 
     private boolean listModeVisible = false;
+    private boolean toolbarCollapsed = false;
+    private int statusBarInset;
+    private int navigationBarInset;
     private NodeTreeAdapter listAdapter;
 
     // 颜色
@@ -252,6 +257,7 @@ public class AccessibilityNodeScannerOverlay {
             dismiss();
             return;
         }
+        applySystemBarSafeAreas();
         bindTopBar();
         bindDetailPanel();
         bindListPanel();
@@ -264,6 +270,13 @@ public class AccessibilityNodeScannerOverlay {
 
     private void bindTopBar() {
         overlayView.findViewById(R.id.btn_close_scanner)
+                .setOnClickListener(v -> dismiss());
+        overlayView.findViewById(R.id.btn_collapse_scanner_toolbar)
+                .setOnClickListener(v -> setToolbarCollapsed(true));
+        overlayView.findViewById(R.id.btn_show_scanner_toolbar)
+                .setOnClickListener(v -> setToolbarCollapsed(false));
+        bindCompactToolbarDrag();
+        overlayView.findViewById(R.id.btn_exit_scanner)
                 .setOnClickListener(v -> dismiss());
         overlayView.findViewById(R.id.btn_refresh)
                 .setOnClickListener(v -> startScan());
@@ -303,6 +316,122 @@ public class AccessibilityNodeScannerOverlay {
         listModeVisible = on;
         View panelList = overlayView.findViewById(R.id.panel_list);
         panelList.setVisibility(on ? View.VISIBLE : View.GONE);
+        setFallbackExitVisible(selectedNode == null || on);
+    }
+
+    /**
+     * Accessibility overlays can extend behind system bars. Keep every exit path in the
+     * application touch area so a notch or status bar can never trap the user in the scanner.
+     */
+    private void applySystemBarSafeAreas() {
+        if (overlayView == null) return;
+        int statusBar = getSystemBarDimension("status_bar_height");
+        int navigationBar = getSystemBarDimension("navigation_bar_height");
+        statusBarInset = statusBar;
+        navigationBarInset = navigationBar;
+
+        View topBar = overlayView.findViewById(R.id.top_bar);
+        if (topBar != null && topBar.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) topBar.getLayoutParams();
+            params.topMargin = Math.max(params.topMargin, statusBar);
+            topBar.setLayoutParams(params);
+        }
+
+        View detailPanel = overlayView.findViewById(R.id.panel_detail);
+        if (detailPanel != null && detailPanel.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) detailPanel.getLayoutParams();
+            params.bottomMargin = Math.max(params.bottomMargin, navigationBar);
+            detailPanel.setLayoutParams(params);
+        }
+
+        View exitButton = overlayView.findViewById(R.id.btn_exit_scanner);
+        if (exitButton != null && exitButton.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) exitButton.getLayoutParams();
+            params.bottomMargin = Math.max(params.bottomMargin, navigationBar + dp(12));
+            exitButton.setLayoutParams(params);
+        }
+
+        View showToolbarButton = overlayView.findViewById(R.id.btn_show_scanner_toolbar);
+        if (showToolbarButton != null
+                && showToolbarButton.getLayoutParams() instanceof FrameLayout.LayoutParams) {
+            FrameLayout.LayoutParams params =
+                    (FrameLayout.LayoutParams) showToolbarButton.getLayoutParams();
+            params.topMargin = Math.max(params.topMargin, statusBar + dp(8));
+            showToolbarButton.setLayoutParams(params);
+        }
+
+        View listPanel = overlayView.findViewById(R.id.panel_list);
+        if (listPanel != null) {
+            listPanel.setPadding(listPanel.getPaddingLeft(), statusBar,
+                    listPanel.getPaddingRight(), navigationBar);
+        }
+    }
+
+    private int getSystemBarDimension(String resourceName) {
+        int resourceId = context.getResources().getIdentifier(
+                resourceName, "dimen", "android");
+        return resourceId > 0 ? context.getResources().getDimensionPixelSize(resourceId) : 0;
+    }
+
+    private void bindCompactToolbarDrag() {
+        View button = overlayView.findViewById(R.id.btn_show_scanner_toolbar);
+        if (button == null) return;
+        final int touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
+        button.setOnTouchListener(new View.OnTouchListener() {
+            private float downRawX;
+            private float downRawY;
+            private int startLeft;
+            private int startTop;
+            private boolean moved;
+
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getActionMasked()) {
+                    case MotionEvent.ACTION_DOWN:
+                        downRawX = event.getRawX();
+                        downRawY = event.getRawY();
+                        startLeft = v.getLeft();
+                        startTop = v.getTop();
+                        moved = false;
+                        return true;
+                    case MotionEvent.ACTION_MOVE:
+                        float deltaX = event.getRawX() - downRawX;
+                        float deltaY = event.getRawY() - downRawY;
+                        if (!moved && (Math.abs(deltaX) > touchSlop || Math.abs(deltaY) > touchSlop)) {
+                            moved = true;
+                        }
+                        if (moved) {
+                            moveCompactToolbar(v, Math.round(startLeft + deltaX),
+                                    Math.round(startTop + deltaY));
+                        }
+                        return true;
+                    case MotionEvent.ACTION_UP:
+                        if (!moved) v.performClick();
+                        return true;
+                    case MotionEvent.ACTION_CANCEL:
+                        return true;
+                    default:
+                        return true;
+                }
+            }
+        });
+    }
+
+    private void moveCompactToolbar(View button, int requestedLeft, int requestedTop) {
+        if (overlayView == null || !(button.getLayoutParams() instanceof FrameLayout.LayoutParams)) {
+            return;
+        }
+        int width = overlayView.getWidth();
+        int height = overlayView.getHeight();
+        if (width <= 0 || height <= 0) return;
+        int maxLeft = Math.max(0, width - button.getWidth());
+        int minTop = statusBarInset + dp(8);
+        int maxTop = Math.max(minTop, height - navigationBarInset - dp(12) - button.getHeight());
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) button.getLayoutParams();
+        params.gravity = Gravity.TOP | Gravity.START;
+        params.leftMargin = Math.max(0, Math.min(requestedLeft, maxLeft));
+        params.topMargin = Math.max(minTop, Math.min(requestedTop, maxTop));
+        button.setLayoutParams(params);
     }
 
     // ──────────────────────────────────────────────────────────────
@@ -312,6 +441,7 @@ public class AccessibilityNodeScannerOverlay {
     private void startScan() {
         TextView tvCount = overlayView.findViewById(R.id.tv_node_count);
         if (tvCount != null) tvCount.setText("扫描中...");
+        setToolbarCollapsed(false);
 
         new Thread(() -> {
             List<NodeInfo> nodes = new ArrayList<>();
@@ -333,8 +463,21 @@ public class AccessibilityNodeScannerOverlay {
                 TextView hint = overlayView.findViewById(R.id.tv_hint);
                 if (hint != null) hint.setText(nodes.isEmpty()
                         ? "未扫描到节点，请刷新" : "点击界面元素选中节点");
+                // Do not cover app controls while selecting a scanned node.
+                setToolbarCollapsed(!nodes.isEmpty());
             });
         }).start();
+    }
+
+    private void setToolbarCollapsed(boolean collapsed) {
+        if (overlayView == null) return;
+        toolbarCollapsed = collapsed;
+        View topBar = overlayView.findViewById(R.id.top_bar);
+        View showToolbarButton = overlayView.findViewById(R.id.btn_show_scanner_toolbar);
+        if (topBar != null) topBar.setVisibility(collapsed ? View.GONE : View.VISIBLE);
+        if (showToolbarButton != null) {
+            showToolbarButton.setVisibility(collapsed ? View.VISIBLE : View.GONE);
+        }
     }
 
     /** 优先获取前台 App（非本包）的根节点 */
@@ -450,11 +593,13 @@ public class AccessibilityNodeScannerOverlay {
         selectedNode = null;
         nodeCanvas.setSelected(null);
         overlayView.findViewById(R.id.panel_detail).setVisibility(View.GONE);
+        setFallbackExitVisible(true);
     }
 
     private void showDetailPanel(NodeInfo n) {
         LinearLayout panel = overlayView.findViewById(R.id.panel_detail);
         panel.setVisibility(View.VISIBLE);
+        setFallbackExitVisible(false);
 
         // 类名 badge
         TextView tvClass = panel.findViewById(R.id.tv_sel_class);
@@ -511,6 +656,14 @@ public class AccessibilityNodeScannerOverlay {
             llChips.addView(chip);
         }
         refreshSelectorAnalysis(panel);
+    }
+
+    private void setFallbackExitVisible(boolean visible) {
+        if (overlayView == null) return;
+        View exitButton = overlayView.findViewById(R.id.btn_exit_scanner);
+        if (exitButton != null) {
+            exitButton.setVisibility(visible ? View.VISIBLE : View.GONE);
+        }
     }
 
     private void bindDetailRow(TextView tv, String text, boolean visible) {

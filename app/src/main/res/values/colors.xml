@@ -111,14 +111,14 @@
     <color name="black">#FF000000</color>
     <color name="transparent">#00000000</color>
     <color name="window_color">#BB000000</color>
-    <color name="addOperationMenuSurface">#18212D</color>
-    <color name="addOperationMenuSurfaceAlt">#1F2A39</color>
-    <color name="addOperationMenuSurfacePressed">#273447</color>
-    <color name="addOperationMenuSurfaceSelected">#22344D</color>
-    <color name="addOperationMenuOutline">#2F3C4E</color>
-    <color name="addOperationMenuOutlineStrong">#41536C</color>
-    <color name="addOperationMenuText">#F4F7FB</color>
-    <color name="addOperationMenuTextSecondary">#93A2B7</color>
+    <color name="addOperationMenuSurface">#485469</color>
+    <color name="addOperationMenuSurfaceAlt">#00000000</color>
+    <color name="addOperationMenuSurfacePressed">#596780</color>
+    <color name="addOperationMenuSurfaceSelected">#5C6B84</color>
+    <color name="addOperationMenuOutline">#485469</color>
+    <color name="addOperationMenuOutlineStrong">#71809A</color>
+    <color name="addOperationMenuText">#FFFFFF</color>
+    <color name="addOperationMenuTextSecondary">#9FA9BA</color>
     <color name="addOperationMenuBadge">#2D5FE5</color>
 
 </resources>

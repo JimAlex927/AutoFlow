@@ -3182,10 +3182,10 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         android.view.ContextThemeWrapper themedCtx =
                 new android.view.ContextThemeWrapper(this, R.style.Theme_AtomMaster);
         View dialogView = LayoutInflater.from(themedCtx).inflate(R.layout.dialog_add_operation, null);
-        WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(340, true);
-        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 360, 0.78f, 0.92f);
+        WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(380, true);
+        dialogHelpers.applyAdaptiveDialogViewport(dialogLp, 380, 0.88f, 0.94f);
         wm.addView(dialogView, dialogLp);
-        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 360, 460, null);
+        dialogHelpers.setupDialogMoveAndScale(dialogView, dialogLp, 380, 620, null);
 
         RecyclerView recyclerView = dialogView.findViewById(R.id.rv_add_operation_menu);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
@@ -3206,7 +3206,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
         AddOperationMenuAdapter.MenuItem initialItem = adapter.findFirstEnabledItem();
         if (initialItem != null) {
-            adapter.collapseAllExcept(initialItem.id);
             adapter.setSelectedItem(initialItem);
             btnConfirm.setEnabled(true);
         }
