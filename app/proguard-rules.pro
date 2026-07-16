@@ -1,42 +1,89 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
+# AutoFlow release obfuscation rules.
 #
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# The app intentionally persists several public-field models with Gson. R8 may rename the
+# classes, but those JSON field names are part of project files and SharedPreferences and must
+# remain stable across Debug/Release and future versions.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# AGP 9 only ships the optimizing default rules. Disable behavior-changing optimization for the
+# first hardened release while retaining shrinking and name obfuscation.
+-dontoptimize
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# Keep enough metadata for Gson TypeToken and useful retraced crash reports without exposing
+# original source file names in the APK.
+-keepattributes Signature,InnerClasses,EnclosingMethod
+-keepattributes RuntimeVisibleAnnotations,RuntimeInvisibleAnnotations,AnnotationDefault
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
-
-# Rhino may reference desktop JDK java.beans APIs that do not exist on Android.
-# Those code paths are not used by this app, so suppress missing-class failures in release shrink.
+# Rhino contains optional desktop-only java.beans paths which Android never executes.
 -dontwarn java.beans.**
 
-# Operation panel relies on stable operation model fields when reading/writing operations.json.
-# Keep these models intact in release to avoid node panel data disappearing after obfuscation.
--keep class com.auto.master.Task.Operation.MetaOperation { *; }
--keep class com.auto.master.Task.Operation.** extends com.auto.master.Task.Operation.MetaOperation { *; }
-
-# Gson TypeToken: R8 with proguard-android-optimize.txt can strip generic type signatures
-# from anonymous TypeToken subclasses (e.g. new TypeToken<List<MetaOperation>>(){}.getType()).
-# Without these rules, getType() returns the raw List type and Gson skips the custom
-# MetaOperationDeserializer, causing fromJson() to return an empty list in release.
+# Gson generic type capture. Several stores use anonymous TypeToken<List/Map<...>> classes.
 -keep,allowobfuscation,allowshrinking class com.google.gson.reflect.TypeToken
 -keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken
 
-# Keep the Gson type-adapter helper and its inner deserializer/serializer classes.
-# R8 may otherwise inline or remove them, leaving Gson with no adapter for MetaOperation.
--keep class com.auto.master.Task.Operation.OperationGsonHelper { *; }
--keep class com.auto.master.Task.Operation.OperationGsonHelper$* { *; }
+# Preserve fields explicitly annotated for Gson while still allowing their classes to shrink
+# and be renamed.
+-keepclassmembers,allowoptimization class * {
+    @com.google.gson.annotations.SerializedName <fields>;
+}
+
+# Operation JSON files are a public compatibility boundary. Preserve field names only; operation
+# classes, handlers, dialogs and execution code remain eligible for obfuscation.
+-keepclassmembers,allowoptimization class com.auto.master.Task.Operation.** {
+    <fields>;
+}
+
+# Config UI schemas are exported inside projects as JSON.
+-keepclassmembers,allowoptimization class com.auto.master.configui.ConfigUiSchema {
+    <fields>;
+}
+-keepclassmembers,allowoptimization class com.auto.master.configui.ConfigUiPage {
+    <fields>;
+}
+-keepclassmembers,allowoptimization class com.auto.master.configui.ConfigUiComponent {
+    <fields>;
+}
+-keepclassmembers,allowoptimization class com.auto.master.configui.ConfigUiOption {
+    <fields>;
+}
+
+# Node floating-button settings are stored per task as JSON.
+-keepclassmembers,allowoptimization class com.auto.master.floatwin.NodeFloatButtonConfig {
+    <fields>;
+}
+
+# Gesture files are shared between recording, preview and runtime playback.
+-keepclassmembers,allowoptimization class com.auto.master.auto.GestureOverlayView$GestureNode {
+    <fields>;
+}
+-keepclassmembers,allowoptimization class com.auto.master.auto.GestureOverlayView$GestureStroke {
+    <fields>;
+}
+-keepclassmembers,allowoptimization class com.auto.master.auto.GestureOverlayView$PointF {
+    <fields>;
+}
+
+# Persistent scheduler/trigger entries live in SharedPreferences as Gson JSON.
+-keepclassmembers,allowoptimization class com.auto.master.scheduler.ScheduledTask {
+    <fields>;
+}
+-keepclassmembers,allowoptimization class com.auto.master.scheduler.AppNotificationTrigger {
+    <fields>;
+}
+
+# Keep names for the small set of Android entry classes. Their internal implementation remains
+# eligible for shrinking and member obfuscation; manifest rewriting/default Android rules keep
+# the framework lifecycle contract intact.
+-keepnames class com.auto.master.AtommApplication
+-keepnames class com.auto.master.auto.AutoAccessibilityService
+-keepnames class com.auto.master.floatwin.FloatWindowService
+-keepnames class com.auto.master.capture.MediaProjectionCaptureService
+-keepnames class com.auto.master.scheduler.TaskScheduleReceiver
+
+# Remove verbose/debug logging calls and their eagerly-built message strings from release code.
+-assumenosideeffects class android.util.Log {
+    public static int v(...);
+    public static int d(...);
+    public static int i(...);
+}

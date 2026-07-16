@@ -64,7 +64,7 @@ $env:Path="$env:JAVA_HOME\bin;$env:Path"
 .\gradlew.bat :app:assembleRelease
 ```
 
-当前 release 配置偏保守：关闭混淆和资源压缩，并暂时沿用 debug signing，方便侧载测试和 GitHub Releases 分发。正式上架前应补充正式 keystore、版本策略、隐私说明和应用商店物料。
+当前 release 已启用 R8 代码裁剪和名称混淆，暂时关闭行为优化与资源压缩，以降低无障碍、悬浮窗、Gson、OCR/CV 和 JNI 功能的兼容风险。Release 不再使用 Debug 签名；本地需配置 `keystore.properties`，GitHub Actions 需配置签名 Secrets。
 
 更多本地构建细节见 [CODEX_BUILD_NOTES.md](./CODEX_BUILD_NOTES.md)。
 
@@ -126,4 +126,3 @@ app/src/main/java/com/auto/master/
 如果你喜欢的话，给我点杯奶茶呗！
 
 ![support](assets/support.jpg)
-

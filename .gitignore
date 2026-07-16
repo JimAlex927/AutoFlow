@@ -37,6 +37,7 @@ build/
 *.jks
 *.keystore
 *.p12
+keystore.properties
 
 # Optional local SDK dumps
 opencv/

@@ -60,34 +60,17 @@ Important:
 
 ## Current Release Configuration
 
-As of 2026-04-16, `release` was intentionally changed to match the conservative behavior of `C:\Users\1\Desktop\tmp\demo2`:
+As of 2026-07-15, `release` uses a conservative first-stage R8 configuration:
 
-- `isMinifyEnabled = false`
+- `isMinifyEnabled = true`
 - `isShrinkResources = false`
-- `proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")`
-- `signingConfig = signingConfigs.getByName("debug")`
+- R8 optimization is disabled in `proguard-rules.pro`
+- Gson-persisted field names and Android entry-point class names are preserved
+- Release signing is loaded from ignored `keystore.properties`; Debug signing is never used
 
-Reason:
+`:app:assembleRelease` completed successfully with JDK 17. R8 generated APK splits and `app/build/outputs/mapping/release/mapping.txt`. Without `keystore.properties`, the outputs are intentionally unsigned and are only suitable for build verification.
 
-- The project had release-only issues.
-- `demo2` uses a safer release setup with shrinking/obfuscation disabled.
-- Debug signing was kept so local release APKs remain directly installable.
-
-## Current Release Blocker
-
-The `release` Gradle configuration now parses and runs far enough to reach Android SDK checks, but `:app:assembleRelease` is still blocked by local SDK environment issues:
-
-- Android SDK Build-Tools 36 license not accepted
-- Android SDK Platform 36 license not accepted
-- `C:\Users\1\AppData\Local\Android\Sdk\platforms\android-36\package.xml` had access denied / parse failure during the build
-
-Observed Gradle guidance:
-
-```text
-sdkmanager --licenses
-```
-
-If a future session wants to finish `release` packaging, check SDK Manager state before changing app code again.
+See `docs/RELEASE_GUIDE.md` for keystore setup, CI Secrets and the required device regression checklist.
 
 ## Command Pitfalls
 

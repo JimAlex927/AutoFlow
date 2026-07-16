@@ -1,4 +1,28 @@
 import org.gradle.kotlin.dsl.implementation
+import java.util.Properties
+
+val releaseKeystorePropertiesFile = rootProject.file("keystore.properties")
+val releaseKeystoreProperties = Properties()
+
+if (releaseKeystorePropertiesFile.isFile) {
+    releaseKeystorePropertiesFile.inputStream().use(releaseKeystoreProperties::load)
+}
+
+val releaseSigningValues = mapOf(
+    "storeFile" to (releaseKeystoreProperties.getProperty("storeFile")
+        ?: System.getenv("AUTOFLOW_KEYSTORE_FILE")),
+    "storePassword" to (releaseKeystoreProperties.getProperty("storePassword")
+        ?: System.getenv("AUTOFLOW_STORE_PASSWORD")),
+    "keyAlias" to (releaseKeystoreProperties.getProperty("keyAlias")
+        ?: System.getenv("AUTOFLOW_KEY_ALIAS")),
+    "keyPassword" to (releaseKeystoreProperties.getProperty("keyPassword")
+        ?: System.getenv("AUTOFLOW_KEY_PASSWORD"))
+)
+val configuredSigningKeys = releaseSigningValues.filterValues { !it.isNullOrBlank() }.keys
+check(configuredSigningKeys.isEmpty() || configuredSigningKeys.size == releaseSigningValues.size) {
+    "Incomplete release signing configuration. Configured: ${configuredSigningKeys.joinToString()}"
+}
+val hasReleaseSigning = configuredSigningKeys.size == releaseSigningValues.size
 
 plugins {
     alias(libs.plugins.android.application)
@@ -19,13 +43,25 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseSigningValues.getValue("storeFile")!!)
+                storePassword = releaseSigningValues.getValue("storePassword")
+                keyAlias = releaseSigningValues.getValue("keyAlias")
+                keyPassword = releaseSigningValues.getValue("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // Mirror demo2's conservative release behavior to avoid release-only
-            // regressions caused by code shrinking/obfuscation.
-            // Keep debug signing so the local release APK remains directly installable.
-            signingConfig = signingConfigs.getByName("debug")
-            isMinifyEnabled = false
+            // R8 shrinks and obfuscates release code. Keep optimization and resource shrinking
+            // off for the first hardened rollout because this app has many reflection/JNI edges.
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
+            isMinifyEnabled = true
             isShrinkResources = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),

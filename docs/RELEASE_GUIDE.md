@@ -1,104 +1,76 @@
 # APK 发布指南
 
-这份文档是给仓库维护者用的，目标是让你在不熟悉 Android 发布流程的情况下，也能先把 APK 稳定发到 GitHub。
+AutoFlow 的 Release 已启用 R8 代码裁剪和名称混淆。当前采用保守策略：先混淆类名、方法名并移除无用代码，暂不启用 R8 行为优化和资源压缩，降低无障碍、悬浮窗、Gson、OpenCV、Tesseract、TensorFlow Lite 与 JNI 功能失效的风险。
 
-## 你现在已经有的东西
+混淆不能让 APK 完全不可反编译，但会显著提高阅读、定位和复用源码的成本。不要在未完整回归真机功能前叠加第三方加固壳，它们可能影响原生库加载、无障碍服务和录屏服务。
 
-仓库里已经准备好了：
+## 首次创建正式签名
 
-- 根目录 `README.md`
-- 自动构建工作流 `.github/workflows/android-apk-release.yml`
+正式 keystore 只创建一次，并需要永久妥善备份。丢失后将无法用相同签名升级已安装的应用。
 
-这意味着你不需要先在本地手动处理 Android SDK license、打包再上传，直接走 GitHub Actions 就可以。
+```powershell
+keytool -genkeypair -v -keystore autoflow-release.jks -alias autoflow -keyalg RSA -keysize 4096 -validity 10000
+```
 
-## 第一次发布前要确认的事
+将 `keystore.properties.example` 复制为本机的 `keystore.properties`，填写实际路径和密码：
 
-先检查下面这些：
+```properties
+storeFile=C:/secure/path/autoflow-release.jks
+storePassword=你的密钥库密码
+keyAlias=autoflow
+keyPassword=你的密钥密码
+```
 
-1. 仓库已经推到 GitHub
-2. 仓库的 `Actions` 没被禁用
-3. 根目录的 `README.md` 已经是你想公开展示的内容
-4. 你已经准备好一个开源许可证
-5. 版本号如果有变化，记得同步更新 `app/build.gradle.kts`
+`keystore.properties` 和密钥文件均已被 Git 忽略。不要把它们、密码或 Base64 密钥提交到仓库。
 
-如果 `LICENSE` 还没加，建议先补上再公开仓库。
+## 本地构建
 
-## 最简单的出包方式
+```powershell
+$env:JAVA_HOME='C:\Program Files\BellSoft\LibericaJDK-17'
+$env:Path="$env:JAVA_HOME\bin;$env:Path"
+.\gradlew.bat :app:assembleRelease --no-daemon --console=plain
+```
 
-### 方式一：手动运行工作流
+配置正式签名后，APK 位于 `app/build/outputs/apk/release/`。若没有 `keystore.properties`，Gradle 仍可生成用于检查 R8 的未签名 APK，但该 APK 不能直接安装或发布。
 
-适合第一次试跑，先确认工作流能否正常产出 APK。
+项目按 ABI 分包：普通 Android 真机一般使用 `arm64-v8a`，`x86_64` 主要用于模拟器。
 
-1. 打开 GitHub 仓库
-2. 进入 `Actions`
-3. 选择 `Android APK Release`
-4. 点击 `Run workflow`
-5. 等待构建完成
-6. 在该次运行页面的 `Artifacts` 区域下载 APK
+## GitHub Actions 签名
 
-## 正式发版方式
+在 GitHub 仓库的 `Settings > Secrets and variables > Actions` 中添加：
 
-当你确认 APK 能正常安装后，再打版本标签：
+- `AUTOFLOW_KEYSTORE_BASE64`：keystore 文件的 Base64 内容
+- `AUTOFLOW_STORE_PASSWORD`：密钥库密码
+- `AUTOFLOW_KEY_ALIAS`：密钥别名
+- `AUTOFLOW_KEY_PASSWORD`：密钥密码
 
-```bash
+PowerShell 生成 Base64：
+
+```powershell
+[Convert]::ToBase64String([IO.File]::ReadAllBytes('C:\secure\autoflow-release.jks')) | Set-Clipboard
+```
+
+工作流在缺少任一签名 Secret 时会停止，不会把未签名 APK 发布给用户。手动运行工作流可先检查构建；推送 `v*` 标签会创建 GitHub Release：
+
+```powershell
 git tag v1.0.0
 git push origin v1.0.0
 ```
 
-推送标签后，工作流会自动：
+## 必须保存 mapping
 
-- 构建 `release` APK
-- 上传 APK 到本次 Actions 产物
-- 自动创建 GitHub Release
-- 把 APK 挂到 Release 附件里
+每个版本都必须保存对应的 `app/build/outputs/mapping/release/mapping.txt`。它用于把混淆后的崩溃堆栈还原为源码位置，版本不匹配时无法正确还原。GitHub Actions 会将它作为独立的私有构建产物保留 90 天，正式发版还应另行长期归档。
 
-## 用户应该下载哪个 APK
+## 真机回归清单
 
-当前项目启用了 ABI 分包，所以一般会看到多个 APK：
+每次调整混淆规则后，至少在一台 Motorola 真机和一台其他品牌设备上检查：
 
-- `arm64-v8a`：大多数 Android 真机使用这个
-- `x86_64`：主要给模拟器使用
+1. 首次启动、权限申请、无障碍服务与悬浮窗
+2. 录屏授权、截图、相册与模板库
+3. 点击、滑动、连续手势与脚本跳转/循环
+4. 模板匹配、图集匹配、OCR、YOLO/TFLite
+5. 项目导入导出、Gson 旧项目兼容、配置 UI
+6. 定时任务、通知触发、TTS 与运行日志
+7. 专注运行模式和脚本结束后的系统状态恢复
 
-如果是发给普通手机用户，优先引导他们下载 `arm64-v8a`。
-
-## 当前这套发布方案的定位
-
-这是一套适合开源仓库和侧载分发的方案，不是正式应用商店签名方案。
-
-当前 `release` 的特点：
-
-- 关闭了代码混淆
-- 关闭了资源压缩
-- 采用更保守的 release 配置，优先保证能稳定导出 APK
-
-这套方案很适合：
-
-- GitHub 开源仓库发包
-- 测试群、体验用户分发
-- 早期版本验证
-
-## 如果工作流失败，优先看哪里
-
-先看这几个位置：
-
-1. Actions 日志里 `Accept SDK licenses and install required packages`
-2. `Build release APK`
-3. `Upload release APK artifact`
-
-常见问题一般是：
-
-- Gradle 依赖下载失败
-- Android SDK 包版本不匹配
-- 构建成功但没有找到 APK 输出
-
-## 如果以后要上应用商店
-
-到那一步你还需要补这些：
-
-1. 正式 keystore
-2. 独立的 release signing 配置
-3. 更规范的版本号管理
-4. 应用商店截图、图标、隐私说明
-5. 更严格的混淆、签名和发布校验
-
-如果你后面真的要上架，我可以继续帮你把这套 GitHub Release 流程升级成正式签名流程。
+先保留当前 `-dontoptimize` 和 `isShrinkResources = false`。以上功能连续稳定后，再分别试开优化和资源压缩，每次只改一项并重新回归。

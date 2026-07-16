@@ -504,12 +504,25 @@ final class FloatBallOverlayController {
             } else {
                 host.showProjectPanel();
             }
+            dockFanMenuAfterLeafAction();
         });
-        btnLog.setOnClickListener(v -> host.toggleRuntimeLogPanel());
-        btnSession.setOnClickListener(v -> host.showScriptSessionDialog());
+        btnLog.setOnClickListener(v -> {
+            host.toggleRuntimeLogPanel();
+            dockFanMenuAfterLeafAction();
+        });
+        btnSession.setOnClickListener(v -> {
+            host.showScriptSessionDialog();
+            dockFanMenuAfterLeafAction();
+        });
         btnTools.setOnClickListener(v -> toggleToolsDock());
-        toolCapture.setOnClickListener(v -> host.captureToolScreenshot());
-        toolBack.setOnClickListener(v -> host.performBackAction());
+        toolCapture.setOnClickListener(v -> {
+            host.captureToolScreenshot();
+            dockFanMenuAfterLeafAction();
+        });
+        toolBack.setOnClickListener(v -> {
+            host.performBackAction();
+            dockFanMenuAfterLeafAction();
+        });
         toolClose.setOnClickListener(v -> setToolsDockVisible(false));
         btnPause.setOnClickListener(v -> {
             host.toggleActivePauseState();
@@ -758,6 +771,16 @@ final class FloatBallOverlayController {
     }
 
     private boolean collapseFanMenuToEdgeIfClose() {
+        return collapseFanMenuToNearestEdge(true);
+    }
+
+    private void dockFanMenuAfterLeafAction() {
+        collapseFanMenuToNearestEdge(false);
+        toolsDockVisible = false;
+        applyMenuModeVisibility(false);
+    }
+
+    private boolean collapseFanMenuToNearestEdge(boolean requireThreshold) {
         if (fanMenuView == null || fanMenuLp == null) {
             return false;
         }
@@ -769,7 +792,7 @@ final class FloatBallOverlayController {
         int right = screen[0] - menuW - fanMenuLp.x;
         int bottom = screen[1] - menuH - fanMenuLp.y;
         int min = Math.min(left, Math.min(right, bottom));
-        if (min > threshold) {
+        if (requireThreshold && min > threshold) {
             return false;
         }
         if (min == left) {
