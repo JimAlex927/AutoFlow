@@ -175,6 +175,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     public static final String TASK_LIBRARY_GESTURE = "gesture";
     private static final long TASK_REMOVED_RESTART_DELAY_MS = 600L;
     private static final String CONFIG_UI_DRAG_LABEL = "config_ui_component";
+    private static final String TEMP_SCRIPT_SESSION_NAME = "tmp";
     private WindowManager wm;
 
     private View projectPanelView;
@@ -9026,11 +9027,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             Toast.makeText(this, "未找到选中的 operation", Toast.LENGTH_SHORT).show();
             return null;
         }
-        if (!hasNodeSessionBinding(startOperation)) {
-            Toast.makeText(this, "当前节点未绑定会话，请先在节点菜单绑定", Toast.LENGTH_SHORT).show();
-            return null;
-        }
-
         List<OperationItem> selectedTaskOperations = buildOperationItemsFromTask(selectedTask);
 
         OperationContext ctx = new OperationContext();
@@ -9499,22 +9495,13 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         return null;
     }
 
-    private boolean hasNodeSessionBinding(@Nullable MetaOperation operation) {
-        Map<String, Object> inputMap = operation == null ? null : operation.getInputMap();
-        return !TextUtils.isEmpty(getInputString(inputMap, MetaOperation.NODE_BOUND_SESSION_ID))
-                || !TextUtils.isEmpty(getInputString(inputMap, MetaOperation.NODE_BOUND_SESSION_NAME));
-    }
-
     @Nullable
     private String resolveBoundSessionForStartOperation(@Nullable MetaOperation operation, boolean showToast) {
         Map<String, Object> inputMap = operation == null ? null : operation.getInputMap();
         String boundSessionId = getInputString(inputMap, MetaOperation.NODE_BOUND_SESSION_ID);
         String boundSessionName = getInputString(inputMap, MetaOperation.NODE_BOUND_SESSION_NAME);
         if (TextUtils.isEmpty(boundSessionId) && TextUtils.isEmpty(boundSessionName)) {
-            if (showToast) {
-                Toast.makeText(this, "当前节点未绑定会话，请先在节点菜单绑定", Toast.LENGTH_SHORT).show();
-            }
-            return null;
+            return resolveTemporarySessionForStart(showToast);
         }
 
         if (!TextUtils.isEmpty(boundSessionId)) {
@@ -9548,6 +9535,51 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             Toast.makeText(this, "绑定会话不存在，请重新绑定", Toast.LENGTH_SHORT).show();
         }
         return null;
+    }
+
+    @Nullable
+    private String resolveTemporarySessionForStart(boolean showToast) {
+        ScriptSessionSnapshot snapshot = findTemporarySessionSnapshot();
+        if (snapshot == null) {
+            return ScriptRunner.createSession(TEMP_SCRIPT_SESSION_NAME);
+        }
+        if (snapshot.state == ScriptSession.State.IDLE) {
+            return snapshot.sessionId;
+        }
+        if (isSessionBusy(snapshot.state)) {
+            if (showToast) {
+                Toast.makeText(this,
+                        "临时会话 tmp 正在被其它节点使用，请稍后再试",
+                        Toast.LENGTH_SHORT).show();
+            }
+            return null;
+        }
+        ScriptRunner.closeSession(snapshot.sessionId);
+        return ScriptRunner.createSession(TEMP_SCRIPT_SESSION_NAME);
+    }
+
+    @Nullable
+    private ScriptSessionSnapshot findTemporarySessionSnapshot() {
+        ScriptSessionSnapshot reusable = null;
+        for (ScriptSessionSnapshot snapshot : ScriptRunner.listSessionSnapshots()) {
+            if (snapshot == null || !TextUtils.equals(TEMP_SCRIPT_SESSION_NAME, snapshot.sessionName)) {
+                continue;
+            }
+            if (isSessionBusy(snapshot.state)) {
+                return snapshot;
+            }
+            if (reusable == null || snapshot.state == ScriptSession.State.IDLE) {
+                reusable = snapshot;
+            }
+        }
+        return reusable;
+    }
+
+    private boolean isSessionBusy(@Nullable ScriptSession.State state) {
+        return state == ScriptSession.State.QUEUED
+                || state == ScriptSession.State.RUNNING
+                || state == ScriptSession.State.PAUSED
+                || state == ScriptSession.State.STOPPING;
     }
 
     private String getInputString(@Nullable Map<String, Object> inputMap, String key) {
