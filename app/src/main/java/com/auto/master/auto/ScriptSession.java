@@ -178,7 +178,10 @@ public final class ScriptSession {
         currentProjectName = "";
         currentTaskName = "";
         startTimeMs = System.currentTimeMillis();
-        clearLogs();
+        // Keep the just-finished run available to the runtime log panel.  The
+        // next bind() already clears the previous run before execution starts,
+        // so clearing here only creates a window in which completion observers
+        // see an empty log snapshot.
         state = State.IDLE;
     }
 

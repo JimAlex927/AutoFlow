@@ -61,6 +61,19 @@
             android:layout_marginTop="14dp">
 
             <TextView
+                android:id="@+id/btn_runtime_cfg_visual_mode"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="自定义 UI"
+                android:textColor="#2F4F7C"
+                android:textSize="12sp"
+                android:background="@drawable/item_operation_compact_bg"
+                android:layout_marginEnd="6dp"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/btn_runtime_cfg_clear"
                 android:layout_width="0dp"
                 android:layout_height="38dp"

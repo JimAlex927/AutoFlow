@@ -52,8 +52,8 @@ public final class ConfigUiValueCodec {
             for (Map.Entry<String, String> entry : formValues.entrySet()) {
                 String key = entry.getKey();
                 String value = entry.getValue();
-                if (!TextUtils.isEmpty(key) && !TextUtils.isEmpty(value)) {
-                    merged.put(key.trim(), value.trim());
+                if (!TextUtils.isEmpty(key)) {
+                    merged.put(key.trim(), value == null ? "" : value.trim());
                 }
             }
         }
@@ -68,7 +68,7 @@ public final class ConfigUiValueCodec {
         for (Map.Entry<String, String> entry : valueMap.entrySet()) {
             String key = entry.getKey() == null ? "" : entry.getKey().trim();
             String value = entry.getValue() == null ? "" : entry.getValue().trim();
-            if (key.isEmpty() || value.isEmpty()) {
+            if (key.isEmpty()) {
                 continue;
             }
             if (builder.length() > 0) {

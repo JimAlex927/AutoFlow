@@ -644,6 +644,13 @@ final class NodeFloatButtonUiHelper {
                     selShape[0], selEffect[0], selStatusStyle[0], selIconKey[0],
                     selSize[0], selAlpha[0], etLabel, etImage, etX, etY,
                     defaultX, defaultY, chkHide.isChecked());
+            // Button appearance and node runtime metadata share the same
+            // persisted object.  Editing the button must not detach its
+            // Config UI or erase the values entered through that UI.
+            if (existing != null) {
+                cfg.runtimeVariablesText = existing.runtimeVariablesText;
+                cfg.configUiSchemaId = existing.configUiSchemaId;
+            }
             cfg.hideWhileRunning = chkHide.isChecked();
             cfg.buttonEnabled = true;
 
@@ -965,7 +972,7 @@ final class NodeFloatButtonUiHelper {
         nodeFloatActionPopupTitleView.setText(cfg.operationName);
         nodeFloatActionSheetItems.clear();
         nodeFloatActionSheetItems.add(new ActionItem(1, "运行节点", "立即运行这个节点", true));
-        nodeFloatActionSheetItems.add(new ActionItem(2, "配置修改", "弹出运行时配置，可切换成可视化表单", true));
+        nodeFloatActionSheetItems.add(new ActionItem(2, "修改配置", "默认打开自定义 UI，可切换通用列表", true));
         nodeFloatActionSheetItems.add(new ActionItem(3, "ConfigUI 设计", "拖动排序组件，设计这个节点的可视化配置界面", true));
         nodeFloatActionSheetItems.add(new ActionItem(4, "按钮设置", "修改文字、颜色、大小和位置", true));
         nodeFloatActionSheetItems.add(new ActionItem(5, "定位节点", "打开面板并高亮这个节点", true));

@@ -39,15 +39,14 @@
 
         <TextView
             android:id="@+id/btn_config_ui_runtime_text_mode"
-            android:layout_width="56dp"
+            android:layout_width="72dp"
             android:layout_height="42dp"
             android:layout_marginEnd="8dp"
             android:background="@drawable/item_operation_compact_bg"
             android:gravity="center"
-            android:text="文本"
+            android:text="通用列表"
             android:textColor="#526273"
-            android:textSize="12sp"
-            android:visibility="gone" />
+            android:textSize="11sp" />
 
         <TextView
             android:id="@+id/btn_config_ui_runtime_cancel"

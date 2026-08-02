@@ -1549,6 +1549,14 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         configUiHelper.showConfigUiDesignerDialog(item);
     }
 
+    private void showNodeRuntimeConfigDialog(OperationItem item) {
+        if (item == null) {
+            return;
+        }
+        NodeFloatButtonConfig cfg = configUiHelper.getOrCreateNodeConfig(item, false);
+        configUiHelper.showNodeRuntimeConfigDialog(cfg);
+    }
+
     /** 截断字符串，超出 maxChars 时加 "…"。 */
     private static String abbreviate(String s, int maxChars) {
         if (s == null) return "";
@@ -4287,6 +4295,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     @Override
                     public void onConfigUi(OperationItem item) {
                         showConfigUiDesignerDialog(item);
+                    }
+
+                    @Override
+                    public void onRuntimeConfig(OperationItem item) {
+                        showNodeRuntimeConfigDialog(item);
                     }
 
                     @Override
@@ -9247,6 +9260,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         @Override
                         public void onConfigUi(OperationItem item) {
                             showConfigUiDesignerDialog(item);
+                        }
+
+                        @Override
+                        public void onRuntimeConfig(OperationItem item) {
+                            showNodeRuntimeConfigDialog(item);
                         }
 
                         @Override

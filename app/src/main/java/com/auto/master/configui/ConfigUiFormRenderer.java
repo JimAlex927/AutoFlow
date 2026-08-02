@@ -565,8 +565,9 @@ public final class ConfigUiFormRenderer {
     }
 
     private static String resolveInitialValue(ConfigUiComponent component, Map<String, String> initialValues) {
-        String initialValue = initialValues == null ? null : initialValues.get(component.fieldKey);
-        if (TextUtils.isEmpty(initialValue)) {
+        boolean hasSavedValue = initialValues != null && initialValues.containsKey(component.fieldKey);
+        String initialValue = hasSavedValue ? initialValues.get(component.fieldKey) : null;
+        if (!hasSavedValue) {
             initialValue = component.defaultValue;
         }
         return initialValue == null ? "" : initialValue;

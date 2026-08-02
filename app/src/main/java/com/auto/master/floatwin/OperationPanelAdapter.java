@@ -66,6 +66,8 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
 
         void onConfigUi(OperationItem item);
 
+        void onRuntimeConfig(OperationItem item);
+
         void onFloatButton(OperationItem item);
 
         void onNodePreDelay(OperationItem item);
@@ -582,6 +584,7 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
         actionItems.add(new ActionItem(6, "下移", "后移一位", position < operations.size() - 1));
         actionItems.add(new ActionItem(7, "删除", "移除节点", true));
         actionItems.add(new ActionItem(8, "配置 UI", "可视化表单", true));
+        actionItems.add(new ActionItem(12, "修改配置", "填写节点运行参数", true));
         actionItems.add(new ActionItem(9, "悬浮按钮", "创建/编辑", true));
         actionItems.add(new ActionItem(10, "前置延迟", "运行前等待", true));
         actionItems.add(new ActionItem(11, "绑定会话", "入口会话", true));
@@ -633,6 +636,9 @@ class OperationPanelAdapter extends RecyclerView.Adapter<OperationPanelAdapter.V
                     break;
                 case 8:
                     actionListener.onConfigUi(item);
+                    break;
+                case 12:
+                    actionListener.onRuntimeConfig(item);
                     break;
                 case 9:
                     actionListener.onFloatButton(item);

@@ -849,19 +849,39 @@ final class FloatWindowConfigUiHelper {
     }
 
     private void showLegacyNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg) {
+        showLegacyNodeRuntimeConfigDialog(cfg, cfg == null ? "" : cfg.runtimeVariablesText);
+    }
+
+    private void showLegacyNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg,
+                                                   @Nullable String initialVariablesText) {
+        if (cfg == null) {
+            return;
+        }
         View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_node_runtime_config, null);
         WindowManager.LayoutParams dialogLp = host.buildDialogLayoutParams(320, true);
         host.getWindowManager().addView(dialogView, dialogLp);
 
         TextView titleView = dialogView.findViewById(R.id.tv_runtime_cfg_title);
         EditText variablesInput = dialogView.findViewById(R.id.et_runtime_variables);
+        TextView visualModeButton = dialogView.findViewById(R.id.btn_runtime_cfg_visual_mode);
+        ConfigUiSchema boundSchema = resolveNodeConfigUiSchema(cfg);
         if (titleView != null) {
             titleView.setText("运行配置: " + host.abbreviate(cfg.operationName, 14));
         }
         if (variablesInput != null) {
-            variablesInput.setText(cfg.runtimeVariablesText == null ? "" : cfg.runtimeVariablesText);
+            variablesInput.setText(initialVariablesText == null ? "" : initialVariablesText);
             variablesInput.setSelection(variablesInput.getText() == null ? 0 : variablesInput.getText().length());
             variablesInput.setHint("每行 key=value\n# 注释行\n\n脚本中可通过：\n  vars.myKey        （独立变量）\n  vars.configMap.myKey （字典访问）");
+        }
+        if (visualModeButton != null) {
+            visualModeButton.setVisibility(boundSchema == null ? View.GONE : View.VISIBLE);
+            visualModeButton.setOnClickListener(v -> {
+                String draft = variablesInput == null || variablesInput.getText() == null
+                        ? ""
+                        : variablesInput.getText().toString();
+                host.safeRemoveView(dialogView);
+                showVisualNodeRuntimeConfigDialog(cfg, boundSchema, null, draft);
+            });
         }
 
         dialogView.findViewById(R.id.btn_runtime_cfg_clear).setOnClickListener(v -> {
@@ -898,12 +918,23 @@ final class FloatWindowConfigUiHelper {
     private void showVisualNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg,
                                                    ConfigUiSchema schema,
                                                    @Nullable String titleOverride) {
+        showVisualNodeRuntimeConfigDialog(
+                cfg,
+                schema,
+                titleOverride,
+                cfg == null ? "" : cfg.runtimeVariablesText);
+    }
+
+    private void showVisualNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg,
+                                                   ConfigUiSchema schema,
+                                                   @Nullable String titleOverride,
+                                                   @Nullable String initialVariablesText) {
         if (cfg == null || schema == null) {
             return;
         }
         cfg.ensureDefaults();
         schema.ensureDefaults();
-        Map<String, String> baseValues = ConfigUiValueCodec.parse(cfg.runtimeVariablesText);
+        Map<String, String> baseValues = ConfigUiValueCodec.parse(initialVariablesText);
         ConfigUiFormRenderer.FormSession session =
                 ConfigUiFormRenderer.create(host.getContext(), schema, baseValues);
         View dialogView = LayoutInflater.from(host.getContext()).inflate(R.layout.dialog_config_ui_runtime, null);
@@ -930,8 +961,12 @@ final class FloatWindowConfigUiHelper {
                 .setOnClickListener(v -> host.safeRemoveView(dialogView));
         dialogView.findViewById(R.id.btn_config_ui_runtime_text_mode)
                 .setOnClickListener(v -> {
+                    Map<String, String> draftValues = ConfigUiValueCodec.merge(
+                            baseValues,
+                            session.collectValues(),
+                            schema.collectFieldKeys());
                     host.safeRemoveView(dialogView);
-                    showLegacyNodeRuntimeConfigDialog(cfg);
+                    showLegacyNodeRuntimeConfigDialog(cfg, ConfigUiValueCodec.encode(draftValues));
                 });
         dialogView.findViewById(R.id.btn_config_ui_runtime_save)
                 .setOnClickListener(v -> {
