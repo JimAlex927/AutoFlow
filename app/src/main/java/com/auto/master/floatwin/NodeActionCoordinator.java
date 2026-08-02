@@ -29,7 +29,10 @@ final class NodeActionCoordinator {
         @Nullable Project loadProjectFromDir(File projectDir);
         void upsertCachedProject(Project project);
         @Nullable NodeFloatButtonConfig getNodeFloatButtonConfig(String operationId);
+        boolean shouldPromptConfigUiBeforeRun(@Nullable NodeFloatButtonConfig cfg);
+        void showRuntimeConfigBeforeRun(NodeFloatButtonConfig cfg, Runnable continueAfterSave);
         void applyNodeRuntimeVariables(OperationContext ctx, @Nullable NodeFloatButtonConfig cfg);
+        void onNodeRunStarting(String operationId);
         void hideNodeFloatButtonUntilScriptStops(String operationId);
         @Nullable String resolveBoundSessionForStartOperation(MetaOperation startOperation);
         void startOperationWithMode(MetaOperation startOperation,
@@ -75,22 +78,40 @@ final class NodeActionCoordinator {
             host.showToast("无法找到节点，请确认项目/任务未被删除");
             return;
         }
-        String scriptSessionId = host.resolveBoundSessionForStartOperation(data.startOperation);
-        if (scriptSessionId == null || scriptSessionId.isEmpty()) {
-            return;
+        Runnable startRun = () -> {
+            NodeFloatButtonConfig latestCfg = host.getNodeFloatButtonConfig(cfg.operationId);
+            if (latestCfg == null) {
+                latestCfg = cfg;
+            }
+            latestCfg.ensureDefaults();
+            host.applyNodeRuntimeVariables(data.ctx, latestCfg);
+            String scriptSessionId = host.resolveBoundSessionForStartOperation(data.startOperation);
+            if (scriptSessionId == null || scriptSessionId.isEmpty()) {
+                return;
+            }
+            host.onNodeRunStarting(cfg.operationId);
+            if (latestCfg.hideWhileRunning) {
+                host.hideNodeFloatButtonUntilScriptStops(cfg.operationId);
+            }
+            host.startOperationWithMode(
+                    data.startOperation,
+                    data.ctx,
+                    data.projectName,
+                    data.selectedTaskName,
+                    data.selectedTaskOperations,
+                    false,
+                    scriptSessionId
+            );
+        };
+        NodeFloatButtonConfig latestCfg = host.getNodeFloatButtonConfig(cfg.operationId);
+        if (latestCfg == null) {
+            latestCfg = cfg;
         }
-        if (cfg.hideWhileRunning) {
-            host.hideNodeFloatButtonUntilScriptStops(cfg.operationId);
+        if (host.shouldPromptConfigUiBeforeRun(latestCfg)) {
+            host.showRuntimeConfigBeforeRun(latestCfg, startRun);
+        } else {
+            startRun.run();
         }
-        host.startOperationWithMode(
-                data.startOperation,
-                data.ctx,
-                data.projectName,
-                data.selectedTaskName,
-                data.selectedTaskOperations,
-                false,
-                scriptSessionId
-        );
     }
 
     @Nullable
@@ -122,8 +143,6 @@ final class NodeActionCoordinator {
         List<OperationItem> ops = host.buildOperationItemsFromTask(task);
         OperationContext ctx = new OperationContext();
         ctx.anchorProject = project;
-        NodeFloatButtonConfig cfg = host.getNodeFloatButtonConfig(operationId);
-        host.applyNodeRuntimeVariables(ctx, cfg);
 
         RunLaunchData data = new RunLaunchData();
         data.startOperation = startOp;

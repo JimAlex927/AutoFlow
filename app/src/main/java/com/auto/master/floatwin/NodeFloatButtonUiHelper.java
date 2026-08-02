@@ -650,6 +650,7 @@ final class NodeFloatButtonUiHelper {
             if (existing != null) {
                 cfg.runtimeVariablesText = existing.runtimeVariablesText;
                 cfg.configUiSchemaId = existing.configUiSchemaId;
+                cfg.promptConfigUiBeforeRun = existing.promptConfigUiBeforeRun;
             }
             cfg.hideWhileRunning = chkHide.isChecked();
             cfg.buttonEnabled = true;
@@ -737,6 +738,7 @@ final class NodeFloatButtonUiHelper {
         copy.hideWhileRunning = src.hideWhileRunning;
         copy.runtimeVariablesText = src.runtimeVariablesText;
         copy.configUiSchemaId = src.configUiSchemaId;
+        copy.promptConfigUiBeforeRun = src.promptConfigUiBeforeRun;
         copy.buttonEnabled = src.buttonEnabled;
         copy.ensureDefaults();
         return copy;
@@ -847,7 +849,6 @@ final class NodeFloatButtonUiHelper {
 
         container.setOnClickListener(v ->
                 playClickEffect(container, cfg, () -> {
-                    markButtonRunningUntilScriptStops(cfg.operationId);
                     host.runNodeFloatButton(cfg);
                 }));
         host.getWindowManager().addView(root, lp);
@@ -1243,6 +1244,10 @@ final class NodeFloatButtonUiHelper {
             return;
         }
         restoreButtonVisual(operationId, success);
+    }
+
+    void onNodeRunStarting(String operationId) {
+        markButtonRunningUntilScriptStops(operationId);
     }
 
     private void requestSystemImagePick(String projectName, String taskName, EditText target, View dialogView) {

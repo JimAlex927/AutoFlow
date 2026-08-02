@@ -467,8 +467,23 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 @Override
+                public boolean shouldPromptConfigUiBeforeRun(@Nullable NodeFloatButtonConfig cfg) {
+                    return configUiHelper.shouldPromptConfigUiBeforeRun(cfg);
+                }
+
+                @Override
+                public void showRuntimeConfigBeforeRun(NodeFloatButtonConfig cfg, Runnable continueAfterSave) {
+                    configUiHelper.showNodeRuntimeConfigDialog(cfg, continueAfterSave);
+                }
+
+                @Override
                 public void applyNodeRuntimeVariables(OperationContext ctx, @Nullable NodeFloatButtonConfig cfg) {
                     configUiHelper.applyNodeRuntimeVariables(ctx, cfg);
+                }
+
+                @Override
+                public void onNodeRunStarting(String operationId) {
+                    nodeFloatButtonUiHelper.onNodeRunStarting(operationId);
                 }
 
                 @Override
@@ -2133,14 +2148,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 return;
             }
 
-            showRunModeMenu(v, mode -> startOperationWithMode(
-                    launchData.startOperation,
-                    launchData.ctx,
-                    launchData.projectName,
-                    launchData.selectedTaskName,
-                    launchData.selectedTaskOperations,
-                    mode
-            ));
+            showRunModeMenu(v, mode -> startPreparedOperationWithMode(launchData, mode));
         });
 
         btnRun.setOnLongClickListener(v -> {
@@ -2156,14 +2164,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
 
             PrecheckResult precheckResult = runPrecheck(launchData.selectedTask, launchData.selectedTaskName);
-            Runnable continueRun = () -> showRunModeMenu(v, mode -> startOperationWithMode(
-                    launchData.startOperation,
-                    launchData.ctx,
-                    launchData.projectName,
-                    launchData.selectedTaskName,
-                    launchData.selectedTaskOperations,
-                    mode
-            ));
+            Runnable continueRun = () -> showRunModeMenu(
+                    v,
+                    mode -> startPreparedOperationWithMode(launchData, mode));
             showPrecheckDialog(precheckResult, continueRun);
             return true;
         });
@@ -9059,6 +9062,35 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         launchData.selectedTaskOperations = selectedTaskOperations;
         launchData.ctx = ctx;
         return launchData;
+    }
+
+    private void startPreparedOperationWithMode(RunLaunchData launchData,
+                                                ExecutionDialogHelper.RunMode runMode) {
+        if (launchData == null || launchData.startOperation == null) {
+            return;
+        }
+        String operationId = launchData.startOperation.getId();
+        NodeFloatButtonConfig cfg = nodeFloatBtnManager == null
+                ? null
+                : nodeFloatBtnManager.getConfig(operationId);
+        Runnable startRun = () -> {
+            NodeFloatButtonConfig latestCfg = nodeFloatBtnManager == null
+                    ? null
+                    : nodeFloatBtnManager.getConfig(operationId);
+            configUiHelper.applyNodeRuntimeVariables(launchData.ctx, latestCfg);
+            startOperationWithMode(
+                    launchData.startOperation,
+                    launchData.ctx,
+                    launchData.projectName,
+                    launchData.selectedTaskName,
+                    launchData.selectedTaskOperations,
+                    runMode);
+        };
+        if (configUiHelper.shouldPromptConfigUiBeforeRun(cfg)) {
+            configUiHelper.showNodeRuntimeConfigDialog(cfg, startRun);
+        } else {
+            startRun.run();
+        }
     }
 
     @Nullable

@@ -93,16 +93,29 @@ final class FloatWindowConfigUiHelper {
     }
 
     void showNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg) {
+        showNodeRuntimeConfigDialog(cfg, null);
+    }
+
+    void showNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg, @Nullable Runnable continueAfterSave) {
         if (cfg == null) {
             return;
         }
         cfg.ensureDefaults();
         ConfigUiSchema schema = resolveNodeConfigUiSchema(cfg);
         if (schema != null) {
-            showVisualNodeRuntimeConfigDialog(cfg, schema, null);
+            showVisualNodeRuntimeConfigDialog(cfg, schema, null, cfg.runtimeVariablesText, continueAfterSave);
             return;
         }
-        showLegacyNodeRuntimeConfigDialog(cfg);
+        showLegacyNodeRuntimeConfigDialog(cfg, cfg.runtimeVariablesText, continueAfterSave);
+    }
+
+    boolean shouldPromptConfigUiBeforeRun(@Nullable NodeFloatButtonConfig cfg) {
+        if (cfg == null) {
+            return false;
+        }
+        cfg.ensureDefaults();
+        return Boolean.TRUE.equals(cfg.promptConfigUiBeforeRun)
+                && resolveNodeConfigUiSchema(cfg) != null;
     }
 
     void showConfigUiDesignerDialog(OperationItem item) {
@@ -418,6 +431,7 @@ final class FloatWindowConfigUiHelper {
         Context ctx = new android.view.ContextThemeWrapper(host.getContext(), R.style.Theme_AtomMaster);
         View dialogView = LayoutInflater.from(ctx).inflate(R.layout.dialog_config_ui_builder, null);
         EditText nameInput = dialogView.findViewById(R.id.et_builder_schema_name);
+        CheckBox promptBeforeRunCheckBox = dialogView.findViewById(R.id.cb_builder_prompt_before_run);
         HorizontalScrollView pageScroll = dialogView.findViewById(R.id.scroll_builder_pages);
         LinearLayout pageTabs = dialogView.findViewById(R.id.layout_builder_pages);
         TextView pageSummary = dialogView.findViewById(R.id.tv_builder_page_summary);
@@ -426,6 +440,9 @@ final class FloatWindowConfigUiHelper {
         final Runnable[] refreshRef = new Runnable[1];
 
         nameInput.setText(TextUtils.isEmpty(workingSchema.name) ? cfg.operationName + " 配置" : workingSchema.name);
+        if (promptBeforeRunCheckBox != null) {
+            promptBeforeRunCheckBox.setChecked(Boolean.TRUE.equals(cfg.promptConfigUiBeforeRun));
+        }
 
         Runnable refresh = () -> {
             workingSchema.ensureDefaults();
@@ -530,6 +547,8 @@ final class FloatWindowConfigUiHelper {
             updated.ensureDefaults();
             ensureNodeConfigOwnership(updated);
             updated.configUiSchemaId = schemaId;
+            updated.promptConfigUiBeforeRun = promptBeforeRunCheckBox != null
+                    && promptBeforeRunCheckBox.isChecked();
             nodeFloatBtnManager.saveConfig(updated);
             ConfigUiSchema schemaToSave = cloneConfigUiSchema(workingSchema);
             stampSchemaOwnership(schemaToSave, updated);
@@ -848,12 +867,9 @@ final class FloatWindowConfigUiHelper {
         ctx.variables.put("configMap", configMap);
     }
 
-    private void showLegacyNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg) {
-        showLegacyNodeRuntimeConfigDialog(cfg, cfg == null ? "" : cfg.runtimeVariablesText);
-    }
-
     private void showLegacyNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg,
-                                                   @Nullable String initialVariablesText) {
+                                                   @Nullable String initialVariablesText,
+                                                   @Nullable Runnable continueAfterSave) {
         if (cfg == null) {
             return;
         }
@@ -864,6 +880,7 @@ final class FloatWindowConfigUiHelper {
         TextView titleView = dialogView.findViewById(R.id.tv_runtime_cfg_title);
         EditText variablesInput = dialogView.findViewById(R.id.et_runtime_variables);
         TextView visualModeButton = dialogView.findViewById(R.id.btn_runtime_cfg_visual_mode);
+        TextView saveButton = dialogView.findViewById(R.id.btn_runtime_cfg_save);
         ConfigUiSchema boundSchema = resolveNodeConfigUiSchema(cfg);
         if (titleView != null) {
             titleView.setText("运行配置: " + host.abbreviate(cfg.operationName, 14));
@@ -880,8 +897,11 @@ final class FloatWindowConfigUiHelper {
                         ? ""
                         : variablesInput.getText().toString();
                 host.safeRemoveView(dialogView);
-                showVisualNodeRuntimeConfigDialog(cfg, boundSchema, null, draft);
+                showVisualNodeRuntimeConfigDialog(cfg, boundSchema, null, draft, continueAfterSave);
             });
+        }
+        if (saveButton != null && continueAfterSave != null) {
+            saveButton.setText("继续运行");
         }
 
         dialogView.findViewById(R.id.btn_runtime_cfg_clear).setOnClickListener(v -> {
@@ -912,6 +932,9 @@ final class FloatWindowConfigUiHelper {
             }
             host.safeRemoveView(dialogView);
             host.showToast("运行配置已保存");
+            if (continueAfterSave != null) {
+                continueAfterSave.run();
+            }
         });
     }
 
@@ -922,13 +945,15 @@ final class FloatWindowConfigUiHelper {
                 cfg,
                 schema,
                 titleOverride,
-                cfg == null ? "" : cfg.runtimeVariablesText);
+                cfg == null ? "" : cfg.runtimeVariablesText,
+                null);
     }
 
     private void showVisualNodeRuntimeConfigDialog(NodeFloatButtonConfig cfg,
                                                    ConfigUiSchema schema,
                                                    @Nullable String titleOverride,
-                                                   @Nullable String initialVariablesText) {
+                                                   @Nullable String initialVariablesText,
+                                                   @Nullable Runnable continueAfterSave) {
         if (cfg == null || schema == null) {
             return;
         }
@@ -944,6 +969,7 @@ final class FloatWindowConfigUiHelper {
 
         TextView titleView = dialogView.findViewById(R.id.tv_config_ui_runtime_title);
         FrameLayout contentContainer = dialogView.findViewById(R.id.layout_config_ui_runtime_content);
+        TextView saveButton = dialogView.findViewById(R.id.btn_config_ui_runtime_save);
         if (titleView != null) {
             titleView.setText(TextUtils.isEmpty(titleOverride)
                     ? (TextUtils.isEmpty(schema.name)
@@ -956,6 +982,9 @@ final class FloatWindowConfigUiHelper {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT));
         }
+        if (saveButton != null) {
+            saveButton.setText(continueAfterSave == null ? "保存" : "继续运行");
+        }
 
         dialogView.findViewById(R.id.btn_config_ui_runtime_cancel)
                 .setOnClickListener(v -> host.safeRemoveView(dialogView));
@@ -966,7 +995,10 @@ final class FloatWindowConfigUiHelper {
                             session.collectValues(),
                             schema.collectFieldKeys());
                     host.safeRemoveView(dialogView);
-                    showLegacyNodeRuntimeConfigDialog(cfg, ConfigUiValueCodec.encode(draftValues));
+                    showLegacyNodeRuntimeConfigDialog(
+                            cfg,
+                            ConfigUiValueCodec.encode(draftValues),
+                            continueAfterSave);
                 });
         dialogView.findViewById(R.id.btn_config_ui_runtime_save)
                 .setOnClickListener(v -> {
@@ -992,6 +1024,9 @@ final class FloatWindowConfigUiHelper {
                     }
                     host.safeRemoveView(dialogView);
                     host.showToast("可视化配置已保存");
+                    if (continueAfterSave != null) {
+                        continueAfterSave.run();
+                    }
                 });
     }
 

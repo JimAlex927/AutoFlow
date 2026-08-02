@@ -57,6 +57,8 @@ public class NodeFloatButtonConfig {
     public String runtimeVariablesText;
     /** Bound visual config UI schema id. Empty = use legacy text editor only. */
     public String configUiSchemaId;
+    /** Whether the bound Config UI must be confirmed before every node run. */
+    public Boolean promptConfigUiBeforeRun;
     /** Whether the floating button itself should be rendered. */
     public Boolean buttonEnabled;
 
@@ -94,6 +96,7 @@ public class NodeFloatButtonConfig {
         if (alpha    <= 0) alpha     = 1.0f;
         if (runtimeVariablesText == null) runtimeVariablesText = "";
         if (configUiSchemaId == null) configUiSchemaId = "";
+        if (promptConfigUiBeforeRun == null) promptConfigUiBeforeRun = false;
         if (buttonEnabled == null) buttonEnabled = true;
     }
 }

@@ -26,6 +26,17 @@
         android:textColor="#243244"
         android:textSize="14sp" />
 
+    <CheckBox
+        android:id="@+id/cb_builder_prompt_before_run"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:buttonTint="#2F4F7C"
+        android:paddingVertical="4dp"
+        android:text="每次运行此节点前弹出配置 UI"
+        android:textColor="#374151"
+        android:textSize="13sp" />
+
     <HorizontalScrollView
         android:id="@+id/scroll_builder_pages"
         android:layout_width="match_parent"
