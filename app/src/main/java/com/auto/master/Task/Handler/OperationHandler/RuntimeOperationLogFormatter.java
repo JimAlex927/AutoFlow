@@ -125,6 +125,8 @@ public final class RuntimeOperationLogFormatter {
                         : "共 " + inputText(input, MetaOperation.REPEAT_COUNT) + " 轮";
                 return "循环执行: 从 " + inputText(input, MetaOperation.REPEAT_START_OPERATION_ID)
                         + " 开始，" + repeatDetail
+                        + appendIfPresent(" 每轮处理=", inputText(input,
+                        MetaOperation.REPEAT_NEXT_ROUND_EXPRESSION))
                         + appendIfPresent(" next=", inputText(input, MetaOperation.NEXT_OPERATION_ID));
             case 17:
                 return "返回键: 已触发";

@@ -25,6 +25,8 @@ public class RepeatExecutionOperationHandler extends OperationHandler {
         String mode = repeatMode(input);
         int count = positiveInt(input, MetaOperation.REPEAT_COUNT, 2);
         String expression = stringValue(input, MetaOperation.REPEAT_EXPRESSION);
+        String nextRoundExpression = stringValue(
+                input, MetaOperation.REPEAT_NEXT_ROUND_EXPRESSION);
         if (TextUtils.isEmpty(startId)) {
             return false;
         }
@@ -38,6 +40,7 @@ public class RepeatExecutionOperationHandler extends OperationHandler {
         response.put(MetaOperation.REPEAT_INFINITE, MetaOperation.REPEAT_MODE_INFINITE.equals(mode));
         response.put(MetaOperation.REPEAT_COUNT, count);
         response.put(MetaOperation.REPEAT_EXPRESSION, expression);
+        response.put(MetaOperation.REPEAT_NEXT_ROUND_EXPRESSION, nextRoundExpression);
         response.put(MetaOperation.NEXT_OPERATION_ID,
                 stringValue(input, MetaOperation.NEXT_OPERATION_ID));
         ctx.currentResponse = response;

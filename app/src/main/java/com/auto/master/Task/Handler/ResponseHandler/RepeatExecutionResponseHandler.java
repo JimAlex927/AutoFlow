@@ -53,11 +53,13 @@ public class RepeatExecutionResponseHandler extends DefaultResponseHandler {
         String mode = repeatMode(controller.getInputMap());
         int count = positiveInt(controller.getInputMap().get(MetaOperation.REPEAT_COUNT), 2);
         String expression = text(controller.getInputMap().get(MetaOperation.REPEAT_EXPRESSION));
+        String nextRoundExpression = text(controller.getInputMap().get(
+                MetaOperation.REPEAT_NEXT_ROUND_EXPRESSION));
         String nextId = text(controller.getInputMap().get(MetaOperation.NEXT_OPERATION_ID));
         MetaOperation nextOperation = TextUtils.isEmpty(nextId) || task == null || task.getOperationMap() == null
                 ? null : task.getOperationMap().get(nextId);
         scriptExecuteContext.beginRepeatExecution(startOperation, controller.getId(), nextOperation,
-                mode, count, expression);
+                mode, count, expression, nextRoundExpression);
         scriptExecuteContext.tobeHandledOperation = startOperation;
     }
 

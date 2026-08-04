@@ -76,13 +76,25 @@ public class ScriptExecuteContext {
                                      String mode,
                                      int totalRounds,
                                      String expression) {
+        beginRepeatExecution(startOperation, controllerOperationId, nextOperation, mode,
+                totalRounds, expression, "");
+    }
+
+    public void beginRepeatExecution(MetaOperation startOperation,
+                                     String controllerOperationId,
+                                     MetaOperation nextOperation,
+                                     String mode,
+                                     int totalRounds,
+                                     String expression,
+                                     String nextRoundExpression) {
         repeatExecutionState = new RepeatExecutionState(
                 startOperation,
                 controllerOperationId,
                 nextOperation,
                 mode,
                 Math.max(1, totalRounds),
-                expression);
+                expression,
+                nextRoundExpression);
     }
 
     /**
@@ -96,12 +108,26 @@ public class ScriptExecuteContext {
             return null;
         }
         state.completedRounds++;
-        boolean continueRepeat = MetaOperation.REPEAT_MODE_INFINITE.equals(state.mode);
-        if (MetaOperation.REPEAT_MODE_COUNT.equals(state.mode)) {
-            continueRepeat = state.completedRounds < state.totalRounds;
-        } else if (MetaOperation.REPEAT_MODE_EXPRESSION.equals(state.mode)) {
-            continueRepeat = RepeatExpressionEvaluator.shouldContinue(state.expression,
-                    sharedContext == null ? null : sharedContext.variables);
+        boolean continueRepeat;
+        if (MetaOperation.REPEAT_MODE_EXPRESSION.equals(state.mode)) {
+            if (!executeRepeatNextRoundUpdate(state)) {
+                continueRepeat = false;
+            } else {
+                RepeatExpressionEvaluator.EvaluationResult evaluation =
+                        RepeatExpressionEvaluator.evaluate(
+                                state.expression,
+                                sharedContext == null ? null : sharedContext.variables);
+                continueRepeat = evaluation.shouldContinue;
+                logRepeatExpressionResult(state, evaluation);
+            }
+        } else {
+            continueRepeat = MetaOperation.REPEAT_MODE_INFINITE.equals(state.mode);
+            if (MetaOperation.REPEAT_MODE_COUNT.equals(state.mode)) {
+                continueRepeat = state.completedRounds < state.totalRounds;
+            }
+            if (continueRepeat && !executeRepeatNextRoundUpdate(state)) {
+                continueRepeat = false;
+            }
         }
         if (continueRepeat) {
             return new RepeatAdvanceResult(state.startOperation, true, state.completedRounds,
@@ -110,6 +136,63 @@ public class ScriptExecuteContext {
         repeatExecutionState = null;
         return new RepeatAdvanceResult(state.nextOperation, false, state.completedRounds,
                 state.totalRounds, state.mode);
+    }
+
+    private boolean executeRepeatNextRoundUpdate(RepeatExecutionState state) {
+        if (state == null || state.nextRoundExpression == null
+                || state.nextRoundExpression.trim().isEmpty()) {
+            return true;
+        }
+        RepeatExpressionEvaluator.UpdateResult update =
+                RepeatExpressionEvaluator.executeNextRoundUpdate(
+                        state.nextRoundExpression,
+                        sharedContext == null ? null : sharedContext.variables);
+        logRepeatNextRoundUpdate(state, update);
+        return update.success;
+    }
+
+    private void logRepeatNextRoundUpdate(
+            RepeatExecutionState state,
+            RepeatExpressionEvaluator.UpdateResult update) {
+        if (sharedContext == null || sharedContext.runtimeLogSink == null || update == null) {
+            return;
+        }
+        String expression = compactRepeatLogExpression(
+                state == null ? null : state.nextRoundExpression);
+        if (!update.success) {
+            sharedContext.runtimeLogSink.log("[error] 循环第 "
+                    + state.completedRounds + " 轮进入下一轮前处理失败: "
+                    + update.errorMessage + "，已结束循环，表达式=" + expression);
+            return;
+        }
+        sharedContext.runtimeLogSink.log("[info] 循环第 "
+                + state.completedRounds + " 轮进入下一轮前处理完成，表达式=" + expression);
+    }
+
+    private void logRepeatExpressionResult(
+            RepeatExecutionState state,
+            RepeatExpressionEvaluator.EvaluationResult evaluation) {
+        if (sharedContext == null || sharedContext.runtimeLogSink == null || evaluation == null) {
+            return;
+        }
+        String expression = compactRepeatLogExpression(
+                state == null ? null : state.expression);
+        if (evaluation.hasError()) {
+            sharedContext.runtimeLogSink.log("[error] 循环表达式第 "
+                    + state.completedRounds + " 轮求值失败: "
+                    + evaluation.errorMessage + "，表达式=" + expression);
+            return;
+        }
+        sharedContext.runtimeLogSink.log("[info] 循环表达式第 "
+                + state.completedRounds + " 轮 => "
+                + evaluation.shouldContinue + "，表达式=" + expression);
+    }
+
+    private static String compactRepeatLogExpression(String rawExpression) {
+        String expression = rawExpression == null ? "" : rawExpression;
+        expression = expression.replace('\n', ' ').replace('\r', ' ').trim();
+        return expression.length() > 120
+                ? expression.substring(0, 117) + "..." : expression;
     }
 
     public boolean isRepeatExecutionActiveFor(String controllerOperationId) {
@@ -145,6 +228,7 @@ public class ScriptExecuteContext {
         final String mode;
         final int totalRounds;
         final String expression;
+        final String nextRoundExpression;
         int completedRounds;
 
         RepeatExecutionState(MetaOperation startOperation,
@@ -152,13 +236,16 @@ public class ScriptExecuteContext {
                              MetaOperation nextOperation,
                              String mode,
                              int totalRounds,
-                             String expression) {
+                             String expression,
+                             String nextRoundExpression) {
             this.startOperation = startOperation;
             this.controllerOperationId = controllerOperationId;
             this.nextOperation = nextOperation;
             this.mode = mode;
             this.totalRounds = totalRounds;
-            this.expression = expression;
+            this.expression = expression == null ? "" : expression.trim();
+            this.nextRoundExpression = nextRoundExpression == null
+                    ? "" : nextRoundExpression.trim();
         }
     }
 }

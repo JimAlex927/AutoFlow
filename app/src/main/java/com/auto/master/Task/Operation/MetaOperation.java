@@ -149,6 +149,7 @@ public abstract class MetaOperation {
     public static String REPEAT_COUNT = "REPEAT_COUNT";
     public static String REPEAT_MODE = "REPEAT_MODE";
     public static String REPEAT_EXPRESSION = "REPEAT_EXPRESSION";
+    public static String REPEAT_NEXT_ROUND_EXPRESSION = "REPEAT_NEXT_ROUND_EXPRESSION";
     public static final String REPEAT_MODE_INFINITE = "infinite";
     public static final String REPEAT_MODE_COUNT = "count";
     public static final String REPEAT_MODE_EXPRESSION = "expression";

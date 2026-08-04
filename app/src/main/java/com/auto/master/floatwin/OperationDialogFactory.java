@@ -34,6 +34,7 @@ import com.auto.master.Task.Operation.MatchMapTemplateOperation;
 import com.auto.master.Task.Operation.MatchTemplateOperation;
 import com.auto.master.Task.Operation.MetaOperation;
 import com.auto.master.Task.Operation.OperationContext;
+import com.auto.master.auto.RepeatExpressionEvaluator;
 import com.auto.master.capture.ScreenCapture;
 import com.auto.master.floatwin.adapter.LaunchAppPickerAdapter;
 import com.auto.master.floatwin.adapter.OperationIdPickerAdapter;
@@ -5236,6 +5237,8 @@ public class OperationDialogFactory {
         AutoCompleteTextView edtMode = dialogView.findViewById(R.id.edt_repeat_mode);
         EditText edtCount = dialogView.findViewById(R.id.edt_repeat_count);
         EditText edtExpression = dialogView.findViewById(R.id.edt_repeat_expression);
+        EditText edtNextRoundExpression = dialogView.findViewById(
+                R.id.edt_repeat_next_round_expression);
         AutoCompleteTextView edtNext = dialogView.findViewById(R.id.edt_next_operation);
         View countSection = dialogView.findViewById(R.id.ly_repeat_count);
         View expressionSection = dialogView.findViewById(R.id.ly_repeat_expression);
@@ -5271,6 +5274,8 @@ public class OperationDialogFactory {
                 edtCount.setText(String.valueOf(Math.max(1,
                         input.optInt(MetaOperation.REPEAT_COUNT, 2))));
                 edtExpression.setText(input.optString(MetaOperation.REPEAT_EXPRESSION, ""));
+                edtNextRoundExpression.setText(input.optString(
+                        MetaOperation.REPEAT_NEXT_ROUND_EXPRESSION, ""));
                 setOperationReferenceText(edtNext,
                         input.optString(MetaOperation.NEXT_OPERATION_ID, ""));
             }
@@ -5298,6 +5303,7 @@ public class OperationDialogFactory {
             String startId = safeText(edtStart);
             String mode = normalizeRepeatExecutionMode(safeText(edtMode));
             String expression = safeText(edtExpression);
+            String nextRoundExpression = safeText(edtNextRoundExpression);
             String nextId = safeText(edtNext);
             int count = 2;
             if (TextUtils.isEmpty(name)) {
@@ -5327,6 +5333,21 @@ public class OperationDialogFactory {
                 edtExpression.setError("请输入变量表达式");
                 return;
             }
+            if (MetaOperation.REPEAT_MODE_EXPRESSION.equals(mode)) {
+                String syntaxError = RepeatExpressionEvaluator.validateSyntax(expression);
+                if (!TextUtils.isEmpty(syntaxError)) {
+                    edtExpression.setError("表达式语法错误: " + syntaxError);
+                    return;
+                }
+            }
+            if (!TextUtils.isEmpty(nextRoundExpression)) {
+                String syntaxError = RepeatExpressionEvaluator
+                        .validateNextRoundUpdateSyntax(nextRoundExpression);
+                if (!TextUtils.isEmpty(syntaxError)) {
+                    edtNextRoundExpression.setError("处理表达式语法错误: " + syntaxError);
+                    return;
+                }
+            }
             if (!editing && idGenerator == null) {
                 host.showToast("节点 ID 生成器不可用");
                 return;
@@ -5345,6 +5366,10 @@ public class OperationDialogFactory {
                 input.put(MetaOperation.REPEAT_COUNT, count);
                 if (MetaOperation.REPEAT_MODE_EXPRESSION.equals(mode)) {
                     input.put(MetaOperation.REPEAT_EXPRESSION, expression);
+                }
+                if (!TextUtils.isEmpty(nextRoundExpression)) {
+                    input.put(MetaOperation.REPEAT_NEXT_ROUND_EXPRESSION,
+                            nextRoundExpression);
                 }
                 if (!TextUtils.isEmpty(nextId)) {
                     input.put(MetaOperation.NEXT_OPERATION_ID, nextId);

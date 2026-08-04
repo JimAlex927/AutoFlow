@@ -165,7 +165,7 @@
                     android:id="@+id/edt_repeat_expression"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:hint="例如: ${retryCount} &lt; 5"
+                    android:hint="例如: ${retryCount} &lt; 5 或 ${configMap.limit} &lt; 6"
                     android:inputType="text"
                     android:layout_marginBottom="4dp" />
 
@@ -173,7 +173,37 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_marginBottom="12dp"
-                    android:text="每轮结束后判断；结果为 true 时继续下一轮。支持 ${变量名} 或变量名直接参与比较。"
+                    android:text="每轮结束后判断；结果为 true 时继续下一轮。支持 ${变量名}、${对象.字段}、vars.变量名或变量名直接参与比较；判断结果和错误会写入运行日志。"
+                    android:textColor="#6A7682"
+                    android:textSize="12sp" />
+            </LinearLayout>
+
+            <LinearLayout
+                android:id="@+id/ly_repeat_next_round_expression"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="4dp"
+                    android:text="进入下一轮前执行（可选）"
+                    android:textSize="14sp" />
+
+                <EditText
+                    android:id="@+id/edt_repeat_next_round_expression"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="例如: times = times + 1"
+                    android:inputType="text"
+                    android:layout_marginBottom="4dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginBottom="12dp"
+                    android:text="变量表达式模式会在每轮结束先执行此处理，再判断是否继续；指定次数和无限循环模式会在进入下一轮前执行。变量修改会保留，处理失败会结束循环。"
                     android:textColor="#6A7682"
                     android:textSize="12sp" />
             </LinearLayout>
