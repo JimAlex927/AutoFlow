@@ -122,7 +122,6 @@ public class ScreenCaptureManager {
     // 3000ms：手势/短延时通常 <2s，留足余量避免频繁暂停/恢复。
     /** 0 表示不自动暂停 VirtualDisplay surface。 */
     public static volatile long IDLE_PAUSE_THRESHOLD_MS = 0L;
-    private static final long FULL_CLEANUP_IDLE_THRESHOLD_MS = 45_000L;
     private static final long RESUME_GRACE_WINDOW_MS = 800L;
     private volatile boolean displayPaused = false;
     private volatile long lastPollMs = 0;
@@ -135,16 +134,9 @@ public class ScreenCaptureManager {
             if (!isRunning.get()) return;
             long pauseThresholdMs = IDLE_PAUSE_THRESHOLD_MS;
             if (pauseThresholdMs <= 0L) {
-                long now = System.currentTimeMillis();
-                long idleMs = now - lastPollMs;
-                if (idleMs > FULL_CLEANUP_IDLE_THRESHOLD_MS) {
-                    Log.i(TAG, "capture idle too long, cleanup session: " + idleMs + "ms");
-                    cleanup();
-                    return;
-                }
-                if (captureHandler != null) {
-                    captureHandler.postDelayed(this, FULL_CLEANUP_IDLE_THRESHOLD_MS);
-                }
+                // 0 means keep the MediaProjection session alive.  Stopping a session
+                // invalidates its consent token on Android 14 and many OEM builds, so
+                // an idle timeout must never call cleanup() merely to save resources.
                 return;
             }
             long now = System.currentTimeMillis();
@@ -156,11 +148,6 @@ public class ScreenCaptureManager {
                 return;
             }
             long idleMs = now - lastPollMs;
-            if (idleMs > FULL_CLEANUP_IDLE_THRESHOLD_MS) {
-                Log.i(TAG, "capture idle too long, cleanup session: " + idleMs + "ms");
-                cleanup();
-                return;
-            }
             if (!displayPaused && virtualDisplay != null
                     && idleMs > pauseThresholdMs) {
                 displayPaused = true;
@@ -279,6 +266,11 @@ public class ScreenCaptureManager {
             mediaProjection.registerCallback(new MediaProjection.Callback() {
                 @Override public void onStop() {
                     Log.w(TAG, "MediaProjection onStop()");
+                    // The consent token is no longer reusable after onStop on
+                    // Android 14/OEM variants. Clear it immediately so the next
+                    // capture action can request permission instead of silently
+                    // retrying a dead token.
+                    ScreenCapture.clearProjectionPermission();
                     cleanup();
                 }
             }, mainHandler);
@@ -299,10 +291,9 @@ public class ScreenCaptureManager {
             consecutiveFrameFailures = 0;
             pendingBorderHealthChecks = BORDER_HEALTH_CHECK_WARMUP_PASSES;
             resetScheduled = false;
-            long idleCheckDelayMs = IDLE_PAUSE_THRESHOLD_MS > 0L
-                    ? IDLE_PAUSE_THRESHOLD_MS
-                    : FULL_CLEANUP_IDLE_THRESHOLD_MS;
-            captureHandler.postDelayed(idleCheckRunnable, idleCheckDelayMs);
+            if (IDLE_PAUSE_THRESHOLD_MS > 0L) {
+                captureHandler.postDelayed(idleCheckRunnable, IDLE_PAUSE_THRESHOLD_MS);
+            }
 
             Log.i(TAG, "startCapture ok");
             return true;
@@ -847,9 +838,11 @@ public class ScreenCaptureManager {
         cleanupDisplayOnly();
 
         try {
-            if (mediaProjection != null) {
-                mediaProjection.stop();
-                mediaProjection = null;
+            MediaProjection projectionToStop = mediaProjection;
+            mediaProjection = null;
+            if (projectionToStop != null) {
+                ScreenCapture.clearProjectionPermission();
+                projectionToStop.stop();
             }
         } catch (Throwable ignored) {}
 

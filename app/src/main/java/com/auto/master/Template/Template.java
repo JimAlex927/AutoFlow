@@ -162,6 +162,15 @@ public class Template {
         gestureMap.put(key, gestureNode);
     }
 
+    public static synchronized void clearTaskSingleGestureCache(
+            String projectName, String taskName, String key) {
+        Map<String, GestureOverlayView.GestureNode> gestureMap =
+                gestureCache.get(projectName + "_" + taskName);
+        if (gestureMap != null) {
+            gestureMap.remove(key);
+        }
+    }
+
     public static synchronized void putTaskSingleManifestCache(String projectName,String taskName,String key,List<Integer> bbox){
         String cacheKey = projectName + "_" + taskName;
         Map<String, List<Integer>> projectTaskManifestMap = manifestCache.get(cacheKey);

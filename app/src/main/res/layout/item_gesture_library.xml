@@ -7,11 +7,36 @@
     android:padding="6dp"
     android:layout_marginBottom="6dp">
 
-    <com.auto.master.floatwin.GesturePreviewView
-        android:id="@+id/view_gesture_preview"
+    <FrameLayout
         android:layout_width="match_parent"
-        android:layout_height="84dp"
-        android:background="#EEF3FB" />
+        android:layout_height="84dp">
+
+        <com.auto.master.floatwin.GesturePreviewView
+            android:id="@+id/view_gesture_preview"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="#EEF3FB" />
+
+        <CheckBox
+            android:id="@+id/chk_gesture_pick"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="top|end"
+            android:buttonTint="#315dbf"
+            android:visibility="gone" />
+
+        <TextView
+            android:id="@+id/btn_gesture_delete"
+            android:layout_width="34dp"
+            android:layout_height="24dp"
+            android:layout_gravity="top|start"
+            android:gravity="center"
+            android:text="删"
+            android:textSize="10sp"
+            android:textColor="#b23b3b"
+            android:background="@drawable/item_operation_compact_bg"
+            android:visibility="gone" />
+    </FrameLayout>
 
     <TextView
         android:id="@+id/tv_gesture_item_name"
@@ -29,7 +54,7 @@
         android:layout_height="wrap_content"
         android:textSize="10sp"
         android:textColor="#7a8794"
-        android:maxLines="1"
+        android:maxLines="2"
         android:ellipsize="end" />
 
 </LinearLayout>

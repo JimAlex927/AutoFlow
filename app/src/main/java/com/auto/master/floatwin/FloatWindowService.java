@@ -4800,7 +4800,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             currentProjectDir = parent;
         }
 
-        List<GestureLibraryAdapter.GestureLibraryItem> items = getCurrentTaskGestureLibraryItems();
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_gesture_library, null);
         WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(360, true);
         wm.addView(dialogView, dialogLp);
@@ -4816,13 +4815,27 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             clearButton.setText("关闭");
         }
         rv.setLayoutManager(new LinearLayoutManager(this));
-        GestureLibraryAdapter adapter = new GestureLibraryAdapter(items, item -> {
-            if (item == null || TextUtils.isEmpty(item.fileName)) {
-                return;
+        final GestureLibraryAdapter[] adapterRef = new GestureLibraryAdapter[1];
+        Runnable refreshList = () -> {
+            currentTaskDir = taskDir;
+            if (adapterRef[0] != null) {
+                adapterRef[0].replaceData(getCurrentTaskGestureLibraryItems());
             }
-            playGestureFileByName(dialogView, item.fileName, null);
-        });
+        };
+        GestureLibraryAdapter adapter = new GestureLibraryAdapter(
+                getCurrentTaskGestureLibraryItems(),
+                item -> {
+                    if (item == null || TextUtils.isEmpty(item.fileName)) {
+                        return;
+                    }
+                    playGestureFileByName(dialogView, item.fileName, null);
+                },
+                item -> confirmDeleteGestureItems(
+                        taskDir, java.util.Collections.singletonList(item), refreshList));
+        adapterRef[0] = adapter;
+        adapter.setDeleteActionEnabled(true);
         rv.setAdapter(adapter);
+        bindGestureLibraryManagement(dialogView, taskDir, adapter, refreshList);
 
         dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
         if (clearButton != null) {
@@ -4837,6 +4850,130 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 @Override public void afterTextChanged(Editable s) {}
             });
         }
+    }
+
+    private void bindGestureLibraryManagement(
+            View dialogView,
+            File taskDir,
+            GestureLibraryAdapter adapter,
+            Runnable refreshList) {
+        if (dialogView == null || adapter == null) {
+            return;
+        }
+        TextView batchButton = dialogView.findViewById(R.id.btn_gesture_library_batch);
+        TextView selectAllButton = dialogView.findViewById(R.id.btn_gesture_library_select_all);
+        TextView deleteButton = dialogView.findViewById(R.id.btn_gesture_library_delete);
+        final boolean[] batchMode = {false};
+
+        Runnable updateUi = () -> {
+            int selected = adapter.getSelectedCount();
+            if (batchButton != null) {
+                batchButton.setText(batchMode[0] ? "完成" : "批量");
+            }
+            if (selectAllButton != null) {
+                selectAllButton.setVisibility(batchMode[0] ? View.VISIBLE : View.GONE);
+            }
+            if (deleteButton != null) {
+                deleteButton.setText("删除(" + selected + ")");
+            }
+        };
+        adapter.setSelectionChangedListener((count, allShownSelected) -> {
+            if (deleteButton != null) {
+                deleteButton.setText("删除(" + count + ")");
+            }
+            if (selectAllButton != null) {
+                selectAllButton.setText(allShownSelected ? "取消全选" : "全选");
+            }
+        });
+        if (batchButton != null) {
+            batchButton.setOnClickListener(v -> {
+                batchMode[0] = !batchMode[0];
+                adapter.setBatchMode(batchMode[0]);
+                updateUi.run();
+            });
+        }
+        if (selectAllButton != null) {
+            selectAllButton.setOnClickListener(v -> adapter.toggleSelectAllShown());
+        }
+        if (deleteButton != null) {
+            deleteButton.setOnClickListener(v -> {
+                List<GestureLibraryAdapter.GestureLibraryItem> selected =
+                        adapter.getSelectedItems();
+                if (selected.isEmpty()) {
+                    Toast.makeText(this, "请先选择手势", Toast.LENGTH_SHORT).show();
+                    return;
+                }
+                confirmDeleteGestureItems(taskDir, selected, () -> {
+                    batchMode[0] = false;
+                    adapter.setBatchMode(false);
+                    if (refreshList != null) {
+                        refreshList.run();
+                    }
+                    updateUi.run();
+                });
+            });
+        }
+        updateUi.run();
+    }
+
+    private void confirmDeleteGestureItems(
+            File taskDir,
+            List<GestureLibraryAdapter.GestureLibraryItem> selected,
+            @Nullable Runnable onChanged) {
+        if (selected == null || selected.isEmpty()) {
+            return;
+        }
+        int protectedCount = 0;
+        for (GestureLibraryAdapter.GestureLibraryItem item : selected) {
+            if (item != null && item.usageCount > 0) {
+                protectedCount++;
+            }
+        }
+        int deletableCount = selected.size() - protectedCount;
+        if (deletableCount <= 0) {
+            Toast.makeText(this, "所选手势仍被节点引用，不能删除", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        String message = "确定删除 " + deletableCount + " 个未引用手势？";
+        if (protectedCount > 0) {
+            message += "\n另有 " + protectedCount + " 个仍被引用，将自动跳过。";
+        }
+        android.view.ContextThemeWrapper ctx =
+                new android.view.ContextThemeWrapper(this, R.style.Theme_AtomMaster);
+        android.app.AlertDialog dialog = new android.app.AlertDialog.Builder(ctx)
+                .setTitle("删除手势")
+                .setMessage(message)
+                .setNegativeButton("取消", null)
+                .setPositiveButton("删除", (d, which) -> {
+                    int deleted = 0;
+                    int skipped = 0;
+                    for (GestureLibraryAdapter.GestureLibraryItem item : selected) {
+                        if (item == null || item.usageCount > 0) {
+                            skipped++;
+                            continue;
+                        }
+                        if (deleteGestureFile(taskDir, item.fileName)) {
+                            deleted++;
+                        } else {
+                            skipped++;
+                        }
+                    }
+                    String result = "已删除 " + deleted + " 个手势";
+                    if (skipped > 0) {
+                        result += "，跳过 " + skipped + " 个被引用或删除失败的手势";
+                    }
+                    Toast.makeText(this, result, Toast.LENGTH_SHORT).show();
+                    if (deleted > 0 && onChanged != null) {
+                        onChanged.run();
+                    }
+                })
+                .create();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setType(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O
+                    ? WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+                    : WindowManager.LayoutParams.TYPE_PHONE);
+        }
+        dialog.show();
     }
 
     private void ensureEntityActionPopup() {
@@ -8048,6 +8185,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (currentTaskDir == null) {
             return items;
         }
+        Map<String, Integer> usageMap = getGestureUsageCountMap(currentTaskDir);
         File gestureDir = new File(currentTaskDir, "gesture");
         File[] files = gestureDir.listFiles(f -> f.isFile() && f.getName().toLowerCase(Locale.ROOT).endsWith(".json"));
         if (files == null) {
@@ -8056,9 +8194,61 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         java.util.Arrays.sort(files, (a, b) -> Long.compare(b.lastModified(), a.lastModified()));
         for (File file : files) {
             GestureOverlayView.GestureNode node = readGestureNodeFromFile(file);
-            items.add(new GestureLibraryAdapter.GestureLibraryItem(file.getName(), file, node));
+            int usageCount = usageMap.containsKey(file.getName())
+                    ? usageMap.get(file.getName()) : 0;
+            items.add(new GestureLibraryAdapter.GestureLibraryItem(
+                    file.getName(), file, node, usageCount));
         }
         return items;
+    }
+
+    private Map<String, Integer> getGestureUsageCountMap(@Nullable File taskDir) {
+        Map<String, Integer> usage = new HashMap<>();
+        if (taskDir == null || !taskDir.isDirectory()) {
+            return usage;
+        }
+        File operationsFile = new File(taskDir, "operations.json");
+        if (!operationsFile.isFile()) {
+            return usage;
+        }
+        try {
+            String content = readFileContent(operationsFile);
+            if (TextUtils.isEmpty(content)) {
+                return usage;
+            }
+            usage.putAll(GestureReferenceCounter.countFromOperationsJson(content));
+        } catch (Exception e) {
+            Log.w(TAG, "统计手势引用失败: " + operationsFile.getAbsolutePath(), e);
+        }
+        return usage;
+    }
+
+    private boolean deleteGestureFile(@Nullable File taskDir, String rawName) {
+        if (taskDir == null || !taskDir.isDirectory() || TextUtils.isEmpty(rawName)) {
+            return false;
+        }
+        String fileName = normalizeGestureFileName(rawName);
+        if (getGestureUsageCountMap(taskDir).getOrDefault(fileName, 0) > 0) {
+            return false;
+        }
+        File gestureDir = new File(taskDir, "gesture");
+        File target = new File(gestureDir, fileName);
+        try {
+            if (!target.getCanonicalFile().getParentFile().equals(gestureDir.getCanonicalFile())) {
+                Log.w(TAG, "拒绝删除手势目录外文件: " + rawName);
+                return false;
+            }
+            if (!target.isFile() || !target.delete()) {
+                return false;
+            }
+            File projectDir = taskDir.getParentFile();
+            Template.clearTaskSingleGestureCache(
+                    projectDir == null ? "" : projectDir.getName(), taskDir.getName(), fileName);
+            return true;
+        } catch (Exception e) {
+            Log.w(TAG, "删除手势文件失败: " + target.getAbsolutePath(), e);
+            return false;
+        }
     }
 
     private void updateGestureStatus(TextView statusView, String gestureFileName) {
@@ -8115,7 +8305,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private void showGestureLibraryDialog(AutoCompleteTextView gestureInput, TextView statusView) {
-        List<GestureLibraryAdapter.GestureLibraryItem> items = getCurrentTaskGestureLibraryItems();
+        File taskDir = currentTaskDir;
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_gesture_library, null);
         WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(360, true);
         wm.addView(dialogView, dialogLp);
@@ -8123,13 +8313,34 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         RecyclerView rv = dialogView.findViewById(R.id.rv_library);
         EditText edtSearch = dialogView.findViewById(R.id.edt_library_search);
         rv.setLayoutManager(new LinearLayoutManager(this));
-        GestureLibraryAdapter adapter = new GestureLibraryAdapter(items, item -> {
-            gestureInput.setText(item.fileName, false);
+        final GestureLibraryAdapter[] adapterRef = new GestureLibraryAdapter[1];
+        Runnable refreshList = () -> {
+            currentTaskDir = taskDir;
+            if (adapterRef[0] != null) {
+                adapterRef[0].replaceData(getCurrentTaskGestureLibraryItems());
+            }
+            String current = gestureInput.getText() == null
+                    ? "" : gestureInput.getText().toString().trim();
+            if (!TextUtils.isEmpty(current) && resolveTaskGestureFile(current) == null) {
+                gestureInput.setText("", false);
+                updateGestureStatus(statusView, "");
+            }
             refreshGestureOptions(gestureInput);
-            updateGestureStatus(statusView, item.fileName);
-            safeRemoveView(dialogView);
-        });
+        };
+        GestureLibraryAdapter adapter = new GestureLibraryAdapter(
+                getCurrentTaskGestureLibraryItems(),
+                item -> {
+                    gestureInput.setText(item.fileName, false);
+                    refreshGestureOptions(gestureInput);
+                    updateGestureStatus(statusView, item.fileName);
+                    safeRemoveView(dialogView);
+                },
+                item -> confirmDeleteGestureItems(
+                        taskDir, java.util.Collections.singletonList(item), refreshList));
+        adapterRef[0] = adapter;
+        adapter.setDeleteActionEnabled(true);
         rv.setAdapter(adapter);
+        bindGestureLibraryManagement(dialogView, taskDir, adapter, refreshList);
 
         dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
         dialogView.findViewById(R.id.btn_library_clear).setOnClickListener(v -> {
@@ -8161,14 +8372,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     }
 
     private String normalizeGestureFileName(String rawName) {
-        if (TextUtils.isEmpty(rawName)) {
-            return "";
-        }
-        String name = rawName.trim();
-        if (!name.endsWith(".json")) {
-            name = name + ".json";
-        }
-        return name;
+        return GestureReferenceCounter.normalizeFileName(rawName);
     }
 
     private String generateGestureTimestampName() {
@@ -8306,7 +8510,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     // ─── Pipeline Gesture Methods ───────────────────────────────────────────────
 
     private void showGestureLibraryDialogPipeline(String currentFile, java.util.function.Consumer<String> onFileSelected) {
-        List<GestureLibraryAdapter.GestureLibraryItem> items = getCurrentTaskGestureLibraryItems();
+        File taskDir = currentTaskDir;
         View dialogView = LayoutInflater.from(this).inflate(R.layout.dialog_gesture_library, null);
         WindowManager.LayoutParams dialogLp = buildDialogLayoutParams(360, true);
         wm.addView(dialogView, dialogLp);
@@ -8314,11 +8518,30 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         RecyclerView rv = dialogView.findViewById(R.id.rv_library);
         EditText edtSearch = dialogView.findViewById(R.id.edt_library_search);
         rv.setLayoutManager(new LinearLayoutManager(this));
-        GestureLibraryAdapter adapter = new GestureLibraryAdapter(items, item -> {
-            if (onFileSelected != null) onFileSelected.accept(item.fileName);
-            safeRemoveView(dialogView);
-        });
+        final GestureLibraryAdapter[] adapterRef = new GestureLibraryAdapter[1];
+        Runnable refreshList = () -> {
+            currentTaskDir = taskDir;
+            if (adapterRef[0] != null) {
+                adapterRef[0].replaceData(getCurrentTaskGestureLibraryItems());
+            }
+            if (!TextUtils.isEmpty(currentFile)
+                    && resolveTaskGestureFile(currentFile) == null
+                    && onFileSelected != null) {
+                onFileSelected.accept("");
+            }
+        };
+        GestureLibraryAdapter adapter = new GestureLibraryAdapter(
+                getCurrentTaskGestureLibraryItems(),
+                item -> {
+                    if (onFileSelected != null) onFileSelected.accept(item.fileName);
+                    safeRemoveView(dialogView);
+                },
+                item -> confirmDeleteGestureItems(
+                        taskDir, java.util.Collections.singletonList(item), refreshList));
+        adapterRef[0] = adapter;
+        adapter.setDeleteActionEnabled(true);
         rv.setAdapter(adapter);
+        bindGestureLibraryManagement(dialogView, taskDir, adapter, refreshList);
 
         dialogView.findViewById(R.id.btn_library_close).setOnClickListener(v -> safeRemoveView(dialogView));
         dialogView.findViewById(R.id.btn_library_clear).setOnClickListener(v -> {
