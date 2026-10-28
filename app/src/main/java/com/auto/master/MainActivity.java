@@ -10,6 +10,7 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.BitmapFactory;
 import android.graphics.Color;
+import android.graphics.Typeface;
 import android.graphics.drawable.ColorDrawable;
 import android.media.MediaScannerConnection;
 import android.net.Uri;
@@ -18,7 +19,9 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -36,6 +39,7 @@ import androidx.annotation.NonNull;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.core.view.WindowCompat;
 import androidx.recyclerview.widget.DiffUtil;
 import androidx.recyclerview.widget.GridLayoutManager;
@@ -51,6 +55,7 @@ import com.auto.master.floatwin.FloatWindowService;
 import com.auto.master.floatwin.RecyclerViewOptimizer;
 import com.auto.master.homepanel.HomeProjectRepository;
 import com.auto.master.importer.ProjectImportPickerActivity;
+import com.auto.master.importer.ScriptPackageManager;
 import com.auto.master.ui.EntityActionSheetAdapter;
 import com.auto.master.utils.BatteryHardeningHelper;
 
@@ -75,6 +80,11 @@ public class MainActivity extends AppCompatActivity {
     private static final String SUPPORT_ASSET_NAME = "support.jpg";
     private static final String SUPPORT_PREFS = "AutoMasterSupport";
     private static final String PREF_SUPPORT_PROMPT_SEEN = "support_prompt_seen";
+    private static final String HOME_PREFS = "AutoMasterHome";
+    private static final String PREF_FLOAT_AUTO_START = "float_auto_start";
+    private static final String STATE_LEVEL = "home_level";
+    private static final String STATE_PROJECT_PATH = "home_project_path";
+    private static final String STATE_SEARCH_QUERY = "home_search_query";
 
     private interface ActionSheetHandler {
         void onAction(ActionSheetItem item);
@@ -371,9 +381,11 @@ public class MainActivity extends AppCompatActivity {
 
     private final HomeProjectRepository repository = new HomeProjectRepository();
     private final ExecutorService panelLoadExecutor = Executors.newSingleThreadExecutor();
+    private final ExecutorService exportExecutor = Executors.newSingleThreadExecutor();
     private final AtomicInteger panelLoadToken = new AtomicInteger();
 
     private TextView tvPermissionStatus;
+    private View permissionStatusDot;
     private TextView btnPermissionQuick;
     private TextView btnToggleFloat;
     private TextView navHomeProjects;
@@ -394,6 +406,9 @@ public class MainActivity extends AppCompatActivity {
     private TextView tvEmptyTitle;
     private TextView tvEmptyHint;
     private TextView btnEmptyAction;
+    private EditText homeSearchInput;
+    private TextView homeSearchMeta;
+    private ImageView homeSearchClear;
     private SwipeRefreshLayout swipeRefreshLayout;
     private RecyclerView rvProjects;
     private GridLayoutManager projectGridLayoutManager;
@@ -412,6 +427,7 @@ public class MainActivity extends AppCompatActivity {
     private File currentProjectDir;
     private File currentTaskDir;
     private EntryAdapter entryAdapter;
+    private List<EntryItem> loadedEntries = Collections.emptyList();
     private boolean pendingSupportImageSave;
 
     private final ActivityResultLauncher<Intent> projectionLauncher =
@@ -456,11 +472,13 @@ public class MainActivity extends AppCompatActivity {
         setupPanelList();
         setupReusableActionSheet();
         bindActions();
+        shouldAutoStartFloat = getSharedPreferences(HOME_PREFS, MODE_PRIVATE)
+                .getBoolean(PREF_FLOAT_AUTO_START, true);
         requestNotificationPermissionIfNeeded();
         syncFloatPanelState();
         maybeAutoStartFloatService();
         refreshPermissionStatus();
-        showProjects();
+        restorePanelState(savedInstanceState);
         maybeShowSupportPrompt();
     }
 
@@ -477,11 +495,44 @@ public class MainActivity extends AppCompatActivity {
     protected void onDestroy() {
         panelLoadToken.incrementAndGet();
         panelLoadExecutor.shutdownNow();
+        exportExecutor.shutdownNow();
         super.onDestroy();
+    }
+
+    @Override
+    protected void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        outState.putString(STATE_LEVEL, currentLevel.name());
+        if (currentProjectDir != null) {
+            outState.putString(STATE_PROJECT_PATH, currentProjectDir.getAbsolutePath());
+        }
+        if (homeSearchInput != null && homeSearchInput.getText() != null) {
+            outState.putString(STATE_SEARCH_QUERY, homeSearchInput.getText().toString());
+        }
+    }
+
+    private void restorePanelState(Bundle state) {
+        boolean restoredTask = false;
+        if (state != null && Level.TASK.name().equals(state.getString(STATE_LEVEL))) {
+            String path = state.getString(STATE_PROJECT_PATH);
+            File projectDir = TextUtils.isEmpty(path) ? null : new File(path);
+            if (projectDir != null && projectDir.isDirectory()) {
+                showTasks(projectDir);
+                restoredTask = true;
+            }
+        }
+        if (!restoredTask) {
+            showProjects();
+        }
+        if (state != null && homeSearchInput != null) {
+            homeSearchInput.setText(state.getString(STATE_SEARCH_QUERY, ""));
+            homeSearchInput.setSelection(homeSearchInput.length());
+        }
     }
 
     private void bindViews() {
         tvPermissionStatus = findViewById(R.id.tv_permission_status);
+        permissionStatusDot = findViewById(R.id.view_permission_status_dot);
         btnPermissionQuick = findViewById(R.id.btn_permission_quick);
         btnToggleFloat = findViewById(R.id.btn_toggle_float);
         navHomeProjects = findViewById(R.id.nav_home_projects);
@@ -502,6 +553,9 @@ public class MainActivity extends AppCompatActivity {
         tvEmptyTitle = findViewById(R.id.tv_empty_title);
         tvEmptyHint = findViewById(R.id.tv_empty_hint);
         btnEmptyAction = findViewById(R.id.btn_empty_action);
+        homeSearchInput = findViewById(R.id.edt_home_search);
+        homeSearchMeta = findViewById(R.id.tv_home_search_meta);
+        homeSearchClear = findViewById(R.id.btn_home_search_clear);
         swipeRefreshLayout = findViewById(R.id.swipe_refresh_projects);
         rvProjects = findViewById(R.id.rv_projects);
     }
@@ -512,7 +566,11 @@ public class MainActivity extends AppCompatActivity {
         entryAdapter = new EntryAdapter(
                 this::handleEntryClick,
                 this::handleEntryMore,
-                (item, anchor) -> Toast.makeText(this, "项目分享功能即将推出", Toast.LENGTH_SHORT).show());
+                (item, anchor) -> {
+                    if (item.payload instanceof HomeProjectRepository.ProjectSummary) {
+                        exportAndShareProject(((HomeProjectRepository.ProjectSummary) item.payload).dir);
+                    }
+                });
         rvProjects.setLayoutManager(projectGridLayoutManager);
         rvProjects.setAdapter(entryAdapter);
         RecyclerViewOptimizer.optimize(rvProjects, false);
@@ -521,6 +579,21 @@ public class MainActivity extends AppCompatActivity {
         swipeRefreshLayout.setOnChildScrollUpCallback((parent, child) ->
                 rvProjects != null && rvProjects.canScrollVertically(-1));
         swipeRefreshLayout.setOnRefreshListener(this::reloadCurrentLevel);
+        homeSearchInput.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence s, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
+                applySearchFilter();
+            }
+
+            @Override
+            public void afterTextChanged(Editable s) {
+            }
+        });
+        homeSearchClear.setOnClickListener(v -> homeSearchInput.setText(""));
     }
 
     private void setupReusableActionSheet() {
@@ -598,6 +671,12 @@ public class MainActivity extends AppCompatActivity {
         btnPermissionQuick.setText(readyCount == 5 ? "已就绪" : "一键获取");
         btnPermissionQuick.setEnabled(readyCount < 5);
         btnPermissionQuick.setAlpha(readyCount == 5 ? 0.55f : 1f);
+        if (permissionStatusDot != null) {
+            permissionStatusDot.setBackgroundResource(
+                    readyCount == 5 ? R.drawable.circle_green : R.drawable.circle_warning);
+            permissionStatusDot.setContentDescription(
+                    readyCount == 5 ? "权限已就绪" : "仍有权限需要处理");
+        }
         updateFloatToggleButton();
     }
 
@@ -610,11 +689,13 @@ public class MainActivity extends AppCompatActivity {
             stopFloatService();
             floatEnabled = false;
             shouldAutoStartFloat = false;
+            persistFloatAutoStartPreference();
             Toast.makeText(this, R.string.toast_float_panel_stopped, Toast.LENGTH_SHORT).show();
         } else {
             startFloatService();
             floatEnabled = true;
             shouldAutoStartFloat = true;
+            persistFloatAutoStartPreference();
             Toast.makeText(this, R.string.toast_float_panel_started, Toast.LENGTH_SHORT).show();
         }
         refreshPermissionStatus();
@@ -626,7 +707,13 @@ public class MainActivity extends AppCompatActivity {
         }
         startFloatService();
         floatEnabled = true;
-        shouldAutoStartFloat = false;
+    }
+
+    private void persistFloatAutoStartPreference() {
+        getSharedPreferences(HOME_PREFS, MODE_PRIVATE)
+                .edit()
+                .putBoolean(PREF_FLOAT_AUTO_START, shouldAutoStartFloat)
+                .apply();
     }
 
     private void updateFloatToggleButton() {
@@ -746,20 +833,27 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void showProjects() {
+        boolean destinationChanged = currentLevel != Level.PROJECT || currentProjectDir != null;
         selectHomeProjects();
         currentLevel = Level.PROJECT;
         currentProjectDir = null;
         currentTaskDir = null;
+        configureSearch("搜索项目", destinationChanged);
         applyPanelLayoutManager(Level.PROJECT);
         updatePanelChrome("脚本", "首页 / 脚本", "仅用于模拟真人自动化办公，严禁制作/传播作弊器、刷评、刷单、外挂等损害其他平台利益的违法违规行为。", false, true);
         loadPanelEntries(Level.PROJECT, null);
     }
 
     private void showTasks(File projectDir) {
+        boolean destinationChanged = currentLevel != Level.TASK
+                || currentProjectDir == null
+                || projectDir == null
+                || !TextUtils.equals(currentProjectDir.getAbsolutePath(), projectDir.getAbsolutePath());
         selectHomeProjects();
         currentLevel = Level.TASK;
         currentProjectDir = projectDir;
         currentTaskDir = null;
+        configureSearch("搜索 Task", destinationChanged);
         applyPanelLayoutManager(Level.TASK);
         updatePanelChrome(projectDir.getName(), "项目 / " + projectDir.getName(), "当前项目下的 Task 列表和菜单操作。", true, true);
         loadPanelEntries(Level.TASK, projectDir);
@@ -774,19 +868,16 @@ public class MainActivity extends AppCompatActivity {
                 if (isFinishing() || isDestroyed() || token != panelLoadToken.get()) {
                     return;
                 }
-                if (level == Level.PROJECT) {
-                    if (currentLevel != Level.PROJECT) {
-                        return;
-                    }
-                    updateEmptyState(entries.isEmpty(), "暂无项目", "点击右上角添加项目", "创建项目");
-                } else {
-                    if (currentLevel != Level.TASK || currentProjectDir == null || projectDir == null
-                            || !TextUtils.equals(currentProjectDir.getAbsolutePath(), projectDir.getAbsolutePath())) {
-                        return;
-                    }
-                    updateEmptyState(entries.isEmpty(), "暂无 Task", "点击右上角添加 Task", "创建 Task");
+                if (level == Level.PROJECT && currentLevel != Level.PROJECT) {
+                    return;
                 }
-                entryAdapter.submitItems(entries);
+                if (level == Level.TASK
+                        && (currentLevel != Level.TASK || currentProjectDir == null || projectDir == null
+                        || !TextUtils.equals(currentProjectDir.getAbsolutePath(), projectDir.getAbsolutePath()))) {
+                    return;
+                }
+                loadedEntries = entries;
+                applySearchFilter();
                 swipeRefreshLayout.setRefreshing(false);
             });
         });
@@ -797,14 +888,17 @@ public class MainActivity extends AppCompatActivity {
         if (level == Level.PROJECT) {
             List<HomeProjectRepository.ProjectSummary> projects = repository.loadProjects(this);
             for (HomeProjectRepository.ProjectSummary project : projects) {
-            String subtitle = "脚本文件夹";
-            entries.add(new EntryItem(
-                    R.drawable.ic_folder_colored,
-                    project.name,
-                    subtitle,
-                    null,
-                    true,
-                    project));
+                String subtitle = project.taskCount + " 个 Task · "
+                        + project.runnableTaskCount + " 个可运行 · "
+                        + formatRelativeTime(project.lastModified);
+                entries.add(new EntryItem(
+                        R.drawable.ic_folder_colored,
+                        project.name,
+                        subtitle,
+                        project.runnableTaskCount > 0
+                                ? project.runnableTaskCount + " 可运行" : "空项目",
+                        true,
+                        project));
             }
             return entries;
         }
@@ -813,6 +907,7 @@ public class MainActivity extends AppCompatActivity {
             String subtitle = task.assetCount > 0
                     ? task.operationCount + " 个节点 · " + task.assetCount + " 个资源"
                     : task.operationCount + " 个节点";
+            subtitle += " · " + formatRelativeTime(task.lastModified);
             entries.add(new EntryItem(
                     R.drawable.ic_task_flow,
                     task.name,
@@ -822,6 +917,88 @@ public class MainActivity extends AppCompatActivity {
                     task));
         }
         return entries;
+    }
+
+    private void configureSearch(String hint, boolean clearQuery) {
+        if (homeSearchInput == null) {
+            return;
+        }
+        homeSearchInput.setHint(hint);
+        if (clearQuery) {
+            loadedEntries = Collections.emptyList();
+            if (entryAdapter != null) {
+                entryAdapter.submitItems(loadedEntries);
+            }
+            if (homeSearchMeta != null) {
+                homeSearchMeta.setText("0 项");
+            }
+        }
+        if (clearQuery && homeSearchInput.length() > 0) {
+            homeSearchInput.setText("");
+        }
+    }
+
+    private void applySearchFilter() {
+        if (entryAdapter == null || homeSearchInput == null) {
+            return;
+        }
+        String query = homeSearchInput.getText() == null
+                ? "" : homeSearchInput.getText().toString().trim().toLowerCase(Locale.ROOT);
+        List<EntryItem> source = loadedEntries == null ? Collections.emptyList() : loadedEntries;
+        List<EntryItem> filtered = new ArrayList<>();
+        for (EntryItem item : source) {
+            if (TextUtils.isEmpty(query)
+                    || containsIgnoreCase(item.title, query)
+                    || containsIgnoreCase(item.subtitle, query)
+                    || containsIgnoreCase(item.badge, query)) {
+                filtered.add(item);
+            }
+        }
+        boolean hasQuery = !TextUtils.isEmpty(query);
+        homeSearchClear.setVisibility(hasQuery ? View.VISIBLE : View.GONE);
+        homeSearchMeta.setText(hasQuery
+                ? filtered.size() + "/" + source.size() + " 项"
+                : source.size() + " 项");
+        if (filtered.isEmpty() && hasQuery && !source.isEmpty()) {
+            updateEmptyState(true, "没有匹配结果", "换一个关键词试试", null);
+        } else if (filtered.isEmpty()) {
+            boolean projects = currentLevel == Level.PROJECT;
+            updateEmptyState(true,
+                    projects ? "暂无项目" : "暂无 Task",
+                    projects ? "创建或导入第一个项目" : "为当前项目创建第一个 Task",
+                    projects ? "创建项目" : "创建 Task");
+        } else {
+            updateEmptyState(false, "", "", null);
+        }
+        entryAdapter.submitItems(filtered);
+        if (!filtered.isEmpty()) {
+            rvProjects.setAlpha(0.78f);
+            rvProjects.animate().alpha(1f).setDuration(140L).start();
+        }
+    }
+
+    private boolean containsIgnoreCase(String value, String lowercaseQuery) {
+        return value != null && value.toLowerCase(Locale.ROOT).contains(lowercaseQuery);
+    }
+
+    private String formatRelativeTime(long timestamp) {
+        long ageMs = Math.max(0L, System.currentTimeMillis() - timestamp);
+        long minute = 60_000L;
+        long hour = 60L * minute;
+        long day = 24L * hour;
+        if (ageMs < minute) {
+            return "刚刚更新";
+        }
+        if (ageMs < hour) {
+            return ageMs / minute + " 分钟前";
+        }
+        if (ageMs < day) {
+            return ageMs / hour + " 小时前";
+        }
+        if (ageMs < 7L * day) {
+            return ageMs / day + " 天前";
+        }
+        return new SimpleDateFormat("MM-dd", Locale.getDefault()).format(new Date(timestamp));
     }
 
     private void applyPanelLayoutManager(Level level) {
@@ -853,7 +1030,21 @@ public class MainActivity extends AppCompatActivity {
 
     private void setSidebarSelected(TextView view, boolean selected) {
         if (view != null) {
+            boolean justSelected = selected && !view.isSelected();
             view.setSelected(selected);
+            view.setTypeface(Typeface.create(
+                    selected ? "sans-serif-medium" : "sans-serif", Typeface.NORMAL));
+            view.animate().cancel();
+            if (justSelected) {
+                view.setScaleX(0.94f);
+                view.setScaleY(0.94f);
+            }
+            view.animate()
+                    .scaleX(1f)
+                    .scaleY(1f)
+                    .alpha(selected ? 1f : 0.92f)
+                    .setDuration(140L)
+                    .start();
         }
     }
 
@@ -931,8 +1122,9 @@ public class MainActivity extends AppCompatActivity {
         List<ActionSheetItem> items = new ArrayList<>();
         items.add(new ActionSheetItem(1, "打开", "查看 Task", true));
         items.add(new ActionSheetItem(2, "新建 Task", "添加任务", true));
-        items.add(new ActionSheetItem(3, "重命名", "修改名称", true));
-        items.add(new ActionSheetItem(4, "删除", "移除项目", true));
+        items.add(new ActionSheetItem(3, "导出分享", "生成可导入 zip", true));
+        items.add(new ActionSheetItem(4, "重命名", "修改名称", true));
+        items.add(new ActionSheetItem(5, "删除", "移除项目", true));
         showActionSheet("项目操作", projectDir.getName(), "管理当前项目和 Task", items, item -> {
             if (item.id == 1) {
                 showTasks(projectDir);
@@ -944,11 +1136,48 @@ public class MainActivity extends AppCompatActivity {
                 return;
             }
             if (item.id == 3) {
-                showRenameDialog(projectDir, true);
+                exportAndShareProject(projectDir);
                 return;
             }
             if (item.id == 4) {
+                showRenameDialog(projectDir, true);
+                return;
+            }
+            if (item.id == 5) {
                 showDeleteDialog(projectDir, true);
+            }
+        });
+    }
+
+    private void exportAndShareProject(File projectDir) {
+        if (projectDir == null || !projectDir.isDirectory()) {
+            Toast.makeText(this, "项目不存在，无法导出", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        Toast.makeText(this, "正在生成项目压缩包…", Toast.LENGTH_SHORT).show();
+        exportExecutor.execute(() -> {
+            try {
+                File zipFile = ScriptPackageManager.exportProject(this, projectDir.getName());
+                Uri uri = FileProvider.getUriForFile(
+                        this, getPackageName() + ".fileprovider", zipFile);
+                Intent shareIntent = new Intent(Intent.ACTION_SEND);
+                shareIntent.setType("application/zip");
+                shareIntent.putExtra(Intent.EXTRA_STREAM, uri);
+                shareIntent.putExtra(Intent.EXTRA_SUBJECT, projectDir.getName() + ".zip");
+                shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed()) {
+                        startActivity(Intent.createChooser(
+                                shareIntent, "分享项目：" + projectDir.getName()));
+                    }
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    if (!isFinishing() && !isDestroyed()) {
+                        Toast.makeText(this,
+                                "导出失败：" + e.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                });
             }
         });
     }
@@ -1196,6 +1425,9 @@ public class MainActivity extends AppCompatActivity {
         }
         if (title.contains("模板")) {
             return R.drawable.ic_action_template;
+        }
+        if (title.contains("导出") || title.contains("分享")) {
+            return R.drawable.ic_action_export;
         }
         if (title.contains("手势")) {
             return R.drawable.ic_action_gesture;

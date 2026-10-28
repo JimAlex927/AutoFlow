@@ -14,6 +14,7 @@ import com.auto.master.capture.CaptureScaleHelper;
 import com.auto.master.capture.ScreenCaptureManager;
 import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.AppStorage;
+import com.auto.master.utils.FileTextUtils;
 import com.auto.master.utils.MatchResult;
 import com.auto.master.utils.OpenCVHelper;
 
@@ -27,7 +28,6 @@ import org.opencv.core.Point;
 import org.opencv.imgproc.Imgproc;
 
 import java.io.File;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -636,7 +636,7 @@ public class MatchtemplateOperationHandler extends OperationHandler {
             if (manifestFile == null || !manifestFile.exists()) {
                 return null;
             }
-            String content = new String(Files.readAllBytes(manifestFile.toPath()));
+            String content = FileTextUtils.readUtf8(manifestFile);
             JSONArray array = new JSONObject(content).optJSONArray(templateName);
             if (array == null || array.length() < 4) {
                 return null;

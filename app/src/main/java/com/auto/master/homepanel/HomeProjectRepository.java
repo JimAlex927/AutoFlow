@@ -2,17 +2,19 @@ package com.auto.master.homepanel;
 
 import android.content.Context;
 import android.text.TextUtils;
+import android.util.AtomicFile;
 
 import com.auto.master.utils.AppStorage;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
@@ -26,12 +28,12 @@ public class HomeProjectRepository {
         public final int runnableTaskCount;
         public final long lastModified;
 
-        ProjectSummary(File dir, int taskCount, int runnableTaskCount) {
+        ProjectSummary(File dir, int taskCount, int runnableTaskCount, long lastModified) {
             this.dir = dir;
             this.name = dir.getName();
             this.taskCount = taskCount;
             this.runnableTaskCount = runnableTaskCount;
-            this.lastModified = dir.lastModified();
+            this.lastModified = lastModified;
         }
     }
 
@@ -42,12 +44,12 @@ public class HomeProjectRepository {
         public final int assetCount;
         public final long lastModified;
 
-        TaskSummary(File dir, int operationCount, int assetCount) {
+        TaskSummary(File dir, int operationCount, int assetCount, long lastModified) {
             this.dir = dir;
             this.name = dir.getName();
             this.operationCount = operationCount;
             this.assetCount = assetCount;
-            this.lastModified = dir.lastModified();
+            this.lastModified = lastModified;
         }
     }
 
@@ -77,7 +79,6 @@ public class HomeProjectRepository {
         if (dirs == null) {
             return items;
         }
-        Arrays.sort(dirs, Comparator.comparingLong(File::lastModified).reversed());
         for (File dir : dirs) {
             File[] taskDirs = dir.listFiles(File::isDirectory);
             int taskCount = taskDirs == null ? 0 : taskDirs.length;
@@ -89,8 +90,11 @@ public class HomeProjectRepository {
                     }
                 }
             }
-            items.add(new ProjectSummary(dir, taskCount, runnableTaskCount));
+            items.add(new ProjectSummary(
+                    dir, taskCount, runnableTaskCount, newestModified(dir, 3)));
         }
+        items.sort(Comparator.comparingLong(
+                (ProjectSummary item) -> item.lastModified).reversed());
         return items;
     }
 
@@ -103,10 +107,12 @@ public class HomeProjectRepository {
         if (dirs == null) {
             return items;
         }
-        Arrays.sort(dirs, Comparator.comparingLong(File::lastModified).reversed());
         for (File dir : dirs) {
-            items.add(new TaskSummary(dir, countOperations(dir), countAssets(dir)));
+            items.add(new TaskSummary(
+                    dir, countOperations(dir), countAssets(dir), newestModified(dir, 3)));
         }
+        items.sort(Comparator.comparingLong(
+                (TaskSummary item) -> item.lastModified).reversed());
         return items;
     }
 
@@ -167,7 +173,7 @@ public class HomeProjectRepository {
         File operationsFile = new File(dir, "operations.json");
         if (!operationsFile.exists()) {
             try {
-                Files.write(operationsFile.toPath(), "[]".getBytes(StandardCharsets.UTF_8));
+                writeBytesAtomically(operationsFile, "[]".getBytes(StandardCharsets.UTF_8));
             } catch (Exception ignored) {
             }
         }
@@ -355,8 +361,43 @@ public class HomeProjectRepository {
     }
 
     private int countAssets(File taskDir) {
-        File[] files = taskDir.listFiles(file -> file.isFile() && !"operations.json".equals(file.getName()));
-        return files == null ? 0 : files.length;
+        return countAssetFiles(taskDir, 0);
+    }
+
+    private int countAssetFiles(File dir, int depth) {
+        if (dir == null || !dir.isDirectory() || depth > 4) {
+            return 0;
+        }
+        File[] files = dir.listFiles();
+        if (files == null) {
+            return 0;
+        }
+        int count = 0;
+        for (File file : files) {
+            if (file.isDirectory()) {
+                count += countAssetFiles(file, depth + 1);
+            } else if (!"operations.json".equals(file.getName())) {
+                count++;
+            }
+        }
+        return count;
+    }
+
+    private long newestModified(File file, int depth) {
+        if (file == null || !file.exists()) {
+            return 0L;
+        }
+        long newest = file.lastModified();
+        if (!file.isDirectory() || depth <= 0) {
+            return newest;
+        }
+        File[] children = file.listFiles();
+        if (children != null) {
+            for (File child : children) {
+                newest = Math.max(newest, newestModified(child, depth - 1));
+            }
+        }
+        return newest;
     }
 
     private String buildOperationSummary(JSONObject obj) {
@@ -392,18 +433,45 @@ public class HomeProjectRepository {
     private JSONArray readOperationsArray(File taskDir) throws Exception {
         File operationsFile = new File(taskDir, "operations.json");
         if (!operationsFile.exists()) {
-            Files.write(operationsFile.toPath(), "[]".getBytes(StandardCharsets.UTF_8));
+            writeBytesAtomically(operationsFile, "[]".getBytes(StandardCharsets.UTF_8));
         }
         return new JSONArray(readFile(operationsFile));
     }
 
     private void writeOperationsArray(File taskDir, JSONArray arr) throws Exception {
         File operationsFile = new File(taskDir, "operations.json");
-        Files.write(operationsFile.toPath(), arr.toString(2).getBytes(StandardCharsets.UTF_8));
+        writeBytesAtomically(operationsFile, arr.toString(2).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private void writeBytesAtomically(File target, byte[] content) throws Exception {
+        File parent = target.getParentFile();
+        if (parent == null || (!parent.isDirectory() && !parent.mkdirs())) {
+            throw new IllegalStateException("无法创建目录");
+        }
+        AtomicFile atomicFile = new AtomicFile(target);
+        FileOutputStream output = null;
+        try {
+            output = atomicFile.startWrite();
+            output.write(content);
+            atomicFile.finishWrite(output);
+        } catch (Exception e) {
+            if (output != null) {
+                atomicFile.failWrite(output);
+            }
+            throw e;
+        }
     }
 
     private String readFile(File file) throws Exception {
-        return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+        try (FileInputStream input = new FileInputStream(file);
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
+            }
+            return output.toString(StandardCharsets.UTF_8.name());
+        }
     }
 
     private String generateOperationId(int seed) {
@@ -414,6 +482,13 @@ public class HomeProjectRepository {
         if (raw == null) {
             return "";
         }
-        return raw.trim().replace("/", "_").replace("\\", "_");
+        String name = raw.trim().replaceAll("[\\p{Cntrl}/\\\\:*?\"<>|]", "_");
+        while (name.endsWith(".")) {
+            name = name.substring(0, name.length() - 1).trim();
+        }
+        if (".".equals(name) || "..".equals(name)) {
+            return "";
+        }
+        return name.length() > 80 ? name.substring(0, 80).trim() : name;
     }
 }

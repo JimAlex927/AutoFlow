@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="wrap_content"
     android:layout_height="wrap_content"
     android:alpha="0.98">
@@ -40,7 +41,7 @@
                 android:layout_height="25dp"
                 android:layout_marginRight="10dp"
                 android:src="@drawable/handler_sorter"
-                android:tint="@color/dialog_content_color"
+                app:tint="@color/dialog_content_color"
                 android:layout_alignParentRight="true"
                 android:layout_centerVertical="true"/>
             <ImageView
@@ -50,7 +51,7 @@
                 android:layout_height="25dp"
                 android:layout_marginRight="10dp"
                 android:src="@drawable/handler_search"
-                android:tint="@color/dialog_content_color"
+                app:tint="@color/dialog_content_color"
                 android:layout_alignParentRight="true"
                 android:layout_centerVertical="true"/>
             <ImageView
@@ -60,7 +61,7 @@
                 android:layout_height="25dp"
                 android:layout_marginRight="10dp"
                 android:src="@drawable/icon_sub_close"
-                android:tint="@color/dialog_content_color"
+                app:tint="@color/dialog_content_color"
                 android:layout_alignParentRight="true"
                 android:layout_centerVertical="true"/>
         </LinearLayout>
@@ -280,7 +281,7 @@
         android:layout_width="25dp"
         android:layout_height="25dp"
         android:src="@drawable/icon_resize"
-        android:tint="@color/dialog_content_color"
+        app:tint="@color/dialog_content_color"
         android:layout_alignParentRight="true"
         android:layout_alignParentBottom="true"
         android:rotation="180"/>
@@ -290,5 +291,5 @@
         android:layout_width="25dp"
         android:layout_height="25dp"
         android:src="@drawable/icon_resize"
-        android:tint="@color/dialog_content_color"/>
+        app:tint="@color/dialog_content_color"/>
 </RelativeLayout>

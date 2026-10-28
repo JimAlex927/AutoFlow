@@ -9,11 +9,10 @@ import android.view.ViewGroup;
 import android.view.View;
 import android.graphics.BitmapFactory;
 import android.graphics.Bitmap;
+import com.auto.master.utils.FileTextUtils;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
+import java.util.Locale;
 
 /** Simple file viewer: images or text. */
 public class FileViewerActivity extends Activity {
@@ -41,7 +40,7 @@ public class FileViewerActivity extends Activity {
         String path = getIntent().getStringExtra("path");
         if (path == null) return;
         File f = new File(path);
-        String lower = path.toLowerCase();
+        String lower = path.toLowerCase(Locale.ROOT);
         if (f.isFile() && (lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".gif") || lower.endsWith(".webp"))) {
             // show image
             try {
@@ -57,8 +56,7 @@ public class FileViewerActivity extends Activity {
         } else {
             // show text
             try {
-                byte[] bytes = Files.readAllBytes(f.toPath());
-                String content = new String(bytes, StandardCharsets.UTF_8);
+                String content = FileTextUtils.readUtf8(f);
                 textView.setText(content);
                 textView.setVisibility(View.VISIBLE);
                 imageView.setVisibility(View.GONE);

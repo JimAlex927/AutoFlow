@@ -13,6 +13,7 @@ import android.text.TextUtils;
 import android.util.Log;
 
 import androidx.annotation.Nullable;
+import androidx.annotation.RequiresApi;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -475,6 +476,7 @@ public final class CrashLogger {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.R)
     private static String buildExitInfoFingerprint(@Nullable ApplicationExitInfo exitInfo) {
         if (exitInfo == null) {
             return "";
@@ -490,6 +492,7 @@ public final class CrashLogger {
                 + valueOrEmpty(exitInfo.getProcessName());
     }
 
+    @RequiresApi(Build.VERSION_CODES.R)
     private static boolean shouldReportExitInfo(@Nullable ApplicationExitInfo exitInfo) {
         if (exitInfo == null) {
             return false;
@@ -500,6 +503,7 @@ public final class CrashLogger {
                 && reason != 11;
     }
 
+    @RequiresApi(Build.VERSION_CODES.R)
     private static void writeProcessExitInfoReport(File file, @Nullable ApplicationExitInfo exitInfo) {
         if (file == null || exitInfo == null) {
             return;

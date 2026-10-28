@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:layout_marginStart="6dp"
@@ -98,7 +99,7 @@
                 android:background="@drawable/project_panel_toolbar_icon_bg"
                 android:padding="3dp"
                 android:src="@drawable/ic_edit"
-                android:tint="#A0AEBB" />
+                app:tint="#A0AEBB" />
 
             <Space
                 android:layout_width="0dp"
@@ -168,7 +169,7 @@
         android:background="@drawable/project_panel_toolbar_icon_bg"
         android:padding="4dp"
         android:src="@drawable/ic_more_vert"
-        android:tint="#728090" />
+        app:tint="#728090" />
 
     <CheckBox
         android:id="@+id/chk_batch"

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/project_panel_shell_bg"
@@ -27,7 +28,7 @@
                 android:background="@drawable/project_panel_toolbar_icon_bg"
                 android:padding="6dp"
                 android:src="@drawable/ic_back"
-                android:tint="#2E3B4E"
+                app:tint="#2E3B4E"
                 android:visibility="gone" />
 
             <LinearLayout
@@ -66,7 +67,7 @@
                 android:background="@drawable/project_panel_toolbar_icon_bg"
                 android:padding="6dp"
                 android:src="@drawable/handler_search"
-                android:tint="#4B5A6C" />
+                app:tint="#4B5A6C" />
 
             <ImageView
                 android:id="@+id/btn_add"
@@ -76,7 +77,7 @@
                 android:background="@drawable/project_panel_toolbar_icon_bg"
                 android:padding="6dp"
                 android:src="@android:drawable/ic_input_add"
-                android:tint="#4B5A6C" />
+                app:tint="#4B5A6C" />
 
             <ImageView
                 android:id="@+id/btn_refresh"
@@ -86,7 +87,7 @@
                 android:background="@drawable/project_panel_toolbar_icon_bg"
                 android:padding="6dp"
                 android:src="@android:drawable/ic_menu_rotate"
-                android:tint="#4B5A6C" />
+                app:tint="#4B5A6C" />
 
             <ImageView
                 android:id="@+id/btn_system_params"
@@ -96,7 +97,7 @@
                 android:background="@drawable/project_panel_toolbar_icon_bg"
                 android:padding="6dp"
                 android:src="@android:drawable/ic_menu_manage"
-                android:tint="#4B5A6C" />
+                app:tint="#4B5A6C" />
 
             <TextView
                 android:id="@+id/btn_sessions"
@@ -118,7 +119,7 @@
                 android:background="@drawable/project_panel_toolbar_icon_bg"
                 android:padding="6dp"
                 android:src="@drawable/icon_sub_close"
-                android:tint="#4B5A6C" />
+                app:tint="#4B5A6C" />
         </LinearLayout>
 
         <LinearLayout
@@ -156,7 +157,7 @@
                 android:background="@drawable/project_panel_toolbar_icon_bg"
                 android:padding="6dp"
                 android:src="@drawable/ic_close"
-                android:tint="#8090A0" />
+                app:tint="#8090A0" />
         </LinearLayout>
 
         <LinearLayout
@@ -176,7 +177,7 @@
                 android:layout_height="14dp"
                 android:layout_marginEnd="5dp"
                 android:src="@drawable/ic_folder"
-                android:tint="#7B8795" />
+                app:tint="#7B8795" />
 
             <TextView
                 android:id="@+id/tv_breadcrumb_legacy"

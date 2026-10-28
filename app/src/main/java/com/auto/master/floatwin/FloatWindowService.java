@@ -66,8 +66,6 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.OutputStream;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -141,6 +139,7 @@ import com.auto.master.importer.ScriptPackageManager;
 import com.auto.master.ui.EntityActionSheetAdapter;
 import com.auto.master.utils.BitmapManager;
 import com.auto.master.utils.CrashLogger;
+import com.auto.master.utils.FileTextUtils;
 import com.auto.master.utils.AdaptivePollingController;
 import com.auto.master.utils.AppStorage;
 import com.auto.master.utils.OpenCVHelper;
@@ -2516,10 +2515,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private String getOperationJson(String operationId) {
         try {
             File jsonFile = new File(currentTaskDir, "operations.json");
-            String content = "";
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                content = new String(Files.readAllBytes(jsonFile.toPath()), StandardCharsets.UTF_8);
-            }
+            String content = FileTextUtils.readUtf8(jsonFile);
             
             // 解析 JSON 数组
             JSONArray jsonArray = new JSONArray(content);
@@ -2545,10 +2541,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
     private boolean saveOperationJson(String operationId, String newJson, OperationPanelAdapter adapter) {
         try {
             File jsonFile = new File(currentTaskDir, "operations.json");
-            String content = "";
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                content = new String(Files.readAllBytes(jsonFile.toPath()), StandardCharsets.UTF_8);
-            }
+            String content = FileTextUtils.readUtf8(jsonFile);
             
             // 解析 JSON 数组
             JSONArray jsonArray = new JSONArray(content);
@@ -2601,9 +2594,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
             
             // 保存回文件
-            try (FileWriter writer = new FileWriter(jsonFile)) {
-                writer.write(jsonArray.toString(2));
-            }
+            FileTextUtils.writeUtf8Atomically(jsonFile, jsonArray.toString(2));
 
             int cleaned = 0;
             
@@ -3573,7 +3564,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                                                    @Nullable String oldTaskName,
                                                    @Nullable String newTaskName,
                                                    boolean rewriteTaskContext) {
-        if (taskDir == null || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+        if (taskDir == null) {
             return false;
         }
         File operationsFile = new File(taskDir, "operations.json");
@@ -3581,7 +3572,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             return false;
         }
         try {
-            String content = new String(Files.readAllBytes(operationsFile.toPath()), StandardCharsets.UTF_8);
+            String content = FileTextUtils.readUtf8(operationsFile);
             if (TextUtils.isEmpty(content.trim())) {
                 return false;
             }
@@ -3615,7 +3606,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             if (!changed) {
                 return false;
             }
-            Files.write(operationsFile.toPath(), array.toString(2).getBytes(StandardCharsets.UTF_8));
+            FileTextUtils.writeUtf8Atomically(operationsFile, array.toString(2));
             return true;
         } catch (Exception e) {
             Log.e(TAG, "迁移节点引用失败: " + taskDir.getAbsolutePath(), e);
@@ -3868,9 +3859,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         File operationsFile = new File(taskDir, "operations.json");
         if (!operationsFile.exists()) {
-            try (FileWriter writer = new FileWriter(operationsFile)) {
-                writer.write("[]");
-            }
+            FileTextUtils.writeUtf8Atomically(operationsFile, "[]");
         }
         File imgDir = new File(taskDir, "img");
         if (!imgDir.exists() && !imgDir.mkdirs()) {
@@ -4184,7 +4173,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 
                 // 如果缓存中没有，直接从文件加载
                 if (project == null) {
-                    String content = new String(Files.readAllBytes(json.toPath()), StandardCharsets.UTF_8);
+                    String content = FileTextUtils.readUtf8(json);
                     List<MetaOperation> metaOperations = OperationGsonUtils.fromJson(content);
                     int i = 0;
                     for (MetaOperation op : metaOperations) {
@@ -4214,7 +4203,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
                     // 缓存里没有该 task（常见于新建 task 后），回退到文件读取
                     if (operations.isEmpty()) {
-                        String content = new String(Files.readAllBytes(json.toPath()), StandardCharsets.UTF_8);
+                        String content = FileTextUtils.readUtf8(json);
                         List<MetaOperation> metaOperations = OperationGsonUtils.fromJson(content);
                         int i = 0;
                         for (MetaOperation op : metaOperations) {
@@ -4596,17 +4585,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
     private String readFileContent(File file) {
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                return new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
-            }
-            StringBuilder sb = new StringBuilder();
-            try (java.io.BufferedReader reader = new java.io.BufferedReader(new java.io.FileReader(file))) {
-                String line;
-                while ((line = reader.readLine()) != null) {
-                    sb.append(line).append('\n');
-                }
-            }
-            return sb.toString();
+            return FileTextUtils.readUtf8(file);
         } catch (Exception e) {
             Log.e(TAG, "readFileContent failed: " + file.getAbsolutePath(), e);
             return "";
@@ -5306,9 +5285,9 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         File manifestFile = new File(templateDir, "manifest.json");
 
         int[] bbox = null;
-        if (manifestFile.exists() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        if (manifestFile.exists()) {
             try {
-                String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
+                String content = FileTextUtils.readUtf8(manifestFile);
                 if (!TextUtils.isEmpty(content.trim())) {
                     JSONObject manifest = new JSONObject(content);
                     if (manifest.has(name)) {
@@ -5710,10 +5689,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             }
             // Remove from scale-specific manifest
             File manifestFile = new File(targetDir, "manifest.json");
-            if (deleted > 0 && manifestFile.exists()
-                    && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                String content = new String(Files.readAllBytes(manifestFile.toPath()),
-                        StandardCharsets.UTF_8);
+            if (deleted > 0 && manifestFile.exists()) {
+                String content = FileTextUtils.readUtf8(manifestFile);
                 if (!TextUtils.isEmpty(content.trim())) {
                     JSONObject manifest = new JSONObject(content);
                     if (manifest.has(fileName)) {
@@ -5747,9 +5724,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
             renameTemplateMaskFile(targetDir, oldName, newName);
             // Update scale-specific manifest
             File manifestFile = new File(targetDir, "manifest.json");
-            if (manifestFile.exists() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                String content = new String(Files.readAllBytes(manifestFile.toPath()),
-                        StandardCharsets.UTF_8);
+            if (manifestFile.exists()) {
+                String content = FileTextUtils.readUtf8(manifestFile);
                 if (!TextUtils.isEmpty(content.trim())) {
                     JSONObject manifest = new JSONObject(content);
                     if (manifest.has(oldName)) {
@@ -5819,7 +5795,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     File manifestFile = new File(mdir, "manifest.json");
                     if (!manifestFile.exists()) continue;
                     try {
-                        String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
+                        String content = FileTextUtils.readUtf8(manifestFile);
                         if (TextUtils.isEmpty(content.trim())) continue;
                         JSONObject manifest = new JSONObject(content);
                         if (manifest.has(oldName)) {
@@ -6905,8 +6881,8 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         try {
             File jsonFile = new File(currentTaskDir, "operations.json");
             JSONArray jsonArray = new JSONArray();
-            if (jsonFile.exists() && Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                String content = new String(Files.readAllBytes(jsonFile.toPath()), StandardCharsets.UTF_8);
+            if (jsonFile.exists()) {
+                String content = FileTextUtils.readUtf8(jsonFile);
                 if (!TextUtils.isEmpty(content.trim())) {
                     jsonArray = new JSONArray(content);
                 }
@@ -6914,9 +6890,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
 
             jsonArray.put(operationObject);
 
-            try (FileWriter writer = new FileWriter(jsonFile)) {
-                writer.write(jsonArray.toString(2));
-            }
+            FileTextUtils.writeUtf8Atomically(jsonFile, jsonArray.toString(2));
 
             refreshCurrentTaskCache();
             loadOperations(currentTaskDir, true);
@@ -6934,10 +6908,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         if (!jsonFile.exists()) {
             return new JSONArray();
         }
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
-            return new JSONArray();
-        }
-        String content = new String(Files.readAllBytes(jsonFile.toPath()), StandardCharsets.UTF_8);
+        String content = FileTextUtils.readUtf8(jsonFile);
         if (TextUtils.isEmpty(content.trim())) {
             return new JSONArray();
         }
@@ -7025,7 +6996,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     File manifestFile = new File(dir, "manifest.json");
                     if (!manifestFile.exists()) continue;
                     try {
-                        String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
+                        String content = FileTextUtils.readUtf8(manifestFile);
                         if (TextUtils.isEmpty(content.trim())) continue;
                         JSONObject manifest = new JSONObject(content);
                         List<String> keys = new ArrayList<>();
@@ -7065,9 +7036,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         try {
             File jsonFile = new File(currentTaskDir, "operations.json");
-            try (FileWriter writer = new FileWriter(jsonFile)) {
-                writer.write(jsonArray.toString(2));
-            }
+            FileTextUtils.writeUtf8Atomically(jsonFile, jsonArray.toString(2));
             int cleaned = 0;
             refreshCurrentTaskCache();
             loadOperations(currentTaskDir, true);
@@ -7584,11 +7553,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         File taskDir = new File(currentProjectDir, taskId);
         File operationsFile = new File(taskDir, "operations.json");
-        if (!operationsFile.exists() || Build.VERSION.SDK_INT < Build.VERSION_CODES.O) {
+        if (!operationsFile.exists()) {
             return ids;
         }
         try {
-            String content = new String(Files.readAllBytes(operationsFile.toPath()), StandardCharsets.UTF_8);
+            String content = FileTextUtils.readUtf8(operationsFile);
             if (TextUtils.isEmpty(content.trim())) {
                 return ids;
             }
@@ -9012,7 +8981,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 mf = new java.io.File(imgDir, "manifest.json");
             }
             if (!mf.exists()) return null;
-            String content = new String(java.nio.file.Files.readAllBytes(mf.toPath()));
+            String content = FileTextUtils.readUtf8(mf);
             org.json.JSONObject json = new org.json.JSONObject(content);
             org.json.JSONArray arr = json.optJSONArray(fileName);
             if (arr != null && arr.length() >= 4) {
@@ -10952,7 +10921,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                     File manifestFile = new File(mdir, "manifest.json");
                     if (!manifestFile.exists()) continue;
                     try {
-                        String content = new String(Files.readAllBytes(manifestFile.toPath()), StandardCharsets.UTF_8);
+                        String content = FileTextUtils.readUtf8(manifestFile);
                         if (TextUtils.isEmpty(content.trim())) continue;
                         JSONObject manifest = new JSONObject(content);
                         boolean changed = false;
@@ -11906,7 +11875,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
         }
         
         try {
-            String json = new String(java.nio.file.Files.readAllBytes(operationsFile.toPath()));
+            String json = FileTextUtils.readUtf8(operationsFile);
             List<MetaOperation> operations = OperationGsonUtils.fromJson(json);
             
             runningOperations.clear();

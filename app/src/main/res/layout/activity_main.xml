@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@color/colorBackground"
@@ -51,7 +52,7 @@
             android:layout_width="122dp"
             android:layout_height="40dp"
             android:background="@drawable/home_float_inactive_bg"
-            android:drawableStart="@drawable/ic_float_menu_play"
+            app:drawableStartCompat="@drawable/ic_float_menu_play"
             android:drawablePadding="7dp"
             android:gravity="center"
             android:paddingStart="10dp"
@@ -72,6 +73,7 @@
         android:paddingEnd="12dp">
 
         <View
+            android:id="@+id/view_permission_status_dot"
             android:layout_width="8dp"
             android:layout_height="8dp"
             android:background="@drawable/circle_green" />
@@ -157,9 +159,9 @@
                 android:layout_width="86dp"
                 android:layout_height="40dp"
                 android:background="@drawable/home_action_import_bg"
-                android:drawableStart="@drawable/ic_action_export"
+                app:drawableStartCompat="@drawable/ic_action_export"
                 android:drawablePadding="5dp"
-                android:drawableTint="@color/colorOnSurfaceVariant"
+                app:drawableTint="@color/colorOnSurfaceVariant"
                 android:gravity="center"
                 android:text="导入"
                 android:textColor="@color/colorOnSurface"
@@ -172,9 +174,9 @@
                 android:layout_height="40dp"
                 android:layout_marginStart="8dp"
                 android:background="@drawable/home_action_new_bg"
-                android:drawableStart="@drawable/ic_action_add"
+                app:drawableStartCompat="@drawable/ic_action_add"
                 android:drawablePadding="5dp"
-                android:drawableTint="@color/colorOnPrimary"
+                app:drawableTint="@color/colorOnPrimary"
                 android:gravity="center"
                 android:text="新建"
                 android:textColor="@color/colorOnPrimary"
@@ -198,7 +200,7 @@
                 android:contentDescription="返回"
                 android:padding="10dp"
                 android:src="@drawable/ic_back"
-                android:tint="@color/colorOnSurface"
+                app:tint="@color/colorOnSurface"
                 android:visibility="gone" />
 
             <LinearLayout
@@ -237,7 +239,7 @@
                 android:contentDescription="刷新"
                 android:padding="10dp"
                 android:src="@android:drawable/ic_menu_rotate"
-                android:tint="@color/colorOnSurfaceVariant" />
+                app:tint="@color/colorOnSurfaceVariant" />
 
             <ImageView
                 android:id="@+id/btn_panel_add"
@@ -248,14 +250,75 @@
                 android:contentDescription="添加"
                 android:padding="10dp"
                 android:src="@drawable/ic_action_add"
-                android:tint="@color/colorOnPrimary" />
+                app:tint="@color/colorOnPrimary" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/layout_home_search"
+            android:layout_width="match_parent"
+            android:layout_height="44dp"
+            android:layout_marginTop="6dp"
+            android:background="@drawable/panel_search_background"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="12dp"
+            android:paddingEnd="4dp">
+
+            <ImageView
+                android:layout_width="18dp"
+                android:layout_height="18dp"
+                android:alpha="0.72"
+                android:contentDescription="搜索"
+                android:src="@android:drawable/ic_menu_search"
+                app:tint="@color/colorOnSurfaceVariant" />
+
+            <EditText
+                android:id="@+id/edt_home_search"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="8dp"
+                android:layout_weight="1"
+                android:background="@android:color/transparent"
+                android:hint="搜索项目"
+                android:imeOptions="actionSearch"
+                android:importantForAutofill="no"
+                android:inputType="text"
+                android:maxLines="1"
+                android:paddingStart="0dp"
+                android:paddingEnd="6dp"
+                android:singleLine="true"
+                android:textColor="@color/colorOnSurface"
+                android:textColorHint="@color/colorOnSurfaceDisabled"
+                android:textSize="13sp" />
+
+            <TextView
+                android:id="@+id/tv_home_search_meta"
+                android:layout_width="wrap_content"
+                android:layout_height="match_parent"
+                android:gravity="center"
+                android:minWidth="44dp"
+                android:paddingStart="6dp"
+                android:paddingEnd="6dp"
+                android:textColor="@color/colorOnSurfaceDisabled"
+                android:textSize="11sp" />
+
+            <ImageView
+                android:id="@+id/btn_home_search_clear"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:background="?android:attr/selectableItemBackgroundBorderless"
+                android:contentDescription="清除搜索"
+                android:padding="12dp"
+                android:src="@drawable/ic_close"
+                app:tint="@color/colorOnSurfaceVariant"
+                android:visibility="gone" />
         </LinearLayout>
 
         <androidx.swiperefreshlayout.widget.SwipeRefreshLayout
             android:id="@+id/swipe_refresh_projects"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="6dp"
             android:layout_weight="1">
 
             <FrameLayout
@@ -284,7 +347,7 @@
                         android:alpha="0.58"
                         android:contentDescription="暂无内容"
                         android:src="@drawable/ic_file_script"
-                        android:tint="@color/colorOnSurfaceVariant" />
+                        app:tint="@color/colorOnSurfaceVariant" />
 
                     <TextView
                         android:id="@+id/tv_empty_title"
@@ -340,10 +403,10 @@
         android:background="@drawable/home_bottom_bar_bg"
         android:gravity="center"
         android:orientation="horizontal"
-        android:paddingStart="24dp"
-        android:paddingTop="6dp"
-        android:paddingEnd="24dp"
-        android:paddingBottom="6dp">
+        android:paddingStart="8dp"
+        android:paddingTop="2dp"
+        android:paddingEnd="8dp"
+        android:paddingBottom="1dp">
 
         <TextView
             android:id="@+id/nav_home_projects"
@@ -351,29 +414,35 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:background="@drawable/home_bottom_nav_item_bg"
-            android:drawableTop="@drawable/ic_file_script"
-            android:drawablePadding="3dp"
+            android:drawablePadding="1dp"
+            android:fontFamily="sans-serif"
             android:gravity="center"
+            android:includeFontPadding="false"
+            android:paddingTop="2dp"
             android:text="项目"
             android:textColor="@color/home_bottom_nav_text"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+            android:textSize="11sp"
+            android:textStyle="normal"
+            app:drawableTint="@color/home_bottom_nav_text"
+            app:drawableTopCompat="@drawable/ic_nav_projects" />
 
         <TextView
             android:id="@+id/nav_home_permissions"
             android:layout_width="0dp"
             android:layout_height="match_parent"
-            android:layout_marginStart="12dp"
-            android:layout_marginEnd="12dp"
             android:layout_weight="1"
             android:background="@drawable/home_bottom_nav_item_bg"
-            android:drawableTop="@android:drawable/ic_menu_manage"
-            android:drawablePadding="3dp"
+            android:drawablePadding="1dp"
+            android:fontFamily="sans-serif"
             android:gravity="center"
+            android:includeFontPadding="false"
+            android:paddingTop="2dp"
             android:text="权限"
             android:textColor="@color/home_bottom_nav_text"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+            android:textSize="11sp"
+            android:textStyle="normal"
+            app:drawableTint="@color/home_bottom_nav_text"
+            app:drawableTopCompat="@drawable/ic_nav_permissions" />
 
         <TextView
             android:id="@+id/nav_home_lab"
@@ -389,13 +458,17 @@
             android:layout_height="match_parent"
             android:layout_weight="1"
             android:background="@drawable/home_bottom_nav_item_bg"
-            android:drawableTop="@android:drawable/ic_menu_myplaces"
-            android:drawablePadding="3dp"
+            android:drawablePadding="1dp"
+            android:fontFamily="sans-serif"
             android:gravity="center"
+            android:includeFontPadding="false"
+            android:paddingTop="2dp"
             android:text="支持"
             android:textColor="@color/home_bottom_nav_text"
-            android:textSize="10sp"
-            android:textStyle="bold" />
+            android:textSize="11sp"
+            android:textStyle="normal"
+            app:drawableTint="@color/home_bottom_nav_text"
+            app:drawableTopCompat="@drawable/ic_nav_support" />
     </LinearLayout>
 
 </LinearLayout>

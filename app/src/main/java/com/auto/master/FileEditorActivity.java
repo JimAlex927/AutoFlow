@@ -1,18 +1,20 @@
 package com.auto.master;
 
-import android.app.Activity;
 import android.content.Intent;
 import android.os.Bundle;
-import android.view.View;
+import android.util.AtomicFile;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Toast;
+import androidx.activity.OnBackPressedCallback;
 import androidx.appcompat.app.AppCompatActivity;
+
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 
 public class FileEditorActivity extends AppCompatActivity {
     private EditText contentEditText;
@@ -62,27 +64,38 @@ public class FileEditorActivity extends AppCompatActivity {
                 finish();
             }
         });
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                handleBackRequest();
+            }
+        });
     }
     
     private void loadFileContent() {
-        try {
-            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                byte[] bytes = Files.readAllBytes(currentFile.toPath());
-                originalContent = new String(bytes, StandardCharsets.UTF_8);
-                contentEditText.setText(originalContent);
+        try (FileInputStream input = new FileInputStream(currentFile);
+             ByteArrayOutputStream output = new ByteArrayOutputStream()) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                output.write(buffer, 0, read);
             }
+            originalContent = output.toString(StandardCharsets.UTF_8.name());
+            contentEditText.setText(originalContent);
         } catch (IOException e) {
             Toast.makeText(this, "读取文件失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
             finish();
         }
     }
     
-    private void saveFile() {
+    private boolean saveFile() {
+        AtomicFile atomicFile = new AtomicFile(currentFile);
+        FileOutputStream output = null;
         try {
             String content = contentEditText.getText().toString();
-            try (FileOutputStream fos = new FileOutputStream(currentFile)) {
-                fos.write(content.getBytes(StandardCharsets.UTF_8));
-            }
+            output = atomicFile.startWrite();
+            output.write(content.getBytes(StandardCharsets.UTF_8));
+            atomicFile.finishWrite(output);
             originalContent = content;
             Toast.makeText(this, "文件保存成功", Toast.LENGTH_SHORT).show();
             
@@ -90,9 +103,13 @@ public class FileEditorActivity extends AppCompatActivity {
             Intent resultIntent = new Intent();
             resultIntent.putExtra("file_saved", true);
             setResult(RESULT_OK, resultIntent);
-            
+            return true;
         } catch (IOException e) {
+            if (output != null) {
+                atomicFile.failWrite(output);
+            }
             Toast.makeText(this, "保存文件失败: " + e.getMessage(), Toast.LENGTH_SHORT).show();
+            return false;
         }
     }
     
@@ -106,20 +123,20 @@ public class FileEditorActivity extends AppCompatActivity {
             .setTitle("未保存的更改")
             .setMessage("您有未保存的更改，确定要退出吗？")
             .setPositiveButton("保存并退出", (dialog, which) -> {
-                saveFile();
-                finish();
+                if (saveFile()) {
+                    finish();
+                }
             })
             .setNegativeButton("直接退出", (dialog, which) -> finish())
             .setNeutralButton("取消", null)
             .show();
     }
     
-    @Override
-    public void onBackPressed() {
+    private void handleBackRequest() {
         if (hasChanges()) {
             showUnsavedChangesDialog();
         } else {
-            super.onBackPressed();
+            finish();
         }
     }
 }

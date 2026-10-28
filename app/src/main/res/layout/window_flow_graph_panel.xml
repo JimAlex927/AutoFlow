@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/panel_background">
@@ -25,7 +26,7 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:src="@drawable/ic_back"
-                android:tint="#FFFFFF"
+                app:tint="#FFFFFF"
                 android:background="@drawable/panel_icon_action_bg"
                 android:padding="7dp" />
 
@@ -47,7 +48,7 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:src="@android:drawable/ic_menu_sort_by_size"
-                android:tint="#FFFFFF"
+                app:tint="#FFFFFF"
                 android:background="@drawable/panel_icon_action_bg"
                 android:padding="7dp" />
 
@@ -57,7 +58,7 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:src="@android:drawable/ic_menu_mylocation"
-                android:tint="#FFFFFF"
+                app:tint="#FFFFFF"
                 android:background="@drawable/panel_icon_action_bg"
                 android:padding="7dp"
                 android:layout_marginStart="6dp" />
@@ -68,7 +69,7 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:src="@drawable/ic_fullscreen"
-                android:tint="#FFFFFF"
+                app:tint="#FFFFFF"
                 android:background="@drawable/panel_icon_action_bg"
                 android:padding="7dp"
                 android:layout_marginStart="6dp" />
@@ -79,7 +80,7 @@
                 android:layout_width="32dp"
                 android:layout_height="32dp"
                 android:src="@drawable/ic_close"
-                android:tint="#FFFFFF"
+                app:tint="#FFFFFF"
                 android:background="@drawable/panel_icon_action_bg"
                 android:padding="7dp"
                 android:layout_marginStart="6dp" />
