@@ -17,7 +17,7 @@ import java.util.Locale;
  * 倒计时悬浮条：基于 SystemClock.uptimeMillis() 计时，与 Thread.sleep 同源，
  * 不受 ANIMATOR_DURATION_SCALE 影响，始终精准匹配实际延迟时长。
  *
- * 显示：条形从满→空，文字显示剩余时间（3.0s → 0.0s）。
+ * 显示：条形从空→满，文字显示已经等待的时间（0.0s → 3.0s）。
  */
 public class DelayCountdownOverlayView extends View {
 
@@ -130,22 +130,21 @@ public class DelayCountdownOverlayView extends View {
         if (!running || durationMs <= 0L || getWidth() <= 0) return;
 
         long elapsed = currentElapsedMs();
-        long remaining = Math.max(0L, durationMs - elapsed);
-        float remainingFraction = remaining / (float) durationMs;
+        float elapsedFraction = elapsed / (float) durationMs;
 
         fillPaint.setColor(RuntimeDisplayConfig.COUNTDOWN_FILL_COLOR);
 
         canvas.drawRoundRect(trackRect, cornerRadius, cornerRadius, trackPaint);
 
-        // 倒计时条：满→空
-        fillRect.set(0f, 0f, getWidth() * remainingFraction, getHeight());
+        // 延时进度条：空→满
+        fillRect.set(0f, 0f, getWidth() * elapsedFraction, getHeight());
         canvas.drawRoundRect(fillRect, cornerRadius, cornerRadius, fillPaint);
 
-        // 剩余时间文字
-        long displayedTenth = (remaining + 99L) / 100L;
+        // 已等待时间文字
+        long displayedTenth = elapsed / 100L;
         if (displayedTenth != lastDisplayedTenth) {
             lastDisplayedTenth = displayedTenth;
-            displayedTime = fmtRemaining(remaining);
+            displayedTime = formatElapsed(elapsed);
         }
         canvas.drawText(displayedTime, getWidth() / 2f, textBaseline, textPaint);
     }
@@ -189,7 +188,7 @@ public class DelayCountdownOverlayView extends View {
 
     // ── formatting ────────────────────────────────────────────────────────────
 
-    private String fmtRemaining(long ms) {
+    private String formatElapsed(long ms) {
         if (ms <= 0L) return "0.0s";
         int minutes = (int) ((ms % 3_600_000L) / 60_000L);
         int seconds = (int) ((ms % 60_000L) / 1_000L);
