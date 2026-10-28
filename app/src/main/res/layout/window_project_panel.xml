@@ -14,7 +14,7 @@
         <LinearLayout
             android:id="@+id/drag_header"
             android:layout_width="match_parent"
-            android:layout_height="46dp"
+            android:layout_height="48dp"
             android:background="@drawable/project_panel_toolbar_bg"
             android:gravity="center_vertical"
             android:orientation="horizontal"
@@ -23,10 +23,11 @@
 
             <ImageView
                 android:id="@+id/btn_back"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
                 android:background="@drawable/project_panel_toolbar_icon_bg"
-                android:padding="6dp"
+                android:contentDescription="返回"
+                android:padding="7dp"
                 android:src="@drawable/ic_back"
                 app:tint="#2E3B4E"
                 android:visibility="gone" />
@@ -61,65 +62,97 @@
 
             <ImageView
                 android:id="@+id/btn_search"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
                 android:layout_marginStart="4dp"
                 android:background="@drawable/project_panel_toolbar_icon_bg"
-                android:padding="6dp"
+                android:contentDescription="搜索"
+                android:padding="7dp"
                 android:src="@drawable/handler_search"
                 app:tint="#4B5A6C" />
 
             <ImageView
                 android:id="@+id/btn_add"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
                 android:layout_marginStart="4dp"
                 android:background="@drawable/project_panel_toolbar_icon_bg"
-                android:padding="6dp"
+                android:contentDescription="添加"
+                android:padding="7dp"
                 android:src="@android:drawable/ic_input_add"
                 app:tint="#4B5A6C" />
 
             <ImageView
-                android:id="@+id/btn_refresh"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
+                android:id="@+id/btn_more_tools"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
                 android:layout_marginStart="4dp"
                 android:background="@drawable/project_panel_toolbar_icon_bg"
-                android:padding="6dp"
-                android:src="@android:drawable/ic_menu_rotate"
+                android:contentDescription="更多工具"
+                android:padding="7dp"
+                android:src="@drawable/ic_more_horiz"
                 app:tint="#4B5A6C" />
-
-            <ImageView
-                android:id="@+id/btn_system_params"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
-                android:layout_marginStart="4dp"
-                android:background="@drawable/project_panel_toolbar_icon_bg"
-                android:padding="6dp"
-                android:src="@android:drawable/ic_menu_manage"
-                app:tint="#4B5A6C" />
-
-            <TextView
-                android:id="@+id/btn_sessions"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
-                android:layout_marginStart="4dp"
-                android:background="@drawable/project_panel_toolbar_icon_bg"
-                android:gravity="center"
-                android:text="S"
-                android:textColor="#4B5A6C"
-                android:textSize="12sp"
-                android:textStyle="bold" />
 
             <ImageView
                 android:id="@+id/btn_close"
-                android:layout_width="26dp"
-                android:layout_height="26dp"
+                android:layout_width="30dp"
+                android:layout_height="30dp"
                 android:layout_marginStart="4dp"
                 android:background="@drawable/project_panel_toolbar_icon_bg"
-                android:padding="6dp"
+                android:contentDescription="关闭面板"
+                android:padding="7dp"
                 android:src="@drawable/icon_sub_close"
                 app:tint="#4B5A6C" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/ly_secondary_tools"
+            android:layout_width="match_parent"
+            android:layout_height="42dp"
+            android:background="#F7FAFD"
+            android:gravity="center_vertical"
+            android:orientation="horizontal"
+            android:paddingStart="8dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="8dp"
+            android:paddingBottom="4dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/btn_refresh"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_weight="1"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:gravity="center"
+                android:text="刷新"
+                android:textColor="#4B5A6C"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/btn_system_params"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:gravity="center"
+                android:text="运行参数"
+                android:textColor="#4B5A6C"
+                android:textSize="11sp" />
+
+            <TextView
+                android:id="@+id/btn_sessions"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginStart="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:gravity="center"
+                android:text="会话"
+                android:textColor="#4B5A6C"
+                android:textSize="11sp"
+                android:visibility="gone" />
         </LinearLayout>
 
         <LinearLayout

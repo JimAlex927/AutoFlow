@@ -13,6 +13,7 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 import android.view.WindowManager;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.EditText;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
@@ -160,6 +161,7 @@ final class ProjectPanelUiHelper {
     private static final int PROJECT_PANEL_DOCK_TRIGGER_DP = 18;
     private static final int PROJECT_PANEL_DOCK_MARGIN_DP = 6;
     private static final long SEARCH_REFRESH_DELAY_MS = 220L;
+    private static final long PANEL_SECTION_ANIMATION_MS = 140L;
 
     private final Host host;
 
@@ -281,13 +283,150 @@ final class ProjectPanelUiHelper {
             return;
         }
         if (searchLayout.getVisibility() == View.VISIBLE) {
-            searchLayout.setVisibility(View.GONE);
+            hideSearch(panelView, true, true);
             return;
         }
+        hideSecondaryTools(panelView, true);
+        setProjectPanelFocusable(true);
+        searchLayout.animate().cancel();
+        searchLayout.setAlpha(0f);
+        searchLayout.setTranslationY(-host.dp(4));
         searchLayout.setVisibility(View.VISIBLE);
+        searchLayout.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(PANEL_SECTION_ANIMATION_MS)
+                .start();
         EditText searchInput = panelView.findViewById(R.id.edt_search);
         if (searchInput != null) {
             searchInput.requestFocus();
+            searchInput.post(() -> {
+                InputMethodManager inputMethodManager = (InputMethodManager) host.getContext()
+                        .getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (inputMethodManager != null) {
+                    inputMethodManager.showSoftInput(searchInput, InputMethodManager.SHOW_IMPLICIT);
+                }
+            });
+        }
+    }
+
+    private void toggleSecondaryTools(View panelView) {
+        View toolsLayout = panelView.findViewById(R.id.ly_secondary_tools);
+        if (toolsLayout == null) {
+            return;
+        }
+        if (toolsLayout.getVisibility() == View.VISIBLE) {
+            hideSecondaryTools(panelView, true);
+            return;
+        }
+        hideSearch(panelView, true, true);
+        View moreButton = panelView.findViewById(R.id.btn_more_tools);
+        toolsLayout.animate().cancel();
+        toolsLayout.setAlpha(0f);
+        toolsLayout.setTranslationY(-host.dp(4));
+        toolsLayout.setVisibility(View.VISIBLE);
+        toolsLayout.animate()
+                .alpha(1f)
+                .translationY(0f)
+                .setDuration(PANEL_SECTION_ANIMATION_MS)
+                .start();
+        if (moreButton != null) {
+            moreButton.setContentDescription("收起工具");
+            moreButton.animate().cancel();
+            moreButton.animate().rotation(90f).setDuration(PANEL_SECTION_ANIMATION_MS).start();
+        }
+    }
+
+    private void hideSecondaryTools(View panelView, boolean animate) {
+        View toolsLayout = panelView.findViewById(R.id.ly_secondary_tools);
+        View moreButton = panelView.findViewById(R.id.btn_more_tools);
+        if (moreButton != null) {
+            moreButton.setContentDescription("更多工具");
+            moreButton.animate().cancel();
+            if (animate) {
+                moreButton.animate().rotation(0f).setDuration(PANEL_SECTION_ANIMATION_MS).start();
+            } else {
+                moreButton.setRotation(0f);
+            }
+        }
+        if (toolsLayout == null || toolsLayout.getVisibility() != View.VISIBLE) {
+            return;
+        }
+        toolsLayout.animate().cancel();
+        if (!animate) {
+            toolsLayout.setVisibility(View.GONE);
+            toolsLayout.setAlpha(1f);
+            toolsLayout.setTranslationY(0f);
+            return;
+        }
+        toolsLayout.animate()
+                .alpha(0f)
+                .translationY(-host.dp(4))
+                .setDuration(PANEL_SECTION_ANIMATION_MS)
+                .withEndAction(() -> {
+                    toolsLayout.setVisibility(View.GONE);
+                    toolsLayout.setAlpha(1f);
+                    toolsLayout.setTranslationY(0f);
+                })
+                .start();
+    }
+
+    private void hideSearch(View panelView, boolean clearQuery, boolean animate) {
+        View searchLayout = panelView.findViewById(R.id.ly_search);
+        EditText searchInput = panelView.findViewById(R.id.edt_search);
+        if (clearQuery && searchInput != null && searchInput.length() > 0) {
+            host.cancelPendingProjectPanelSearchRefresh();
+            searchInput.setText("");
+        }
+        if (searchInput != null) {
+            searchInput.clearFocus();
+            InputMethodManager inputMethodManager = (InputMethodManager) host.getContext()
+                    .getSystemService(Context.INPUT_METHOD_SERVICE);
+            if (inputMethodManager != null) {
+                inputMethodManager.hideSoftInputFromWindow(searchInput.getWindowToken(), 0);
+            }
+        }
+        setProjectPanelFocusable(false);
+        if (searchLayout == null || searchLayout.getVisibility() != View.VISIBLE) {
+            return;
+        }
+        searchLayout.animate().cancel();
+        if (!animate) {
+            searchLayout.setVisibility(View.GONE);
+            searchLayout.setAlpha(1f);
+            searchLayout.setTranslationY(0f);
+            return;
+        }
+        searchLayout.animate()
+                .alpha(0f)
+                .translationY(-host.dp(4))
+                .setDuration(PANEL_SECTION_ANIMATION_MS)
+                .withEndAction(() -> {
+                    searchLayout.setVisibility(View.GONE);
+                    searchLayout.setAlpha(1f);
+                    searchLayout.setTranslationY(0f);
+                })
+                .start();
+    }
+
+    private void setProjectPanelFocusable(boolean focusable) {
+        View panelView = host.getProjectPanelView();
+        WindowManager.LayoutParams panelLp = host.getProjectPanelLayoutParams();
+        if (panelView == null || panelLp == null) {
+            return;
+        }
+        int nextFlags = focusable
+                ? panelLp.flags & ~WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+                : panelLp.flags | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE;
+        if (nextFlags == panelLp.flags) {
+            return;
+        }
+        panelLp.flags = nextFlags;
+        if (isProjectPanelAttached()) {
+            try {
+                host.getWindowManager().updateViewLayout(panelView, panelLp);
+            } catch (Exception ignored) {
+            }
         }
     }
 
@@ -342,6 +481,8 @@ final class ProjectPanelUiHelper {
         panelView.findViewById(R.id.btn_add).setOnClickListener(v -> host.onProjectPanelAddClick());
         panelView.findViewById(R.id.btn_add).setOnLongClickListener(v -> host.onProjectPanelAddLongClick());
         panelView.findViewById(R.id.btn_search).setOnClickListener(v -> toggleSearch());
+        panelView.findViewById(R.id.btn_more_tools)
+                .setOnClickListener(v -> toggleSecondaryTools(panelView));
 
         EditText searchInput = panelView.findViewById(R.id.edt_search);
         ImageView clearButton = panelView.findViewById(R.id.btn_clear_search);
@@ -392,6 +533,7 @@ final class ProjectPanelUiHelper {
         bindDragTarget(panelView.findViewById(R.id.breadcrumb_layout), dragTouchListener);
         bindDragTarget(panelView.findViewById(R.id.runtime_status_bar), dragTouchListener);
         bindDragTarget(panelView.findViewById(R.id.ly_search), dragTouchListener);
+        bindDragTarget(panelView.findViewById(R.id.ly_secondary_tools), dragTouchListener);
         bindDragTarget(panelView.findViewById(R.id.footer_drag_zone), dragTouchListener);
         bindDragTarget(panelView.findViewById(R.id.empty_view), dragTouchListener);
         int[] footerButtonIds = {
