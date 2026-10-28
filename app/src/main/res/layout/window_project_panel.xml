@@ -119,6 +119,19 @@
             android:visibility="gone">
 
             <TextView
+                android:id="@+id/btn_flow_graph"
+                android:layout_width="0dp"
+                android:layout_height="match_parent"
+                android:layout_marginEnd="6dp"
+                android:layout_weight="1"
+                android:background="@drawable/project_panel_toolbar_icon_bg"
+                android:gravity="center"
+                android:text="流程图"
+                android:textColor="#4B5A6C"
+                android:textSize="11sp"
+                android:visibility="gone" />
+
+            <TextView
                 android:id="@+id/btn_refresh"
                 android:layout_width="0dp"
                 android:layout_height="match_parent"

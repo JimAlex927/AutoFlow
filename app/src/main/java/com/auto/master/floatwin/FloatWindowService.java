@@ -968,7 +968,7 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 @Override
-                public void onProjectPanelRefreshClick() {
+                public void onProjectPanelFlowGraphClick() {
                     if (currentLevel == NavigationLevel.OPERATION && currentTaskDir != null) {
                         showFlowGraphDialog();
                     } else {
@@ -977,18 +977,18 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 @Override
-                public boolean onProjectPanelRefreshLongClick() {
+                public void onProjectPanelRefreshClick() {
                     if (currentLevel == NavigationLevel.PROJECT) {
                         invalidateProjectListCache();
                         loadProjects(true);
                         Toast.makeText(FloatWindowService.this, "已刷新项目列表", Toast.LENGTH_SHORT).show();
-                        return true;
+                        return;
                     }
                     if (currentLevel == NavigationLevel.TASK && currentProjectDir != null) {
                         invalidateTaskListCache(currentProjectDir);
                         loadTasks(currentProjectDir, true);
                         Toast.makeText(FloatWindowService.this, "已刷新 Task 列表", Toast.LENGTH_SHORT).show();
-                        return true;
+                        return;
                     }
                     if (currentLevel == NavigationLevel.OPERATION && currentTaskDir != null) {
                         invalidateOperationListCache(currentTaskDir);
@@ -996,7 +996,6 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                         FloatWindowService.this.loadOperations(currentTaskDir, true);
                         Toast.makeText(FloatWindowService.this, "已刷新列表", Toast.LENGTH_SHORT).show();
                     }
-                    return true;
                 }
 
                 @Override

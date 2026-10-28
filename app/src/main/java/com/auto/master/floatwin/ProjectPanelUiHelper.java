@@ -111,9 +111,9 @@ final class ProjectPanelUiHelper {
 
         boolean onProjectPanelAddLongClick();
 
-        void onProjectPanelRefreshClick();
+        void onProjectPanelFlowGraphClick();
 
-        boolean onProjectPanelRefreshLongClick();
+        void onProjectPanelRefreshClick();
 
         void onProjectPanelSearchQueryChanged(String query);
 
@@ -515,10 +515,14 @@ final class ProjectPanelUiHelper {
             recyclerView.setItemViewCacheSize(12);
         }
 
+        View flowGraphButton = panelView.findViewById(R.id.btn_flow_graph);
+        if (flowGraphButton != null) {
+            flowGraphButton.setOnClickListener(v -> host.onProjectPanelFlowGraphClick());
+        }
+
         View refreshButton = panelView.findViewById(R.id.btn_refresh);
         if (refreshButton != null) {
             refreshButton.setOnClickListener(v -> host.onProjectPanelRefreshClick());
-            refreshButton.setOnLongClickListener(v -> host.onProjectPanelRefreshLongClick());
         }
 
         View sessionsButton = panelView.findViewById(R.id.btn_sessions);
@@ -817,6 +821,7 @@ final class ProjectPanelUiHelper {
         LinearLayout breadcrumbLayout = panelView.findViewById(R.id.breadcrumb_layout);
         TextView breadcrumbView = panelView.findViewById(R.id.tv_breadcrumb);
         TextView breadcrumbLegacyView = panelView.findViewById(R.id.tv_breadcrumb_legacy);
+        View flowGraphButton = panelView.findViewById(R.id.btn_flow_graph);
         View sessionsButton = panelView.findViewById(R.id.btn_sessions);
         if (titleView == null || backButton == null || breadcrumbLayout == null) {
             return;
@@ -837,6 +842,9 @@ final class ProjectPanelUiHelper {
                 if (sessionsButton != null) {
                     sessionsButton.setVisibility(View.GONE);
                 }
+                if (flowGraphButton != null) {
+                    flowGraphButton.setVisibility(View.GONE);
+                }
                 break;
             case LEVEL_TASK:
                 File currentProjectDir = host.getCurrentProjectDir();
@@ -852,6 +860,9 @@ final class ProjectPanelUiHelper {
                 }
                 if (sessionsButton != null) {
                     sessionsButton.setVisibility(View.GONE);
+                }
+                if (flowGraphButton != null) {
+                    flowGraphButton.setVisibility(View.GONE);
                 }
                 break;
             case LEVEL_OPERATION:
@@ -871,6 +882,9 @@ final class ProjectPanelUiHelper {
                 }
                 if (sessionsButton != null) {
                     sessionsButton.setVisibility(View.VISIBLE);
+                }
+                if (flowGraphButton != null) {
+                    flowGraphButton.setVisibility(View.VISIBLE);
                 }
                 break;
             default:
