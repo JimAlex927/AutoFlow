@@ -1,12 +1,12 @@
 package com.auto.master.floatwin;
 
+import android.animation.TimeAnimator;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.RectF;
 import android.os.SystemClock;
 import android.util.TypedValue;
-import android.view.Choreographer;
 import android.view.View;
 
 import com.auto.master.utils.RuntimeDisplayConfig;
@@ -27,12 +27,17 @@ public class DelayCountdownOverlayView extends View {
     private final RectF trackRect  = new RectF();
     private final RectF fillRect   = new RectF();
 
-    private long startUptimeMs = 0L;
-    private long durationMs    = 0L;
-    private boolean running    = false;
+    private final float cornerRadius;
+    private long durationMs = 0L;
+    private long elapsedBeforeResumeMs = 0L;
+    private long resumedAtUptimeMs = 0L;
+    private boolean running = false;
+    private boolean paused = false;
+    private float textBaseline;
+    private long lastDisplayedTenth = Long.MIN_VALUE;
+    private String displayedTime = "0.0s";
 
-    private final Choreographer choreographer = Choreographer.getInstance();
-    private Choreographer.FrameCallback frameCallback;
+    private final TimeAnimator frameAnimator = new TimeAnimator();
 
     public DelayCountdownOverlayView(Context context) {
         super(context);
@@ -47,6 +52,19 @@ public class DelayCountdownOverlayView extends View {
         textPaint.setTextAlign(Paint.Align.CENTER);
         textPaint.setStyle(Paint.Style.FILL);
         textPaint.setTextSize(sp(11.5f));
+        cornerRadius = dp(5f);
+        frameAnimator.setTimeListener((animation, totalTime, deltaTime) -> {
+            if (!running || paused) {
+                return;
+            }
+            if (currentElapsedMs() >= durationMs) {
+                running = false;
+                animation.cancel();
+                setVisibility(GONE);
+                return;
+            }
+            invalidate();
+        });
 
         setAlpha(0.9f);
         setVisibility(GONE);
@@ -63,12 +81,15 @@ public class DelayCountdownOverlayView extends View {
      */
     public void start(long durationMs, long startElapsedMs, Runnable onReady) {
         stopInternal();
-        this.durationMs   = Math.max(1L, durationMs);
-        long elapsed      = Math.max(0L, Math.min(startElapsedMs, this.durationMs));
-        this.startUptimeMs = SystemClock.uptimeMillis() - elapsed;
-        this.running       = true;
+        this.durationMs = Math.max(1L, durationMs);
+        this.elapsedBeforeResumeMs = Math.max(0L, Math.min(startElapsedMs, this.durationMs));
+        this.resumedAtUptimeMs = SystemClock.uptimeMillis();
+        this.running = true;
+        this.paused = false;
+        this.lastDisplayedTenth = Long.MIN_VALUE;
         setVisibility(VISIBLE);
-        scheduleFrame();
+        invalidate();
+        frameAnimator.start();
 
         // 立即回调，不等下一帧 —— 保证 CountDownLatch 在 sleep 开始前释放
         if (onReady != null) onReady.run();
@@ -83,55 +104,81 @@ public class DelayCountdownOverlayView extends View {
         setVisibility(GONE);
     }
 
+    public void pause() {
+        if (!running || paused) {
+            return;
+        }
+        elapsedBeforeResumeMs = currentElapsedMs();
+        paused = true;
+        frameAnimator.pause();
+        invalidate();
+    }
+
+    public void resume() {
+        if (!running || !paused) {
+            return;
+        }
+        resumedAtUptimeMs = SystemClock.uptimeMillis();
+        paused = false;
+        frameAnimator.resume();
+    }
+
     // ── draw ──────────────────────────────────────────────────────────────────
 
     @Override
     protected void onDraw(Canvas canvas) {
         if (!running || durationMs <= 0L || getWidth() <= 0) return;
 
-        long elapsed   = Math.min(durationMs, SystemClock.uptimeMillis() - startUptimeMs);
+        long elapsed = currentElapsedMs();
         long remaining = Math.max(0L, durationMs - elapsed);
-        float fraction = elapsed / (float) durationMs;
+        float remainingFraction = remaining / (float) durationMs;
 
         fillPaint.setColor(RuntimeDisplayConfig.COUNTDOWN_FILL_COLOR);
 
-        float r = dp(5f);
-        trackRect.set(0f, 0f, getWidth(), getHeight());
-        canvas.drawRoundRect(trackRect, r, r, trackPaint);
+        canvas.drawRoundRect(trackRect, cornerRadius, cornerRadius, trackPaint);
 
         // 倒计时条：满→空
-        fillRect.set(0f, 0f, getWidth() * fraction, getHeight());
-        canvas.drawRoundRect(fillRect, r, r, fillPaint);
+        fillRect.set(0f, 0f, getWidth() * remainingFraction, getHeight());
+        canvas.drawRoundRect(fillRect, cornerRadius, cornerRadius, fillPaint);
 
         // 剩余时间文字
-        Paint.FontMetrics fm = textPaint.getFontMetrics();
-        float baseline = trackRect.centerY() - (fm.bottom - fm.top) / 2f - fm.top;
-        canvas.drawText(fmtRemaining(elapsed), getWidth() / 2f, baseline, textPaint);
+        long displayedTenth = (remaining + 99L) / 100L;
+        if (displayedTenth != lastDisplayedTenth) {
+            lastDisplayedTenth = displayedTenth;
+            displayedTime = fmtRemaining(remaining);
+        }
+        canvas.drawText(displayedTime, getWidth() / 2f, textBaseline, textPaint);
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        trackRect.set(0f, 0f, w, h);
+        Paint.FontMetrics fontMetrics = textPaint.getFontMetrics();
+        textBaseline = trackRect.centerY()
+                - (fontMetrics.bottom - fontMetrics.top) / 2f
+                - fontMetrics.top;
     }
 
     // ── internal ──────────────────────────────────────────────────────────────
 
-    private void scheduleFrame() {
-        frameCallback = frameTimeNanos -> {
-            if (!running) return;
-            long elapsed = SystemClock.uptimeMillis() - startUptimeMs;
-            if (elapsed >= durationMs) {
-                running = false;
-                setVisibility(GONE);
-                return;
-            }
-            invalidate();
-            choreographer.postFrameCallback(frameCallback);
-        };
-        choreographer.postFrameCallback(frameCallback);
-    }
-
     private void stopInternal() {
         running = false;
-        if (frameCallback != null) {
-            choreographer.removeFrameCallback(frameCallback);
-            frameCallback = null;
+        paused = false;
+        durationMs = 0L;
+        elapsedBeforeResumeMs = 0L;
+        resumedAtUptimeMs = 0L;
+        if (frameAnimator.isStarted()) {
+            frameAnimator.cancel();
         }
+    }
+
+    private long currentElapsedMs() {
+        long elapsed = elapsedBeforeResumeMs;
+        if (!paused && resumedAtUptimeMs > 0L) {
+            elapsed += Math.max(0L, SystemClock.uptimeMillis() - resumedAtUptimeMs);
+        }
+        return Math.min(durationMs, Math.max(0L, elapsed));
     }
 
     @Override

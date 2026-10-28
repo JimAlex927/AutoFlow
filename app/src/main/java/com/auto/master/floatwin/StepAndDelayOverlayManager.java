@@ -44,6 +44,9 @@ public class StepAndDelayOverlayManager {
     private String activeDelayOperationId;
     private long activeDelayDurationMs = 0L;
     private long activeDelayStartMs = 0L;
+    private long activeDelayElapsedBeforePauseMs = 0L;
+    private long activeDelayShownAtMs = 0L;
+    private boolean activeDelayPaused = false;
     private Runnable pendingStopRunnable;
 
     // 倒计时悬浮条至少可见这么久，避免主线程繁忙时"显示"和"隐藏"两个任务
@@ -127,7 +130,7 @@ public class StepAndDelayOverlayManager {
             if (durationMs <= 0) return;
             activeDelayOperationId = operationId + "_retry";
             activeDelayDurationMs = durationMs;
-            activeDelayStartMs = SystemClock.uptimeMillis();
+            startDelayClock();
             renderDelayProgress(true, 0L, activeDelayDurationMs);
         });
     }
@@ -169,8 +172,37 @@ public class StepAndDelayOverlayManager {
         if (durationMs <= 0L || !showCountdown) return;
         activeDelayOperationId = opItem.id;
         activeDelayDurationMs = durationMs;
-        activeDelayStartMs = SystemClock.uptimeMillis();
+        startDelayClock();
         renderDelayProgress(true, 0L, activeDelayDurationMs, onFirstFrameReady);
+    }
+
+    /** 暂停或恢复当前倒计时；暂停期间不消耗剩余延时时间，也不请求绘制帧。 */
+    public void setPaused(boolean paused) {
+        Runnable update = () -> {
+            if (TextUtils.isEmpty(activeDelayOperationId)
+                    || activeDelayDurationMs <= 0L
+                    || activeDelayPaused == paused) {
+                return;
+            }
+            if (paused) {
+                activeDelayElapsedBeforePauseMs = getActiveDelayElapsedMs();
+                activeDelayPaused = true;
+                if (delayOverlayView != null) {
+                    delayOverlayView.pause();
+                }
+                return;
+            }
+            activeDelayStartMs = SystemClock.uptimeMillis();
+            activeDelayPaused = false;
+            if (delayOverlayView != null) {
+                delayOverlayView.resume();
+            }
+        };
+        if (Looper.myLooper() == Looper.getMainLooper()) {
+            update.run();
+        } else {
+            uiHandler.post(update);
+        }
     }
 
     /**
@@ -182,11 +214,11 @@ public class StepAndDelayOverlayManager {
         if (!android.text.TextUtils.equals(activeDelayOperationId, operationId)) {
             return;
         }
-        long elapsed = SystemClock.uptimeMillis() - activeDelayStartMs;
-        if (activeDelayDurationMs > 0L && elapsed < MIN_VISIBLE_MS) {
+        long visibleElapsed = SystemClock.uptimeMillis() - activeDelayShownAtMs;
+        if (activeDelayDurationMs > 0L && visibleElapsed < MIN_VISIBLE_MS) {
             cancelPendingStop();
             pendingStopRunnable = this::stopDelay;
-            uiHandler.postDelayed(pendingStopRunnable, MIN_VISIBLE_MS - elapsed);
+            uiHandler.postDelayed(pendingStopRunnable, MIN_VISIBLE_MS - visibleElapsed);
         } else {
             stopDelay();
         }
@@ -198,6 +230,9 @@ public class StepAndDelayOverlayManager {
         activeDelayOperationId = null;
         activeDelayDurationMs = 0L;
         activeDelayStartMs = 0L;
+        activeDelayElapsedBeforePauseMs = 0L;
+        activeDelayShownAtMs = 0L;
+        activeDelayPaused = false;
         renderDelayProgress(false, 0L, 0L);
     }
 
@@ -214,9 +249,11 @@ public class StepAndDelayOverlayManager {
      */
     public void syncDelayState() {
         if (!TextUtils.isEmpty(activeDelayOperationId) && activeDelayDurationMs > 0L) {
-            long elapsed = Math.min(activeDelayDurationMs,
-                    Math.max(0L, SystemClock.uptimeMillis() - activeDelayStartMs));
+            long elapsed = getActiveDelayElapsedMs();
             renderDelayProgress(true, elapsed, activeDelayDurationMs);
+            if (activeDelayPaused && delayOverlayView != null) {
+                delayOverlayView.pause();
+            }
         } else {
             renderDelayProgress(false, 0L, 0L);
         }
@@ -238,6 +275,22 @@ public class StepAndDelayOverlayManager {
 
     private void renderDelayProgress(boolean visible, long elapsedMs, long durationMs) {
         renderDelayProgress(visible, elapsedMs, durationMs, null);
+    }
+
+    private void startDelayClock() {
+        long now = SystemClock.uptimeMillis();
+        activeDelayStartMs = now;
+        activeDelayShownAtMs = now;
+        activeDelayElapsedBeforePauseMs = 0L;
+        activeDelayPaused = false;
+    }
+
+    private long getActiveDelayElapsedMs() {
+        long elapsed = activeDelayElapsedBeforePauseMs;
+        if (!activeDelayPaused && activeDelayStartMs > 0L) {
+            elapsed += Math.max(0L, SystemClock.uptimeMillis() - activeDelayStartMs);
+        }
+        return Math.min(activeDelayDurationMs, Math.max(0L, elapsed));
     }
 
     private void renderDelayProgress(boolean visible,

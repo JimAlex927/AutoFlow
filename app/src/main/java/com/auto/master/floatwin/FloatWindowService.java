@@ -543,6 +543,11 @@ public class FloatWindowService extends Service implements ScriptRunner.ScriptEx
                 }
 
                 @Override
+                public void onPauseStateChanged(boolean paused) {
+                    stepDelayOverlayManager.setPaused(paused);
+                }
+
+                @Override
                 public void updateRunningPanelStatus(String status, int color) {
                     FloatWindowService.this.updateRunningPanelStatus(status, color);
                 }

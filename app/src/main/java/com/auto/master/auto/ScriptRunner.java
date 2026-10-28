@@ -445,11 +445,11 @@ public final class ScriptRunner {
 
     public static boolean sleepCurrentSessionAware(long durationMs) {
         long remainingMs = Math.max(0L, durationMs);
-        long lastTickMs = SystemClock.uptimeMillis();
         while (remainingMs > 0L) {
             if (!waitIfCurrentSessionPaused()) {
                 return false;
             }
+            long tickStartedMs = SystemClock.uptimeMillis();
             long chunkMs = Math.min(remainingMs, 50L);
             try {
                 Thread.sleep(chunkMs);
@@ -458,8 +458,7 @@ public final class ScriptRunner {
                 return false;
             }
             long nowMs = SystemClock.uptimeMillis();
-            remainingMs -= Math.max(0L, nowMs - lastTickMs);
-            lastTickMs = nowMs;
+            remainingMs -= Math.max(0L, nowMs - tickStartedMs);
         }
         return waitIfCurrentSessionPaused();
     }

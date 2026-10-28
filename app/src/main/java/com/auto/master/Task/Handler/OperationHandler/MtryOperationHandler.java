@@ -122,10 +122,7 @@ public class MtryOperationHandler extends OperationHandler {
                         MAIN.post(() -> listenerDelay.onMtryRetryDelay(retrySessionId, mtryOpId, dl));
                     }
                 }
-                try {
-                    Thread.sleep(retryDelayMs);
-                } catch (InterruptedException e) {
-                    Thread.currentThread().interrupt();
+                if (!ScriptRunner.sleepCurrentSessionAware(retryDelayMs)) {
                     break;
                 }
             } else {

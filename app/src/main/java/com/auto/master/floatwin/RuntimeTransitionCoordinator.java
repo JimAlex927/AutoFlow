@@ -13,6 +13,7 @@ final class RuntimeTransitionCoordinator {
         @Nullable String getSelectedScriptSessionId();
         boolean isPaused();
         void setPaused(boolean paused);
+        void onPauseStateChanged(boolean paused);
         void updateRunningPanelStatus(String status, int color);
         void applyBallPresentation();
         void syncProjectPanelRuntimeUi();
@@ -53,12 +54,14 @@ final class RuntimeTransitionCoordinator {
         if (host.isPaused()) {
             ScriptRunner.resumeScript(sessionId);
             host.setPaused(false);
+            host.onPauseStateChanged(false);
             host.updateRunningPanelStatus("运行中", 0xFF4CAF50);
             host.applyBallPresentation();
             host.showToast("脚本已继续");
         } else {
             ScriptRunner.pauseScript(sessionId);
             host.setPaused(true);
+            host.onPauseStateChanged(true);
             host.updateRunningPanelStatus("已暂停", 0xFFFF9800);
             host.applyBallPresentation();
             host.showToast("脚本已暂停");
