@@ -328,78 +328,92 @@
         <LinearLayout
             android:id="@+id/footer_drag_zone"
             android:layout_width="match_parent"
-            android:layout_height="46dp"
+            android:layout_height="wrap_content"
+            android:animateLayoutChanges="true"
             android:background="@drawable/project_panel_footer_bg"
-            android:gravity="center_vertical"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:paddingStart="7dp"
             android:paddingTop="6dp"
             android:paddingEnd="7dp"
             android:paddingBottom="6dp">
 
-            <TextView
-                android:id="@+id/btn_run"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1.1"
-                android:background="@drawable/project_panel_btn_primary"
-                android:gravity="center"
-                android:text="运行"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                android:textStyle="bold" />
+            <LinearLayout
+                android:id="@+id/footer_primary_row"
+                android:layout_width="match_parent"
+                android:layout_height="36dp"
+                android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/btn_edit"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="1.1"
-                android:layout_marginStart="5dp"
-                android:background="@drawable/project_panel_btn_secondary"
-                android:gravity="center"
-                android:text="编辑"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/btn_run"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@drawable/project_panel_btn_primary"
+                    android:gravity="center"
+                    android:text="运行"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
 
-            <TextView
-                android:id="@+id/btn_move_up"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="0.8"
-                android:layout_marginStart="5dp"
-                android:background="@drawable/project_panel_btn_minor"
-                android:gravity="center"
-                android:text="上移"
-                android:textColor="#546273"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/btn_edit"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="6dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/project_panel_btn_secondary"
+                    android:gravity="center"
+                    android:text="编辑"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
-            <TextView
-                android:id="@+id/btn_move_down"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="0.8"
-                android:layout_marginStart="5dp"
-                android:background="@drawable/project_panel_btn_minor"
-                android:gravity="center"
-                android:text="下移"
-                android:textColor="#546273"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+            <LinearLayout
+                android:id="@+id/footer_secondary_row"
+                android:layout_width="match_parent"
+                android:layout_height="32dp"
+                android:layout_marginTop="5dp"
+                android:orientation="horizontal">
 
-            <TextView
-                android:id="@+id/btn_batch"
-                android:layout_width="0dp"
-                android:layout_height="match_parent"
-                android:layout_weight="0.9"
-                android:layout_marginStart="5dp"
-                android:background="@drawable/project_panel_btn_minor"
-                android:gravity="center"
-                android:text="批量"
-                android:textColor="#546273"
-                android:textSize="11sp"
-                android:textStyle="bold" />
+                <TextView
+                    android:id="@+id/btn_move_up"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@drawable/project_panel_btn_minor"
+                    android:gravity="center"
+                    android:text="上移"
+                    android:textColor="#546273"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_move_down"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/project_panel_btn_minor"
+                    android:gravity="center"
+                    android:text="下移"
+                    android:textColor="#546273"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btn_batch"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_marginStart="5dp"
+                    android:layout_weight="1"
+                    android:background="@drawable/project_panel_btn_minor"
+                    android:gravity="center"
+                    android:text="批量"
+                    android:textColor="#546273"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
     </LinearLayout>
 

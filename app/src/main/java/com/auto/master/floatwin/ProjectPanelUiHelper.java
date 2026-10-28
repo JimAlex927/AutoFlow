@@ -885,41 +885,73 @@ final class ProjectPanelUiHelper {
         if (panelView == null) {
             return;
         }
+        View footer = panelView.findViewById(R.id.footer_drag_zone);
+        View secondaryRow = panelView.findViewById(R.id.footer_secondary_row);
         TextView runButton = panelView.findViewById(R.id.btn_run);
         TextView editButton = panelView.findViewById(R.id.btn_edit);
         TextView moveUpButton = panelView.findViewById(R.id.btn_move_up);
         TextView moveDownButton = panelView.findViewById(R.id.btn_move_down);
         TextView batchButton = panelView.findViewById(R.id.btn_batch);
-        if (runButton == null || editButton == null || moveUpButton == null
-                || moveDownButton == null || batchButton == null) {
+        if (footer == null || secondaryRow == null || runButton == null || editButton == null
+                || moveUpButton == null || moveDownButton == null || batchButton == null) {
             return;
         }
 
-        boolean runtimeMode = host.getProjectPanelLevel() == LEVEL_OPERATION && host.isScriptActiveForUi();
+        boolean operationLevel = host.getProjectPanelLevel() == LEVEL_OPERATION;
+        if (!operationLevel) {
+            footer.animate().cancel();
+            footer.setVisibility(View.GONE);
+            footer.setAlpha(1f);
+            return;
+        }
+        if (footer.getVisibility() != View.VISIBLE) {
+            footer.animate().cancel();
+            footer.setAlpha(0f);
+            footer.setVisibility(View.VISIBLE);
+            footer.animate().alpha(1f).setDuration(PANEL_SECTION_ANIMATION_MS).start();
+        }
+
+        boolean runtimeMode = host.isScriptActiveForUi();
         if (runtimeMode) {
             runButton.setText(host.isPaused() ? "继续" : "暂停");
             editButton.setText("停止");
-            batchButton.setText("收起");
+            batchButton.setText("后台运行");
+            secondaryRow.setVisibility(View.VISIBLE);
             moveUpButton.setVisibility(View.GONE);
             moveDownButton.setVisibility(View.GONE);
             batchButton.setVisibility(View.VISIBLE);
+            setButtonStartMargin(batchButton, 0);
             return;
         }
 
-        moveUpButton.setVisibility(View.VISIBLE);
-        moveDownButton.setVisibility(View.VISIBLE);
-        batchButton.setVisibility(View.VISIBLE);
         if (host.isOperationBatchMode()) {
             runButton.setText("删除选中(" + host.getBatchSelectedOperationCount() + ")");
             editButton.setText("退出批量");
-            batchButton.setText("批量中");
+            secondaryRow.setVisibility(View.GONE);
         } else {
-            runButton.setText("▶ 运行");
-            editButton.setText("✎ 编辑");
+            runButton.setText("运行节点");
+            editButton.setText("编辑节点");
+            secondaryRow.setVisibility(View.VISIBLE);
+            moveUpButton.setVisibility(View.VISIBLE);
+            moveDownButton.setVisibility(View.VISIBLE);
+            batchButton.setVisibility(View.VISIBLE);
+            setButtonStartMargin(batchButton, host.dp(5));
             moveUpButton.setText("上移");
             moveDownButton.setText("下移");
             batchButton.setText("批量");
         }
+    }
+
+    private void setButtonStartMargin(View button, int marginPx) {
+        if (!(button.getLayoutParams() instanceof LinearLayout.LayoutParams)) {
+            return;
+        }
+        LinearLayout.LayoutParams layoutParams = (LinearLayout.LayoutParams) button.getLayoutParams();
+        if (layoutParams.getMarginStart() == marginPx) {
+            return;
+        }
+        layoutParams.setMarginStart(marginPx);
+        button.setLayoutParams(layoutParams);
     }
 
     void syncProjectPanelRuntimeUi() {
